@@ -285,6 +285,7 @@ COAUTHOR_ALIASES = {
     "thomas": "soispoke",
     "barry whitehat": "barryWhiteHat",
     "caspar": "casparschwa",
+    "mike": "mikeneuder",
     "joachim neu": "jneu",
     "david tse": "David Tse",  # Stanford professor — no Discourse account
 }
