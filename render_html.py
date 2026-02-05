@@ -92,6 +92,7 @@ def prepare_viz_data(data):
             "out": t.get("outgoing_refs", []),
             "inc": t.get("incoming_refs", []),
             "parts": t.get("authors", [t["author"]])[:3],
+            "coauth": [u for u in t.get("coauthors", []) if u != t["author"]],
         }
 
     compact_authors = {}
@@ -2832,6 +2833,7 @@ function showDetail(t) {
     msBadge +
     '<div class="meta">by <strong>' + escHtml(t.a) + '</strong> \u00b7 ' + t.d +
     ' \u00b7 <a href="https://ethresear.ch/t/' + t.id + '" target="_blank">Open on ethresear.ch \u2192</a></div>' +
+    (t.coauth && t.coauth.length > 0 ? '<div class="detail-stat"><span class="label">Coauthors</span><span class="value">' + t.coauth.map(function(u) { return '<span onclick="toggleAuthor(\'' + escHtml(u) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>'; }).join(', ') + '</span></div>' : '') +
     '<div class="detail-stat"><span class="label">Thread</span><span class="value" style="color:' + threadColor + '">' + threadName + '</span></div>' +
     '<div class="detail-stat"><span class="label">Influence</span><span class="value">' + t.inf.toFixed(3) + '</span></div>' +
     '<div class="detail-stat"><span class="label">Views</span><span class="value">' + t.vw.toLocaleString() + '</span></div>' +
