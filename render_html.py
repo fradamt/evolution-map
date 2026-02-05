@@ -273,12 +273,12 @@ header .stats span { white-space: nowrap; }
 #coauthor-view { display: none; }
 
 /* Timeline */
-.timeline-container { width: 100%; height: 100%; overflow-x: auto; overflow-y: auto; }
-.timeline-container::-webkit-scrollbar { height: 10px; width: 10px; }
-.timeline-container::-webkit-scrollbar-thumb { background: #333; border-radius: 5px; }
+.timeline-container { width: 100%; height: 100%; overflow: hidden; }
 .fork-line { stroke: #444; stroke-width: 1; stroke-dasharray: 4,4; }
 .fork-label { fill: #666; font-size: 10px; font-weight: 500; }
 .era-bg { opacity: 0.03; }
+.histogram-bar { fill: rgba(255,255,255,0.13); }
+.histogram-bar:hover { fill: rgba(255,255,255,0.25); }
 
 /* CRITICAL: pointer-events:all so circles with transparent fill are still hoverable */
 .topic-circle { cursor: pointer; pointer-events: all; }
@@ -407,6 +407,9 @@ let activeTag = null;
 let simulation = null;
 let coAuthorSimulation = null;
 let hoveredTopicId = null;
+let lineageActive = false;
+let lineageSet = new Set();
+let lineageEdgeSet = new Set(); // "src-tgt" strings for fast edge lookup
 
 // Build index: topic_id -> set of connected topic_ids (for edge highlighting)
 const topicEdgeIndex = {};
@@ -456,6 +459,7 @@ function showView(view) {
   document.getElementById('btn-coauthor').classList.toggle('active', view === 'coauthor');
   if (view === 'network' && !document.querySelector('#network-view svg')) buildNetwork();
   if (view === 'coauthor' && !document.querySelector('#coauthor-view svg')) buildCoAuthorNetwork();
+  if (lineageActive) applyLineageHighlight();
 }
 
 // === SIDEBAR ===
@@ -583,17 +587,23 @@ function clearFilters() {
   activeAuthor = null;
   activeCategory = null;
   activeTag = null;
+  lineageActive = false;
+  lineageSet = new Set();
+  lineageEdgeSet = new Set();
   document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
+  var btn = document.getElementById('lineage-btn');
+  if (btn) { btn.textContent = 'Trace Lineage'; btn.style.borderColor = '#5566aa'; btn.style.color = '#8899cc'; }
   applyFilters();
 }
 
 function toggleThread(tid) {
   activeThread = activeThread === tid ? null : tid;
   activeAuthor = null;
+  lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
   document.querySelectorAll('.thread-chip').forEach(c =>
     c.classList.toggle('active', c.dataset.thread === activeThread));
   document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
@@ -604,6 +614,7 @@ function toggleThread(tid) {
 function toggleAuthor(username) {
   activeAuthor = activeAuthor === username ? null : username;
   activeThread = null;
+  lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
   document.querySelectorAll('.author-item').forEach(c =>
     c.classList.toggle('active', c.dataset.author === activeAuthor));
   document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
@@ -684,15 +695,19 @@ function highlightCoAuthorSet(ids) {
 
 // === TIMELINE ===
 let tlRScale; // shared so search can use it
+let tlXScale; // current x scale (updated on zoom)
+let tlXScaleOrig; // original x scale (for zoom reset)
 
 function buildTimeline() {
   const container = document.getElementById('timeline-view');
-  const width = Math.max(container.clientWidth, 3200);
+  const width = container.clientWidth || 900;
   const height = container.clientHeight || 700;
 
-  const margin = {top: 50, right: 40, bottom: 30, left: 180};
+  const histH = 24; // histogram height
+  const margin = {top: 50, right: 40, bottom: 30 + histH, left: 180};
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
+  const swimH = plotH - histH; // swim lane area above histogram
 
   // Group topics by thread for swim lanes
   const threadTopics = {};
@@ -706,20 +721,24 @@ function buildTimeline() {
   });
 
   const laneOrder = [...THREAD_ORDER.filter(t => (threadTopics[t]||[]).length > 0), '_other'];
-  const laneH = plotH / laneOrder.length;
+  const laneH = swimH / laneOrder.length;
 
   // Time scale
   const allDates = Object.values(DATA.topics).map(t => new Date(t.d)).filter(d => !isNaN(d));
+  const xDomainOrig = [d3.min(allDates), d3.max(allDates)];
   const xScale = d3.scaleTime()
-    .domain([d3.min(allDates), d3.max(allDates)])
+    .domain(xDomainOrig.slice())
     .range([0, plotW]);
+
+  tlXScale = xScale;
+  tlXScaleOrig = xScale.copy();
 
   // Size scale
   const maxInf = d3.max(Object.values(DATA.topics), t => t.inf) || 1;
   const rScale = d3.scaleSqrt().domain([0, maxInf]).range([2.5, 14]);
   tlRScale = rScale; // expose for search
 
-  // Create SVG
+  // Create SVG (fits the container -- no oversized width)
   const wrapper = document.createElement('div');
   wrapper.className = 'timeline-container';
   container.appendChild(wrapper);
@@ -728,85 +747,112 @@ function buildTimeline() {
     .attr('width', width)
     .attr('height', height);
 
-  const g = svg.append('g').attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+  // Clip path so zoomed content doesn't overflow into the label area
+  svg.append('defs').append('clipPath').attr('id', 'tl-clip')
+    .append('rect').attr('x', 0).attr('y', -margin.top).attr('width', plotW).attr('height', height);
+
+  // Root group offset by margins
+  const root = svg.append('g').attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+  // Fixed layer for y-axis labels (never affected by zoom)
+  const fixedG = root.append('g');
+
+  // Clipped layer for all zoomable content
+  const clipG = root.append('g').attr('clip-path', 'url(#tl-clip)');
+  const zoomG = clipG.append('g');
 
   // Era backgrounds
   const eraColors = ['#334', '#343', '#334', '#433', '#343'];
+  const eraRects = [];
+  const eraTexts = [];
   DATA.eras.forEach((era, i) => {
     const x0 = xScale(new Date(era.start));
     const x1 = xScale(new Date(era.end));
-    g.append('rect').attr('class', 'era-bg')
-      .attr('x', x0).attr('y', 0).attr('width', x1-x0).attr('height', plotH)
-      .attr('fill', eraColors[i] || '#333');
-    g.append('text').attr('x', (x0+x1)/2).attr('y', -8)
-      .attr('text-anchor', 'middle').attr('fill', '#555').attr('font-size', 10)
-      .text(era.name);
+    eraRects.push(
+      zoomG.append('rect').attr('class', 'era-bg')
+        .attr('x', x0).attr('y', 0).attr('width', x1 - x0).attr('height', swimH)
+        .attr('fill', eraColors[i] || '#333')
+        .datum({start: new Date(era.start), end: new Date(era.end)})
+    );
+    eraTexts.push(
+      zoomG.append('text').attr('x', (x0 + x1) / 2).attr('y', -8)
+        .attr('text-anchor', 'middle').attr('fill', '#555').attr('font-size', 10)
+        .text(era.name)
+        .datum({start: new Date(era.start), end: new Date(era.end)})
+    );
   });
 
-  // Fork lines
+  // Fork lines + labels
+  const forkLines = [];
+  const forkLabels = [];
   DATA.forks.forEach(f => {
     if (!f.d) return;
-    const x = xScale(new Date(f.d));
-    g.append('line').attr('class', 'fork-line')
-      .attr('x1', x).attr('x2', x).attr('y1', -5).attr('y2', plotH);
-    g.append('text').attr('class', 'fork-label')
-      .attr('x', x).attr('y', plotH + 15).attr('text-anchor', 'middle')
-      .text(f.cn || f.n);
+    const fd = new Date(f.d);
+    const x = xScale(fd);
+    forkLines.push(
+      zoomG.append('line').attr('class', 'fork-line')
+        .attr('x1', x).attr('x2', x).attr('y1', -5).attr('y2', swimH + histH)
+        .datum(fd)
+    );
+    forkLabels.push(
+      zoomG.append('text').attr('class', 'fork-label')
+        .attr('x', x).attr('y', swimH + histH + 15).attr('text-anchor', 'middle')
+        .text(f.cn || f.n)
+        .datum(fd)
+    );
   });
 
-  // Swim lane labels + separators
+  // Swim lane labels + separators (labels are fixed; separators are in zoomG)
   const laneIdx = {};
   laneOrder.forEach((tid, i) => {
     laneIdx[tid] = i;
     const y = i * laneH + laneH / 2;
     const name = tid === '_other' ? 'Other' : (DATA.threads[tid] ? DATA.threads[tid].n : tid);
     const color = tid === '_other' ? '#555' : (THREAD_COLORS[tid] || '#555');
-    g.append('text').attr('x', -10).attr('y', y)
+    fixedG.append('text').attr('x', -10).attr('y', y)
       .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
       .attr('fill', color).attr('font-size', 11).attr('font-weight', 500)
       .text(name.length > 22 ? name.slice(0, 20) + '\u2026' : name);
     if (i > 0) {
-      g.append('line').attr('x1', 0).attr('x2', plotW)
+      fixedG.append('line').attr('x1', 0).attr('x2', plotW)
         .attr('y1', i * laneH).attr('y2', i * laneH)
         .attr('stroke', '#1a1a2a').attr('stroke-width', 0.5);
     }
   });
 
-  // Position topics within swim lanes using deterministic jitter
-  const topicPos = {};
+  // Pre-compute fixed y positions for topics (y is stable across zoom)
   Object.values(DATA.topics).forEach(t => {
     const th = (t.th && laneIdx[t.th] !== undefined) ? t.th : '_other';
     const lane = laneIdx[th];
-    const x = xScale(new Date(t.d));
     const yBase = lane * laneH + laneH * 0.12;
     const yRange = laneH * 0.76;
-    const y = yBase + (hashCode(t.id) % 100) / 100 * yRange;
-    topicPos[t.id] = {x: x, y: y};
+    t._yPos = yBase + (hashCode(t.id) % 100) / 100 * yRange;
+    t._date = new Date(t.d);
   });
 
   // Draw edges (below circles)
-  const edgeG = g.append('g');
+  const edgeG = zoomG.append('g');
   DATA.graph.edges.forEach(e => {
-    const s = topicPos[e.source];
-    const t = topicPos[e.target];
-    if (s && t) {
+    const sT = DATA.topics[e.source];
+    const tT = DATA.topics[e.target];
+    if (sT && tT && sT._yPos !== undefined && tT._yPos !== undefined) {
       edgeG.append('line').attr('class', 'edge-line')
-        .attr('x1', s.x).attr('y1', s.y).attr('x2', t.x).attr('y2', t.y)
+        .attr('x1', xScale(sT._date)).attr('y1', sT._yPos)
+        .attr('x2', xScale(tT._date)).attr('y2', tT._yPos)
         .attr('stroke-opacity', 0.06)
-        .datum({source: e.source, target: e.target});
+        .datum({source: e.source, target: e.target, sd: sT._date, td: tT._date, sy: sT._yPos, ty: tT._yPos});
     }
   });
 
   // Draw topic circles
-  const circleG = g.append('g');
+  const circleG = zoomG.append('g');
   Object.values(DATA.topics).forEach(t => {
-    const pos = topicPos[t.id];
-    if (!pos) return;
+    if (t._yPos === undefined) return;
     const color = t.th ? (THREAD_COLORS[t.th] || '#555') : '#555';
 
     circleG.append('circle')
       .attr('class', 'topic-circle')
-      .attr('cx', pos.x).attr('cy', pos.y)
+      .attr('cx', xScale(t._date)).attr('cy', t._yPos)
       .attr('r', rScale(t.inf))
       .attr('fill', color)
       .attr('stroke', color)
@@ -818,11 +864,118 @@ function buildTimeline() {
       .on('mouseout', function(ev, d) { onTimelineHover(ev, d, false); });
   });
 
-  // X axis
-  const xAxis = d3.axisBottom(xScale).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y'));
-  g.append('g').attr('transform', 'translate(0,' + plotH + ')').call(xAxis)
-    .selectAll('text').attr('fill', '#666').attr('font-size', 10);
-  g.selectAll('.domain, .tick line').attr('stroke', '#333');
+  // --- Monthly activity histogram ---
+  var monthBins = {};
+  Object.values(DATA.topics).forEach(function(t) {
+    var d = t._date;
+    if (!d || isNaN(d)) return;
+    var key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    if (!monthBins[key]) monthBins[key] = {date: new Date(d.getFullYear(), d.getMonth(), 1), count: 0};
+    monthBins[key].count++;
+  });
+  var histData = Object.values(monthBins).sort(function(a, b) { return a.date - b.date; });
+  var maxCount = d3.max(histData, function(d) { return d.count; }) || 1;
+  var histYScale = d3.scaleLinear().domain([0, maxCount]).range([0, histH - 2]);
+
+  // Compute bar width: ~30 days in the time scale
+  var barWidthBase = Math.max(1, xScale(new Date(2020, 1, 1)) - xScale(new Date(2020, 0, 1)));
+
+  var histG = zoomG.append('g').attr('class', 'histogram-g')
+    .attr('transform', 'translate(0,' + swimH + ')');
+
+  histG.selectAll('.histogram-bar')
+    .data(histData)
+    .join('rect')
+    .attr('class', 'histogram-bar')
+    .attr('x', function(d) { return xScale(d.date); })
+    .attr('y', function(d) { return histH - histYScale(d.count); })
+    .attr('width', Math.max(1, barWidthBase * 0.85))
+    .attr('height', function(d) { return histYScale(d.count); })
+    .attr('rx', 1)
+    .on('mouseover', function(ev, d) {
+      var tip = document.getElementById('tooltip');
+      var mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      tip.innerHTML = mn[d.date.getMonth()] + ' ' + d.date.getFullYear() + ': ' + d.count + ' topic' + (d.count !== 1 ? 's' : '');
+      tip.style.display = 'block';
+      tip.style.left = (ev.clientX + 10) + 'px';
+      tip.style.top = (ev.clientY - 24) + 'px';
+    })
+    .on('mouseout', function() { hideTooltip(); });
+
+  // X axis (below histogram + swimlanes)
+  var xAxisG = root.append('g')
+    .attr('class', 'x-axis')
+    .attr('transform', 'translate(0,' + (swimH + histH) + ')');
+  var xAxisFn = d3.axisBottom(xScale).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y'));
+  xAxisG.call(xAxisFn);
+  xAxisG.selectAll('text').attr('fill', '#666').attr('font-size', 10);
+  xAxisG.selectAll('.domain, .tick line').attr('stroke', '#333');
+
+  // === D3 ZOOM (horizontal only) ===
+  var zoom = d3.zoom()
+    .scaleExtent([0.5, 8])
+    .translateExtent([[0, 0], [plotW, height]])
+    .extent([[0, 0], [plotW, height]])
+    .filter(function(ev) {
+      // Allow wheel, touch, and drag -- but not double-click (handled separately)
+      return !ev.ctrlKey && !ev.button && ev.type !== 'dblclick';
+    })
+    .on('zoom', onZoom);
+
+  svg.call(zoom);
+
+  // Double-click to reset zoom
+  svg.on('dblclick.zoom', function() {
+    svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+  });
+
+  function onZoom(ev) {
+    // Rescale x only (horizontal pan/zoom; y stays fixed)
+    var t = ev.transform;
+    var newX = t.rescaleX(tlXScaleOrig);
+    tlXScale = newX;
+
+    // Update topic circles (only cx changes)
+    d3.selectAll('.topic-circle').attr('cx', function(d) { return newX(d._date); });
+
+    // Update edges
+    d3.selectAll('.edge-line')
+      .attr('x1', function(d) { return newX(d.sd); })
+      .attr('x2', function(d) { return newX(d.td); });
+
+    // Update era backgrounds
+    eraRects.forEach(function(r) {
+      var d = r.datum();
+      r.attr('x', newX(d.start)).attr('width', Math.max(0, newX(d.end) - newX(d.start)));
+    });
+    eraTexts.forEach(function(txt) {
+      var d = txt.datum();
+      txt.attr('x', (newX(d.start) + newX(d.end)) / 2);
+    });
+
+    // Update fork lines + labels
+    forkLines.forEach(function(l) { var d = l.datum(); l.attr('x1', newX(d)).attr('x2', newX(d)); });
+    forkLabels.forEach(function(l) { var d = l.datum(); l.attr('x', newX(d)); });
+
+    // Update histogram bars
+    var zoomedBarW = Math.max(1, (newX(new Date(2020, 1, 1)) - newX(new Date(2020, 0, 1))) * 0.85);
+    d3.selectAll('.histogram-bar')
+      .attr('x', function(d) { return newX(d.date); })
+      .attr('width', zoomedBarW);
+
+    // Update x-axis with adaptive tick density
+    var axisFn;
+    if (t.k > 4) {
+      axisFn = d3.axisBottom(newX).ticks(d3.timeMonth.every(1)).tickFormat(d3.timeFormat('%b %Y'));
+    } else if (t.k > 2) {
+      axisFn = d3.axisBottom(newX).ticks(d3.timeMonth.every(3)).tickFormat(d3.timeFormat('%b %Y'));
+    } else {
+      axisFn = d3.axisBottom(newX).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y'));
+    }
+    xAxisG.call(axisFn);
+    xAxisG.selectAll('text').attr('fill', '#666').attr('font-size', 10);
+    xAxisG.selectAll('.domain, .tick line').attr('stroke', '#333');
+  }
 }
 
 function onTimelineHover(ev, d, entering) {
@@ -871,6 +1024,7 @@ function topicMatchesFilter(t) {
 }
 
 function filterTimeline() {
+  if (lineageActive) { applyLineageTimeline(); return; }
   const hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
 
   d3.selectAll('.topic-circle')
@@ -884,6 +1038,7 @@ function filterTimeline() {
 
   d3.selectAll('.edge-line')
     .attr('stroke', '#556')
+    .attr('stroke-width', 1)
     .attr('stroke-opacity', function(e) {
       if (!hasFilter) return 0.06;
       const sT = DATA.topics[e.source];
@@ -1023,6 +1178,7 @@ function buildNetwork() {
 }
 
 function filterNetwork() {
+  if (lineageActive) { applyLineageNetwork(); return; }
   var hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
 
   d3.selectAll('.net-node circle').attr('opacity', function(d) {
@@ -1034,9 +1190,12 @@ function filterNetwork() {
     return 0.7;
   });
 
-  d3.selectAll('.net-link').attr('stroke-opacity', function() {
-    return hasFilter ? 0.04 : 0.12;
-  });
+  d3.selectAll('.net-link')
+    .attr('stroke', '#334')
+    .attr('stroke-width', 1)
+    .attr('stroke-opacity', function() {
+      return hasFilter ? 0.04 : 0.12;
+    });
 }
 
 // === CO-AUTHOR NETWORK ===
@@ -1347,6 +1506,142 @@ function showAuthorDetail(username) {
   panel.classList.add('open');
 }
 
+// === LINEAGE TRACING ===
+function traceLineage(topicId) {
+  if (lineageActive && lineageSet.has(topicId)) {
+    // Toggle off
+    clearLineage();
+    return;
+  }
+
+  // BFS upstream (follow incoming refs) and downstream (follow outgoing refs)
+  lineageSet = new Set();
+  lineageEdgeSet = new Set();
+  lineageSet.add(topicId);
+
+  // Upstream: who does this topic cite, and who do THEY cite (2 hops via t.out)
+  // Actually incoming refs = topics that cite this one = descendants
+  // outgoing refs = topics this one cites = ancestors
+  // "upstream" = ancestors = follow outgoing refs
+  // "downstream" = descendants = follow incoming refs
+
+  var upQueue = [{id: topicId, depth: 0}];
+  var visited = new Set([topicId]);
+  while (upQueue.length > 0) {
+    var cur = upQueue.shift();
+    if (cur.depth >= 2) continue;
+    var topic = DATA.topics[cur.id];
+    if (!topic) continue;
+    (topic.out || []).forEach(function(refId) {
+      lineageSet.add(refId);
+      lineageEdgeSet.add(cur.id + '-' + refId);
+      lineageEdgeSet.add(refId + '-' + cur.id);
+      if (!visited.has(refId)) {
+        visited.add(refId);
+        upQueue.push({id: refId, depth: cur.depth + 1});
+      }
+    });
+  }
+
+  // Downstream: follow incoming refs (topics that cite this one)
+  var downQueue = [{id: topicId, depth: 0}];
+  visited = new Set([topicId]);
+  while (downQueue.length > 0) {
+    var cur = downQueue.shift();
+    if (cur.depth >= 2) continue;
+    var topic = DATA.topics[cur.id];
+    if (!topic) continue;
+    (topic.inc || []).forEach(function(refId) {
+      lineageSet.add(refId);
+      lineageEdgeSet.add(cur.id + '-' + refId);
+      lineageEdgeSet.add(refId + '-' + cur.id);
+      if (!visited.has(refId)) {
+        visited.add(refId);
+        downQueue.push({id: refId, depth: cur.depth + 1});
+      }
+    });
+  }
+
+  lineageActive = true;
+  applyLineageHighlight();
+  updateLineageButton(topicId);
+}
+
+function clearLineage() {
+  lineageActive = false;
+  lineageSet = new Set();
+  lineageEdgeSet = new Set();
+  applyFilters();
+  // Update button if detail panel is open
+  var btn = document.getElementById('lineage-btn');
+  if (btn) {
+    btn.textContent = 'Trace Lineage';
+    btn.style.borderColor = '#5566aa';
+    btn.style.color = '#8899cc';
+  }
+}
+
+function updateLineageButton(topicId) {
+  var btn = document.getElementById('lineage-btn');
+  if (btn) {
+    btn.textContent = 'Clear Lineage (' + lineageSet.size + ' topics)';
+    btn.style.borderColor = '#88aaff';
+    btn.style.color = '#88aaff';
+  }
+}
+
+function applyLineageHighlight() {
+  if (!lineageActive) return;
+  if (activeView === 'timeline') applyLineageTimeline();
+  else if (activeView === 'network') applyLineageNetwork();
+}
+
+function applyLineageTimeline() {
+  d3.selectAll('.topic-circle')
+    .attr('opacity', function(d) { return lineageSet.has(d.id) ? 1 : 0.04; })
+    .attr('r', function(d) { return lineageSet.has(d.id) ? tlRScale(d.inf) * 1.2 : tlRScale(d.inf); });
+
+  d3.selectAll('.edge-line')
+    .attr('stroke', function(e) {
+      var key = e.source + '-' + e.target;
+      return lineageEdgeSet.has(key) ? '#88aaff' : '#556';
+    })
+    .attr('stroke-opacity', function(e) {
+      var key = e.source + '-' + e.target;
+      return lineageEdgeSet.has(key) ? 0.6 : 0.01;
+    })
+    .attr('stroke-width', function(e) {
+      var key = e.source + '-' + e.target;
+      return lineageEdgeSet.has(key) ? 2 : 1;
+    });
+}
+
+function applyLineageNetwork() {
+  d3.selectAll('.net-node circle').attr('opacity', function(d) {
+    return lineageSet.has(d.id) ? 1 : 0.04;
+  });
+
+  d3.selectAll('.net-link')
+    .attr('stroke', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      var key = sid + '-' + tid;
+      return lineageEdgeSet.has(key) ? '#88aaff' : '#334';
+    })
+    .attr('stroke-opacity', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      var key = sid + '-' + tid;
+      return lineageEdgeSet.has(key) ? 0.7 : 0.02;
+    })
+    .attr('stroke-width', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      var key = sid + '-' + tid;
+      return lineageEdgeSet.has(key) ? 2.5 : 1;
+    });
+}
+
 // === DETAIL PANEL ===
 function showDetail(t) {
   var panel = document.getElementById('detail-panel');
@@ -1391,6 +1686,12 @@ function showDetail(t) {
     '<div class="detail-stat"><span class="label">Posts</span><span class="value">' + t.pc + '</span></div>' +
     '<div class="detail-stat"><span class="label">Cited by</span><span class="value">' + t.ind + ' topics</span></div>' +
     '<div class="detail-stat"><span class="label">Category</span><span class="value">' + escHtml(t.cat) + '</span></div>' +
+    '<div style="margin:10px 0 6px"><button id="lineage-btn" onclick="traceLineage(' + t.id + ')" ' +
+    'style="background:#1a1a2e;border:1px solid ' + (lineageActive && lineageSet.has(t.id) ? '#88aaff' : '#5566aa') +
+    ';color:' + (lineageActive && lineageSet.has(t.id) ? '#88aaff' : '#8899cc') +
+    ';padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">' +
+    (lineageActive && lineageSet.has(t.id) ? 'Clear Lineage (' + lineageSet.size + ' topics)' : 'Trace Lineage') +
+    '</button></div>' +
     (t.exc ? '<div class="detail-excerpt">' + escHtml(t.exc) + '</div>' : '') +
     (t.peips && t.peips.length > 0 ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">EIPs discussed:</strong> ' +
       t.peips.map(function(e) { return '<span class="eip-tag primary">EIP-' + e + '</span>'; }).join(' ') + '</div>' : '') +

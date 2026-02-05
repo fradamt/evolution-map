@@ -1,0 +1,3 @@
+1. When you click on a node (and the sidebar opens), the view should stay fixed as if you were hovering on it, i.e. the arrows out of it should be highlighted, the dependent nodes should stay highlighted etc... So you can move the cursor away from the node and go explore the dependencies
+2. when you click on a node and hover over a link in "References" (in the sidebar that opens for the node), the corresponding node should be highlighted
+3. When you click on a link in References and the sidebar switches to the new node (the one referenced in the link), the corresponding node should now be the one "in focus" (same concept as 1)
