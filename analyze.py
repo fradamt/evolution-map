@@ -623,6 +623,110 @@ def main():
     print(f"  Unassigned: {unassigned}")
 
     # -----------------------------------------------------------------------
+    # Thread evolution milestones
+    # -----------------------------------------------------------------------
+    print("Computing thread evolution milestones...")
+    thread_milestones = {}  # thread_id -> list of milestone dicts
+
+    for thread_id in THREAD_SEEDS:
+        thread_tids = [
+            tid for tid in included
+            if topics[tid].get("research_thread") == thread_id and topics[tid]["date"]
+        ]
+        if not thread_tids:
+            thread_milestones[thread_id] = []
+            continue
+
+        # Sort by date
+        thread_tids.sort(key=lambda t: topics[t]["date"])
+
+        # Compute in-degree within the thread for peak_citations detection
+        thread_tid_set = set(thread_tids)
+        thread_in_degree = Counter()
+        for tid in thread_tids:
+            for tgt in all_internal_links.get(tid, set()):
+                if tgt in thread_tid_set:
+                    thread_in_degree[tgt] += 1
+
+        # Find the topic with highest in-degree in the thread
+        peak_citations_tid = None
+        if thread_in_degree:
+            peak_citations_tid = thread_in_degree.most_common(1)[0][0]
+
+        # Find the topic with highest influence score in the thread
+        peak_influence_tid = max(thread_tids, key=lambda t: topics[t]["influence_score"])
+
+        # Earliest and latest topics
+        earliest_tid = thread_tids[0]
+        latest_tid = thread_tids[-1]
+
+        # Divide time range into equal intervals and pick best topic per interval
+        first_date = topics[earliest_tid]["date"]
+        last_date = topics[latest_tid]["date"]
+
+        # Convert dates to ordinal for arithmetic
+        first_ord = datetime.strptime(first_date, "%Y-%m-%d").toordinal()
+        last_ord = datetime.strptime(last_date, "%Y-%m-%d").toordinal()
+        span = last_ord - first_ord
+
+        # We want up to 5 milestones total. The first and last are always
+        # candidates, so divide into 5 intervals and pick 1 per interval.
+        num_intervals = 5
+        interval_picks = {}  # interval_index -> best tid
+
+        if span > 0:
+            for tid in thread_tids:
+                t_ord = datetime.strptime(topics[tid]["date"], "%Y-%m-%d").toordinal()
+                bucket = min(int((t_ord - first_ord) / span * num_intervals), num_intervals - 1)
+                prev = interval_picks.get(bucket)
+                if prev is None or topics[tid]["influence_score"] > topics[prev]["influence_score"]:
+                    interval_picks[bucket] = tid
+        else:
+            # All topics on the same date — just pick the highest influence
+            interval_picks[0] = peak_influence_tid
+
+        # Assemble milestone candidates with notes, deduplicating by tid
+        milestone_map = {}  # tid -> note
+
+        # Always include earliest and latest
+        if earliest_tid not in milestone_map:
+            milestone_map[earliest_tid] = "earliest"
+        if latest_tid not in milestone_map:
+            milestone_map[latest_tid] = "latest"
+
+        # Include peak influence
+        if peak_influence_tid not in milestone_map:
+            milestone_map[peak_influence_tid] = "peak_influence"
+
+        # Include peak citations (highest in-degree within thread)
+        if peak_citations_tid and peak_citations_tid not in milestone_map:
+            milestone_map[peak_citations_tid] = "peak_citations"
+
+        # Fill remaining slots from interval picks
+        for _bucket, tid in sorted(interval_picks.items()):
+            if len(milestone_map) >= 5:
+                break
+            if tid not in milestone_map:
+                milestone_map[tid] = "interval"
+
+        # Build sorted milestone list
+        milestones = []
+        for tid, note in sorted(milestone_map.items(), key=lambda kv: topics[kv[0]]["date"]):
+            t = topics[tid]
+            milestones.append({
+                "id": tid,
+                "title": t["title"],
+                "date": t["date"],
+                "influence": t["influence_score"],
+                "note": note,
+            })
+
+        thread_milestones[thread_id] = milestones
+
+    milestone_total = sum(len(m) for m in thread_milestones.values())
+    print(f"  {milestone_total} milestones across {len(thread_milestones)} threads")
+
+    # -----------------------------------------------------------------------
     # EIP → fork mapping for topics
     # -----------------------------------------------------------------------
     # NOTE: We intentionally do NOT map topics → "shipped in fork".
@@ -773,6 +877,30 @@ def main():
                 quarter_counter[q] += 1
         quarterly_counts = [{"q": q, "c": quarter_counter.get(q, 0)} for q in all_quarters]
 
+        # --- Thread summary statistics ---
+
+        # peak_year: year with the most topics in this thread
+        year_counter = Counter()
+        for tid in thread_topics:
+            d = topics[tid]["date"]
+            if d:
+                year_counter[int(d[:4])] += 1
+        peak_year = year_counter.most_common(1)[0][0] if year_counter else None
+
+        # active_years: years with >= 3 topics
+        active_years = sorted(y for y, c in year_counter.items() if c >= 3)
+
+        # top_eips: top 5 most-mentioned EIPs across thread's topics (by count)
+        thread_eip_counter = Counter()
+        for tid in thread_topics:
+            for eip in topics[tid]["eip_mentions"]:
+                thread_eip_counter[eip] += 1
+        top_eips = [eip for eip, _count in thread_eip_counter.most_common(5)]
+
+        # author_diversity: distinct authors / total topics (0-1)
+        distinct_authors = len({topics[tid]["author"] for tid in thread_topics})
+        author_diversity = round(distinct_authors / len(thread_topics), 4) if thread_topics else 0
+
         threads_output[thread_id] = {
             "id": thread_id,
             "name": thread_def["name"],
@@ -783,6 +911,11 @@ def main():
             "eip_mentions": sorted(thread_eips),
             "top_topics": thread_topics_sorted[:15],
             "quarterly_counts": quarterly_counts,
+            "milestones": thread_milestones.get(thread_id, []),
+            "peak_year": peak_year,
+            "active_years": active_years,
+            "top_eips": top_eips,
+            "author_diversity": author_diversity,
         }
 
     print(f"  {len(threads_output)} threads with topics")

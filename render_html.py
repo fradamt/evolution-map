@@ -284,6 +284,13 @@ header .stats span { white-space: nowrap; }
 .topic-circle { cursor: pointer; pointer-events: all; }
 .edge-line { stroke: #556; }
 
+/* Arrow markers (default barely visible, highlighted more visible) */
+.arrow-default { fill: #556; }
+.arrow-highlight { fill: #88aaff; }
+.arrow-lineage { fill: #88aaff; }
+.arrow-net-default { fill: #334; }
+.arrow-net-highlight { fill: #88aaff; }
+
 /* Network */
 .net-node { cursor: pointer; }
 .net-link { stroke: #334; }
@@ -447,6 +454,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeDetail(); clearFilters(); }
   });
+  // Apply initial hash state after a short delay to ensure views are ready
+  setTimeout(function() { applyHash(); }, 50);
+  // Listen for browser back/forward
+  window.addEventListener('hashchange', function() {
+    applyHash();
+  });
 });
 
 // === VIEW SWITCHING ===
@@ -461,6 +474,7 @@ function showView(view) {
   if (view === 'network' && !document.querySelector('#network-view svg')) buildNetwork();
   if (view === 'coauthor' && !document.querySelector('#coauthor-view svg')) buildCoAuthorNetwork();
   if (lineageActive) applyLineageHighlight();
+  updateHash();
 }
 
 // === SIDEBAR ===
@@ -599,6 +613,7 @@ function clearFilters() {
   var btn = document.getElementById('lineage-btn');
   if (btn) { btn.textContent = 'Trace Lineage'; btn.style.borderColor = '#5566aa'; btn.style.color = '#8899cc'; }
   applyFilters();
+  updateHash();
 }
 
 function toggleThread(tid) {
@@ -610,6 +625,19 @@ function toggleThread(tid) {
   document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
   applyFilters();
+  updateHash();
+}
+
+function selectThread(tid) {
+  activeThread = tid;
+  activeAuthor = null;
+  lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
+  document.querySelectorAll('.thread-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.thread === activeThread));
+  document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
+  document.getElementById('search-box').value = '';
+  applyFilters();
+  updateHash();
 }
 
 function toggleAuthor(username) {
@@ -621,6 +649,19 @@ function toggleAuthor(username) {
   document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
   applyFilters();
+  updateHash();
+}
+
+function selectAuthor(username) {
+  activeAuthor = username;
+  activeThread = null;
+  lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
+  document.querySelectorAll('.author-item').forEach(c =>
+    c.classList.toggle('active', c.dataset.author === activeAuthor));
+  document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById('search-box').value = '';
+  applyFilters();
+  updateHash();
 }
 
 function applyFilters() {
@@ -749,8 +790,26 @@ function buildTimeline() {
     .attr('height', height);
 
   // Clip path so zoomed content doesn't overflow into the label area
-  svg.append('defs').append('clipPath').attr('id', 'tl-clip')
+  var tlDefs = svg.append('defs');
+  tlDefs.append('clipPath').attr('id', 'tl-clip')
     .append('rect').attr('x', 0).attr('y', -margin.top).attr('width', plotW).attr('height', height);
+
+  // Arrow markers for citation edges (default: subtle, highlighted: visible)
+  tlDefs.append('marker').attr('id', 'arrow-default')
+    .attr('viewBox', '0 0 6 4').attr('refX', 6).attr('refY', 2)
+    .attr('markerWidth', 6).attr('markerHeight', 4)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L6,2 L0,4 Z').attr('class', 'arrow-default').attr('opacity', 0.3);
+  tlDefs.append('marker').attr('id', 'arrow-highlight')
+    .attr('viewBox', '0 0 6 4').attr('refX', 6).attr('refY', 2)
+    .attr('markerWidth', 6).attr('markerHeight', 4)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L6,2 L0,4 Z').attr('class', 'arrow-highlight').attr('opacity', 0.8);
+  tlDefs.append('marker').attr('id', 'arrow-lineage')
+    .attr('viewBox', '0 0 6 4').attr('refX', 6).attr('refY', 2)
+    .attr('markerWidth', 6).attr('markerHeight', 4)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L6,2 L0,4 Z').attr('class', 'arrow-lineage').attr('opacity', 0.9);
 
   // Root group offset by margins
   const root = svg.append('g').attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
@@ -841,6 +900,7 @@ function buildTimeline() {
         .attr('x1', xScale(sT._date)).attr('y1', sT._yPos)
         .attr('x2', xScale(tT._date)).attr('y2', tT._yPos)
         .attr('stroke-opacity', 0.06)
+        .attr('marker-end', 'url(#arrow-default)')
         .datum({source: e.source, target: e.target, sd: sT._date, td: tT._date, sy: sT._yPos, ty: tT._yPos});
     }
   });
@@ -1007,6 +1067,10 @@ function onTimelineHover(ev, d, entering) {
       .attr('stroke', function(e) {
         if (e.source === d.id || e.target === d.id) return '#88aaff';
         return '#556';
+      })
+      .attr('marker-end', function(e) {
+        if (e.source === d.id || e.target === d.id) return 'url(#arrow-highlight)';
+        return 'url(#arrow-default)';
       });
   } else {
     hoveredTopicId = null;
@@ -1052,6 +1116,10 @@ function applyPinnedHighlightTimeline() {
     .attr('stroke', function(e) {
       if (e.source === pinnedTopicId || e.target === pinnedTopicId) return '#88aaff';
       return '#556';
+    })
+    .attr('marker-end', function(e) {
+      if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 'url(#arrow-highlight)';
+      return 'url(#arrow-default)';
     });
 }
 
@@ -1068,6 +1136,10 @@ function applyPinnedHighlightNetwork() {
     var sid = typeof l.source === 'object' ? l.source.id : l.source;
     var tid = typeof l.target === 'object' ? l.target.id : l.target;
     return (sid === pinnedTopicId || tid === pinnedTopicId) ? 0.6 : 0.02;
+  }).attr('marker-end', function(l) {
+    var sid = typeof l.source === 'object' ? l.source.id : l.source;
+    var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    return (sid === pinnedTopicId || tid === pinnedTopicId) ? 'url(#net-arrow-highlight)' : 'url(#net-arrow-default)';
   });
 }
 
@@ -1094,6 +1166,11 @@ function highlightTopicInView(topicId) {
         if (e.source === topicId || e.target === topicId) return '#ffaa44';
         if (e.source === pinnedTopicId || e.target === pinnedTopicId) return '#88aaff';
         return '#556';
+      })
+      .attr('marker-end', function(e) {
+        if (e.source === topicId || e.target === topicId) return 'url(#arrow-highlight)';
+        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 'url(#arrow-highlight)';
+        return 'url(#arrow-default)';
       });
   } else if (activeView === 'network') {
     var connected = topicEdgeIndex[String(topicId)] || new Set();
@@ -1106,6 +1183,10 @@ function highlightTopicInView(topicId) {
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
       return (sid === topicId || tid === topicId) ? 0.6 : 0.02;
+    }).attr('marker-end', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (sid === topicId || tid === topicId) ? 'url(#net-arrow-highlight)' : 'url(#net-arrow-default)';
     });
   }
 }
@@ -1143,7 +1224,8 @@ function filterTimeline() {
       const tT = DATA.topics[e.target];
       if (sT && tT && topicMatchesFilter(sT) && topicMatchesFilter(tT)) return 0.25;
       return 0.01;
-    });
+    })
+    .attr('marker-end', 'url(#arrow-default)');
 }
 
 // === NETWORK ===
@@ -1154,6 +1236,19 @@ function buildNetwork() {
 
   const svg = d3.select(container).append('svg')
     .attr('width', width).attr('height', height);
+
+  // Arrow markers for network edges
+  var netDefs = svg.append('defs');
+  netDefs.append('marker').attr('id', 'net-arrow-default')
+    .attr('viewBox', '0 0 6 4').attr('refX', 6).attr('refY', 2)
+    .attr('markerWidth', 6).attr('markerHeight', 4)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L6,2 L0,4 Z').attr('class', 'arrow-net-default').attr('opacity', 0.25);
+  netDefs.append('marker').attr('id', 'net-arrow-highlight')
+    .attr('viewBox', '0 0 6 4').attr('refX', 6).attr('refY', 2)
+    .attr('markerWidth', 6).attr('markerHeight', 4)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L6,2 L0,4 Z').attr('class', 'arrow-net-highlight').attr('opacity', 0.8);
 
   const g = svg.append('g');
 
@@ -1196,7 +1291,8 @@ function buildNetwork() {
   const link = g.append('g').selectAll('line')
     .data(links).join('line')
     .attr('class', 'net-link')
-    .attr('stroke-opacity', 0.12);
+    .attr('stroke-opacity', 0.12)
+    .attr('marker-end', 'url(#net-arrow-default)');
 
   const node = g.append('g').selectAll('g')
     .data(nodes).join('g')
@@ -1257,6 +1353,10 @@ function buildNetwork() {
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
       return (connected.has(sid) && connected.has(tid)) ? 0.6 : 0.02;
+    }).attr('marker-end', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (connected.has(sid) && connected.has(tid)) ? 'url(#net-arrow-highlight)' : 'url(#net-arrow-default)';
     });
   });
 
@@ -1296,7 +1396,8 @@ function filterNetwork() {
     .attr('stroke-width', 1)
     .attr('stroke-opacity', function() {
       return hasFilter ? 0.04 : 0.12;
-    });
+    })
+    .attr('marker-end', 'url(#net-arrow-default)');
 }
 
 // === CO-AUTHOR NETWORK ===
@@ -1716,6 +1817,10 @@ function applyLineageTimeline() {
     .attr('stroke-width', function(e) {
       var key = e.source + '-' + e.target;
       return lineageEdgeSet.has(key) ? 2 : 1;
+    })
+    .attr('marker-end', function(e) {
+      var key = e.source + '-' + e.target;
+      return lineageEdgeSet.has(key) ? 'url(#arrow-lineage)' : 'url(#arrow-default)';
     });
 }
 
@@ -1742,6 +1847,12 @@ function applyLineageNetwork() {
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
       var key = sid + '-' + tid;
       return lineageEdgeSet.has(key) ? 2.5 : 1;
+    })
+    .attr('marker-end', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      var key = sid + '-' + tid;
+      return lineageEdgeSet.has(key) ? 'url(#net-arrow-highlight)' : 'url(#net-arrow-default)';
     });
 }
 
@@ -1814,12 +1925,14 @@ function showDetail(t) {
     (incRefs ? '<div class="detail-refs"><h4>Cited by (' + t.inc.length + ')</h4>' + incRefs + '</div>' : '');
 
   panel.classList.add('open');
+  updateHash();
 }
 
 function closeDetail() {
   document.getElementById('detail-panel').classList.remove('open');
   pinnedTopicId = null;
   applyFilters();
+  updateHash();
 }
 
 // === TOOLTIP ===
@@ -1846,6 +1959,90 @@ function showTooltip(ev, t) {
 
 function hideTooltip() {
   document.getElementById('tooltip').style.display = 'none';
+}
+
+// === URL HASH ROUTING ===
+function parseHash() {
+  var hash = window.location.hash.replace(/^#/, '');
+  if (!hash) return {};
+  var params = {};
+  hash.split('&').forEach(function(part) {
+    var kv = part.split('=');
+    if (kv.length === 2) params[kv[0]] = decodeURIComponent(kv[1]);
+  });
+  return params;
+}
+
+function buildHash() {
+  var parts = [];
+  if (activeView && activeView !== 'timeline') parts.push('view=' + activeView);
+  if (activeThread) parts.push('thread=' + encodeURIComponent(activeThread));
+  if (activeAuthor) parts.push('author=' + encodeURIComponent(activeAuthor));
+  if (pinnedTopicId) parts.push('topic=' + pinnedTopicId);
+  return parts.length > 0 ? '#' + parts.join('&') : '';
+}
+
+function updateHash() {
+  var newHash = buildHash();
+  var current = window.location.hash || '';
+  if (newHash !== current) {
+    if (newHash) {
+      history.replaceState(null, '', newHash);
+    } else {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }
+}
+
+function applyHash() {
+  var params = parseHash();
+  var changed = false;
+
+  // Switch view if specified
+  if (params.view && params.view !== activeView) {
+    if (params.view === 'network' || params.view === 'coauthor' || params.view === 'timeline') {
+      showView(params.view);
+      changed = true;
+    }
+  }
+
+  // Apply thread filter
+  if (params.thread && params.thread !== activeThread) {
+    if (DATA.threads[params.thread]) {
+      activeThread = params.thread;
+      activeAuthor = null;
+      document.querySelectorAll('.thread-chip').forEach(function(c) {
+        c.classList.toggle('active', c.dataset.thread === activeThread);
+      });
+      document.querySelectorAll('.author-item').forEach(function(c) { c.classList.remove('active'); });
+      applyFilters();
+      changed = true;
+    }
+  }
+
+  // Apply author filter
+  if (params.author && params.author !== activeAuthor) {
+    if (DATA.authors[params.author]) {
+      activeAuthor = params.author;
+      activeThread = null;
+      document.querySelectorAll('.author-item').forEach(function(c) {
+        c.classList.toggle('active', c.dataset.author === activeAuthor);
+      });
+      document.querySelectorAll('.thread-chip').forEach(function(c) { c.classList.remove('active'); });
+      applyFilters();
+      changed = true;
+    }
+  }
+
+  // Open topic detail
+  if (params.topic) {
+    var topicId = Number(params.topic);
+    var t = DATA.topics[topicId];
+    if (t) {
+      showDetail(t);
+      changed = true;
+    }
+  }
 }
 
 // === UTILS ===
