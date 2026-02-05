@@ -17,7 +17,7 @@ header { grid-column: 1 / -1; padding: 12px 20px; background: #12121a;
 header h1 { font-size: 18px; font-weight: 600; color: #fff; white-space: nowrap; }
 header .stats { font-size: 12px; color: #888; display: flex; gap: 15px; }
 header .stats span { white-space: nowrap; }
-.inf-slider-wrap { display: flex; align-items: center; gap: 6px; }
+.inf-slider-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
 .inf-slider-wrap input[type=range] { width: 80px; height: 4px; -webkit-appearance: none; appearance: none;
   background: #333; border-radius: 2px; outline: none; cursor: pointer; }
 .inf-slider-wrap input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
@@ -26,7 +26,7 @@ header .stats span { white-space: nowrap; }
   background: #667; cursor: pointer; border: none; }
 .inf-slider-wrap input[type=range]::-webkit-slider-thumb:hover { background: #88a; }
 .bc-hint { font-size: 10px; color: #555; font-style: italic; }
-.controls { display: flex; gap: 8px; margin-left: auto; }
+.controls { display: flex; gap: 8px; flex-shrink: 0; }
 .controls button { background: #1e1e2e; border: 1px solid #333; color: #ccc;
                    padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
 .controls button:hover { background: #2a2a3e; }
@@ -452,10 +452,8 @@ const defaultInfluenceThreshold = nonMinorCount > 0 && nonMinorCount < allInfsSo
   ? allInfsSorted[nonMinorCount - 1] : 0;
 const defaultSliderPct = maxDataInf > 0 ? Math.round(defaultInfluenceThreshold / maxDataInf * 100) : 0;
 
-function sliderTopicCount(threshold) {
-  var count = 0;
-  Object.values(DATA.topics).forEach(function(t) { if (t.inf >= threshold) count++; });
-  return count;
+function sliderLabel(pct) {
+  return pct === 0 ? '0%' : pct + '%';
 }
 
 function setupInfSlider() {
@@ -464,11 +462,11 @@ function setupInfSlider() {
   // Set default value so initial view matches original (~550 topics visible)
   slider.value = defaultSliderPct;
   minInfluence = defaultInfluenceThreshold;
-  label.textContent = sliderTopicCount(minInfluence);
+  label.textContent = sliderLabel(defaultSliderPct);
   slider.addEventListener('input', function() {
     var pct = Number(this.value);
     minInfluence = pct / 100 * maxDataInf;
-    label.textContent = sliderTopicCount(minInfluence);
+    label.textContent = sliderLabel(pct);
     applyFilters();
   });
 }
@@ -684,7 +682,7 @@ function clearFilters() {
   var slider = document.getElementById('inf-slider');
   if (slider) { slider.value = defaultSliderPct; }
   var slLabel = document.getElementById('inf-slider-label');
-  if (slLabel) { slLabel.textContent = sliderTopicCount(minInfluence); }
+  if (slLabel) { slLabel.textContent = sliderLabel(defaultSliderPct); }
   lineageActive = false;
   lineageSet = new Set();
   lineageEdgeSet = new Set();
