@@ -720,6 +720,27 @@ def main():
     # Research thread summaries
     # -----------------------------------------------------------------------
     print("Building research thread summaries...")
+
+    # Build the full quarter range for sparklines: 2017-Q3 through 2026-Q1
+    all_quarters = []
+    for year in range(2017, 2027):
+        for q in range(1, 5):
+            label = f"{year}-Q{q}"
+            all_quarters.append(label)
+    # Trim to 2017-Q3 through 2026-Q1
+    start_idx = all_quarters.index("2017-Q3")
+    end_idx = all_quarters.index("2026-Q1")
+    all_quarters = all_quarters[start_idx:end_idx + 1]
+
+    def date_to_quarter(date_str):
+        """Convert 'YYYY-MM-DD' to 'YYYY-QN'."""
+        if not date_str or len(date_str) < 7:
+            return None
+        year = date_str[:4]
+        month = int(date_str[5:7])
+        q = (month - 1) // 3 + 1
+        return f"{year}-Q{q}"
+
     threads_output = {}
     for thread_id, thread_def in THREAD_SEEDS.items():
         thread_topics = [tid for tid in included if topics[tid].get("research_thread") == thread_id]
@@ -744,6 +765,14 @@ def main():
         # Sort topics by influence
         thread_topics_sorted = sorted(thread_topics, key=lambda t: topics[t]["influence_score"], reverse=True)
 
+        # Quarterly counts for sparkline
+        quarter_counter = Counter()
+        for tid in thread_topics:
+            q = date_to_quarter(topics[tid]["date"])
+            if q:
+                quarter_counter[q] += 1
+        quarterly_counts = [{"q": q, "c": quarter_counter.get(q, 0)} for q in all_quarters]
+
         threads_output[thread_id] = {
             "id": thread_id,
             "name": thread_def["name"],
@@ -753,6 +782,7 @@ def main():
             "key_authors": dict(Counter({a: int(c) for a, c in thread_authors.most_common(10)}).most_common(10)),
             "eip_mentions": sorted(thread_eips),
             "top_topics": thread_topics_sorted[:15],
+            "quarterly_counts": quarterly_counts,
         }
 
     print(f"  {len(threads_output)} threads with topics")

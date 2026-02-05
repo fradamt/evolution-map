@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Render analysis.json → evolution-map.html (interactive visualization).
+"""Render analysis.json -> evolution-map.html (interactive visualization).
 
 Generates a single self-contained HTML file with D3.js v7 (from CDN).
-Four panels: Timeline Swim Lanes, Citation Network, Author Sidebar, Detail Panel.
+Five panels: Timeline Swim Lanes, Citation Network, Co-Author Network,
+Author Sidebar, Detail Panel.
 
 Usage:
     python3 render_html.py
@@ -86,6 +87,7 @@ def prepare_viz_data(data):
             "eips": t.get("eip_mentions", []),
             "peips": t.get("primary_eips", []),
             "cat": t.get("category_name", ""),
+            "tg": t.get("tags", [])[:5],
             "exc": t.get("first_post_excerpt", "")[:300],
             "out": t.get("outgoing_refs", []),
             "inc": t.get("incoming_refs", []),
@@ -120,6 +122,7 @@ def prepare_viz_data(data):
             "ka": dict(list(th["key_authors"].items())[:5]),
             "eips": th.get("eip_mentions", []),
             "tops": th["top_topics"][:10],
+            "qc": th.get("quarterly_counts", []),
         }
 
     compact_forks = []
@@ -184,11 +187,13 @@ def generate_html(viz_json, data):
     <div class="controls">
       <button id="btn-timeline" class="active" onclick="showView('timeline')">Timeline</button>
       <button id="btn-network" onclick="showView('network')">Network</button>
+      <button id="btn-coauthor" onclick="showView('coauthor')">Authors</button>
     </div>
   </header>
   <div id="main-area">
     <div id="timeline-view"></div>
     <div id="network-view"></div>
+    <div id="coauthor-view"></div>
     <div id="detail-panel">
       <button class="close-btn" onclick="closeDetail()">&times;</button>
       <div id="detail-content"></div>
@@ -201,6 +206,24 @@ def generate_html(viz_json, data):
     <div class="sidebar-section">
       <h3>Research Threads</h3>
       <div id="thread-legend" class="thread-legend"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-collapse-hdr" onclick="toggleCollapse('cat')">
+        <span class="toggle-arrow" id="cat-arrow">&#9656;</span>
+        <h3>Categories</h3>
+      </div>
+      <div class="sidebar-collapse-body" id="cat-body">
+        <div id="cat-chips" class="cat-chips"></div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-collapse-hdr" onclick="toggleCollapse('tag')">
+        <span class="toggle-arrow" id="tag-arrow">&#9656;</span>
+        <h3>Tags</h3>
+      </div>
+      <div class="sidebar-collapse-body" id="tag-body">
+        <div id="tag-chips" class="tag-chips"></div>
+      </div>
     </div>
     <div class="sidebar-section">
       <h3>Top Authors</h3>
@@ -244,9 +267,10 @@ header .stats span { white-space: nowrap; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
-#timeline-view, #network-view { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+#timeline-view, #network-view, #coauthor-view { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
 #timeline-view { display: block; }
 #network-view { display: none; }
+#coauthor-view { display: none; }
 
 /* Timeline */
 .timeline-container { width: 100%; height: 100%; overflow-x: auto; overflow-y: auto; }
@@ -265,14 +289,27 @@ header .stats span { white-space: nowrap; }
 .net-link { stroke: #334; }
 .fork-diamond { fill: #ffcc00; stroke: #aa8800; stroke-width: 1.5; cursor: pointer; }
 
+/* Co-Author Network */
+.coauthor-node { cursor: pointer; }
+.coauthor-link { stroke: #445566; }
+.coauthor-label { fill: #ccc; font-size: 11px; font-weight: 500; pointer-events: none;
+                  text-anchor: middle; dominant-baseline: central; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
+.coauthor-label-hover { fill: #fff; font-size: 10px; font-weight: 400; pointer-events: none;
+                        text-anchor: middle; dominant-baseline: central; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
+
 /* Sidebar */
 .sidebar-section { padding: 12px 14px; border-bottom: 1px solid #1e1e2e; }
 .sidebar-section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
                       color: #666; margin-bottom: 8px; }
-.thread-legend { display: flex; flex-wrap: wrap; gap: 4px; }
+.thread-legend { display: flex; flex-direction: column; gap: 3px; }
 .thread-chip { font-size: 10px; padding: 2px 6px; border-radius: 3px; cursor: pointer;
-               opacity: 0.7; transition: opacity 0.15s; white-space: nowrap; }
+               opacity: 0.7; transition: opacity 0.15s; white-space: nowrap;
+               display: flex; align-items: center; gap: 6px; }
 .thread-chip:hover, .thread-chip.active { opacity: 1; }
+.thread-chip .thread-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.thread-chip .thread-count { font-size: 9px; opacity: 0.6; flex-shrink: 0; }
+.thread-chip .sparkline-wrap { flex-shrink: 0; position: relative; }
+.thread-chip .sparkline-wrap svg { display: block; }
 .author-item { padding: 6px 0; cursor: pointer; display: flex; align-items: center; gap: 8px; }
 .author-item:hover { background: #1a1a2a; }
 .author-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -280,6 +317,35 @@ header .stats span { white-space: nowrap; }
                text-overflow: ellipsis; white-space: nowrap; }
 .author-count { font-size: 10px; color: #666; flex-shrink: 0; }
 .author-item.active .author-name { color: #fff; font-weight: 600; }
+
+/* Collapsible sidebar sections */
+.sidebar-collapse-hdr { display: flex; align-items: center; cursor: pointer;
+                        user-select: none; gap: 6px; }
+.sidebar-collapse-hdr h3 { margin-bottom: 0; }
+.sidebar-collapse-hdr .toggle-arrow { font-size: 10px; color: #666; transition: transform 0.15s; }
+.sidebar-collapse-hdr .toggle-arrow.open { transform: rotate(90deg); }
+.sidebar-collapse-body { overflow: hidden; max-height: 0; transition: max-height 0.25s ease; }
+.sidebar-collapse-body.open { max-height: 600px; }
+
+/* Category chips */
+.cat-chips { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 8px; }
+.cat-chip { font-size: 10px; padding: 2px 6px; border-radius: 3px; cursor: pointer;
+            background: rgba(100,120,160,0.15); color: #8899bb; border: 1px solid rgba(100,120,160,0.25);
+            opacity: 0.75; transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+            white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.cat-chip:hover { opacity: 1; }
+.cat-chip.active { opacity: 1; border-color: #8899cc; background: rgba(100,120,180,0.3); color: #aabbdd; }
+.cat-chip .chip-count { font-size: 9px; color: #667; }
+
+/* Tag chips -- smaller and more compact */
+.tag-chips { display: flex; flex-wrap: wrap; gap: 3px; padding-top: 8px; }
+.tag-chip { font-size: 9px; padding: 1px 5px; border-radius: 3px; cursor: pointer;
+            background: rgba(130,130,130,0.1); color: #889; border: 1px solid rgba(130,130,130,0.2);
+            opacity: 0.7; transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+            white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; }
+.tag-chip:hover { opacity: 1; }
+.tag-chip.active { opacity: 1; border-color: #99aaaa; background: rgba(130,160,160,0.25); color: #aacccc; }
+.tag-chip .chip-count { font-size: 8px; color: #556; }
 
 /* Detail panel */
 #detail-panel { display: none; position: absolute; top: 0; right: 0; width: 420px; height: 100%;
@@ -310,6 +376,13 @@ header .stats span { white-space: nowrap; }
 .fork-tag { display: inline-block; font-size: 10px; padding: 1px 5px; background: #3a3a1a;
             border: 1px solid #5a5a2a; border-radius: 3px; margin: 1px; color: #cccc88; }
 
+/* Thread bar in author detail */
+.thread-bar-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 11px; }
+.thread-bar-label { color: #888; width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+.thread-bar-track { flex: 1; height: 6px; background: #1a1a2a; border-radius: 3px; overflow: hidden; }
+.thread-bar-fill { height: 100%; border-radius: 3px; }
+.thread-bar-pct { color: #666; font-size: 10px; width: 32px; text-align: right; flex-shrink: 0; }
+
 #search-box { width: 100%; padding: 6px 8px; background: #1a1a2a; border: 1px solid #333;
               border-radius: 4px; color: #ccc; font-size: 12px; margin-bottom: 8px; }
 #search-box:focus { outline: none; border-color: #555; }
@@ -322,14 +395,17 @@ header .stats span { white-space: nowrap; }
 
 
 def _build_js():
-    # Return JS as a plain string — no Python f-string interpolation needed
+    # Return JS as a plain string -- no Python f-string interpolation needed
     # (DATA, THREAD_COLORS etc. are injected as separate <script> constants)
     return r"""
 // === GLOBALS ===
 let activeView = 'timeline';
 let activeThread = null;
 let activeAuthor = null;
+let activeCategory = null;
+let activeTag = null;
 let simulation = null;
+let coAuthorSimulation = null;
 let hoveredTopicId = null;
 
 // Build index: topic_id -> set of connected topic_ids (for edge highlighting)
@@ -342,10 +418,22 @@ DATA.graph.edges.forEach(e => {
   topicEdgeIndex[t].add(Number(e.source));
 });
 
+// Build co-author edge index: author_id -> set of connected author_ids
+const coAuthorEdgeIndex = {};
+(DATA.coGraph.edges || []).forEach(e => {
+  if (!coAuthorEdgeIndex[e.source]) coAuthorEdgeIndex[e.source] = new Set();
+  if (!coAuthorEdgeIndex[e.target]) coAuthorEdgeIndex[e.target] = new Set();
+  coAuthorEdgeIndex[e.source].add(e.target);
+  coAuthorEdgeIndex[e.target].add(e.source);
+});
+
 // Author color map
 const authorList = Object.values(DATA.authors).sort((a,b) => b.inf - a.inf);
 const authorColorMap = {};
 authorList.forEach((a, i) => { authorColorMap[a.u] = i < 15 ? AUTHOR_COLORS[i] : '#555'; });
+
+// Top 15 authors by influence (for persistent labels in co-author network)
+const top15Authors = new Set(authorList.slice(0, 15).map(a => a.u));
 
 // === INIT ===
 document.addEventListener('DOMContentLoaded', () => {
@@ -362,9 +450,12 @@ function showView(view) {
   activeView = view;
   document.getElementById('timeline-view').style.display = view === 'timeline' ? 'block' : 'none';
   document.getElementById('network-view').style.display = view === 'network' ? 'block' : 'none';
+  document.getElementById('coauthor-view').style.display = view === 'coauthor' ? 'block' : 'none';
   document.getElementById('btn-timeline').classList.toggle('active', view === 'timeline');
   document.getElementById('btn-network').classList.toggle('active', view === 'network');
+  document.getElementById('btn-coauthor').classList.toggle('active', view === 'coauthor');
   if (view === 'network' && !document.querySelector('#network-view svg')) buildNetwork();
+  if (view === 'coauthor' && !document.querySelector('#coauthor-view svg')) buildCoAuthorNetwork();
 }
 
 // === SIDEBAR ===
@@ -373,16 +464,105 @@ function buildSidebar() {
   THREAD_ORDER.forEach(tid => {
     const th = DATA.threads[tid];
     if (!th) return;
-    const chip = document.createElement('span');
+    const color = THREAD_COLORS[tid] || '#555';
+    const chip = document.createElement('div');
     chip.className = 'thread-chip';
-    chip.style.background = THREAD_COLORS[tid] + '33';
-    chip.style.color = THREAD_COLORS[tid];
-    chip.style.border = '1px solid ' + THREAD_COLORS[tid] + '66';
-    chip.textContent = th.n.split('&')[0].trim();
+    chip.style.background = color + '33';
+    chip.style.color = color;
+    chip.style.border = '1px solid ' + color + '66';
     chip.title = th.n + ' (' + th.tc + ' topics)';
     chip.onclick = () => toggleThread(tid);
     chip.dataset.thread = tid;
+
+    const lbl = document.createElement('span');
+    lbl.className = 'thread-label';
+    lbl.textContent = th.n.split('&')[0].trim();
+    chip.appendChild(lbl);
+
+    const cnt = document.createElement('span');
+    cnt.className = 'thread-count';
+    cnt.textContent = th.tc;
+    chip.appendChild(cnt);
+
+    // Sparkline SVG from quarterly counts
+    var qc = th.qc || [];
+    if (qc.length > 0) {
+      var sparkW = 80, sparkH = 16;
+      var maxC = Math.max(1, Math.max.apply(null, qc.map(function(d) { return d.c; })));
+      var stepX = sparkW / Math.max(1, qc.length - 1);
+      var points = qc.map(function(d, i) {
+        var x = i * stepX;
+        var y = sparkH - (d.c / maxC) * (sparkH - 2) - 1;
+        return x.toFixed(1) + ',' + y.toFixed(1);
+      });
+      var areaPoints = points.join(' ') + ' ' + sparkW.toFixed(1) + ',' + sparkH + ' 0,' + sparkH;
+
+      var wrap = document.createElement('span');
+      wrap.className = 'sparkline-wrap';
+      wrap.innerHTML =
+        '<svg width="' + sparkW + '" height="' + sparkH + '" viewBox="0 0 ' + sparkW + ' ' + sparkH + '">' +
+        '<polygon points="' + areaPoints + '" fill="' + color + '" opacity="0.3"/>' +
+        '<polyline points="' + points.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="1" opacity="0.8"/>' +
+        '</svg>';
+
+      var svgEl = wrap.querySelector('svg');
+      svgEl.style.cursor = 'default';
+      svgEl.addEventListener('mousemove', (function(qcData, sw) {
+        return function(ev) {
+          var rect = ev.currentTarget.getBoundingClientRect();
+          var mx = ev.clientX - rect.left;
+          var idx = Math.round(mx / sw * (qcData.length - 1));
+          idx = Math.max(0, Math.min(qcData.length - 1, idx));
+          var d = qcData[idx];
+          var tip = document.getElementById('tooltip');
+          tip.innerHTML = d.q + ': ' + d.c + ' topic' + (d.c !== 1 ? 's' : '');
+          tip.style.display = 'block';
+          tip.style.left = (ev.clientX + 10) + 'px';
+          tip.style.top = (ev.clientY - 24) + 'px';
+          ev.stopPropagation();
+        };
+      })(qc, sparkW));
+      svgEl.addEventListener('mouseleave', function() { hideTooltip(); });
+      svgEl.addEventListener('click', function(ev) { ev.stopPropagation(); });
+
+      chip.appendChild(wrap);
+    }
+
     legend.appendChild(chip);
+  });
+
+  // --- Category chips ---
+  const catCounts = {};
+  Object.values(DATA.topics).forEach(t => {
+    if (t.cat) catCounts[t.cat] = (catCounts[t.cat] || 0) + 1;
+  });
+  const topCats = Object.entries(catCounts).sort((a,b) => b[1] - a[1]).slice(0, 10);
+  const catContainer = document.getElementById('cat-chips');
+  topCats.forEach(([cat, count]) => {
+    const chip = document.createElement('span');
+    chip.className = 'cat-chip';
+    chip.dataset.cat = cat;
+    chip.innerHTML = escHtml(cat) + ' <span class="chip-count">' + count + '</span>';
+    chip.title = cat + ' (' + count + ' topics)';
+    chip.onclick = () => toggleCategory(cat);
+    catContainer.appendChild(chip);
+  });
+
+  // --- Tag chips ---
+  const tagCounts = {};
+  Object.values(DATA.topics).forEach(t => {
+    (t.tg || []).forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; });
+  });
+  const topTags = Object.entries(tagCounts).sort((a,b) => b[1] - a[1]).slice(0, 15);
+  const tagContainer = document.getElementById('tag-chips');
+  topTags.forEach(([tag, count]) => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.dataset.tag = tag;
+    chip.innerHTML = escHtml(tag) + ' <span class="chip-count">' + count + '</span>';
+    chip.title = tag + ' (' + count + ' topics)';
+    chip.onclick = () => toggleTag(tag);
+    tagContainer.appendChild(chip);
   });
 
   const list = document.getElementById('author-list');
@@ -401,8 +581,12 @@ function buildSidebar() {
 function clearFilters() {
   activeThread = null;
   activeAuthor = null;
+  activeCategory = null;
+  activeTag = null;
   document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
   applyFilters();
 }
@@ -429,7 +613,8 @@ function toggleAuthor(username) {
 
 function applyFilters() {
   if (activeView === 'timeline') filterTimeline();
-  else filterNetwork();
+  else if (activeView === 'network') filterNetwork();
+  else if (activeView === 'coauthor') filterCoAuthorNetwork();
 }
 
 // === SEARCH ===
@@ -452,6 +637,15 @@ function setupSearch() {
 }
 
 function filterBySearch(q) {
+  if (activeView === 'coauthor') {
+    // Search authors in co-author view
+    var matchingAuthors = new Set();
+    (DATA.coGraph.nodes || []).forEach(function(n) {
+      if (n.id.toLowerCase().includes(q)) matchingAuthors.add(n.id);
+    });
+    highlightCoAuthorSet(matchingAuthors);
+    return;
+  }
   const matching = new Set();
   Object.values(DATA.topics).forEach(t => {
     if (t.t.toLowerCase().includes(q) || t.a.toLowerCase().includes(q) ||
@@ -473,6 +667,19 @@ function highlightTopicSet(ids) {
     d3.selectAll('.net-node circle').attr('opacity', d => ids.has(d.id) ? 0.9 : 0.06);
     d3.selectAll('.net-link').attr('stroke-opacity', 0.02);
   }
+}
+
+function highlightCoAuthorSet(ids) {
+  d3.selectAll('.coauthor-node circle').attr('opacity', function(d) {
+    return ids.has(d.id) ? 1 : 0.06;
+  });
+  d3.selectAll('.coauthor-link').attr('stroke-opacity', 0.02);
+  d3.selectAll('.coauthor-label').attr('opacity', function(d) {
+    return ids.has(d.id) ? 1 : 0.1;
+  });
+  d3.selectAll('.coauthor-label-hover').attr('opacity', function(d) {
+    return ids.has(d.id) ? 1 : 0;
+  });
 }
 
 // === TIMELINE ===
@@ -633,6 +840,8 @@ function onTimelineHover(ev, d, entering) {
         // Respect active filter
         if (activeThread && t.th !== activeThread) return 0.03;
         if (activeAuthor && t.a !== activeAuthor) return 0.03;
+        if (activeCategory && t.cat !== activeCategory) return 0.03;
+        if (activeTag && !(t.tg || []).includes(activeTag)) return 0.03;
         return 0.12;
       });
 
@@ -653,15 +862,21 @@ function onTimelineHover(ev, d, entering) {
   }
 }
 
+function topicMatchesFilter(t) {
+  if (activeThread && t.th !== activeThread) return false;
+  if (activeAuthor && t.a !== activeAuthor) return false;
+  if (activeCategory && t.cat !== activeCategory) return false;
+  if (activeTag && !(t.tg || []).includes(activeTag)) return false;
+  return true;
+}
+
 function filterTimeline() {
-  const hasFilter = activeThread || activeAuthor;
+  const hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
 
   d3.selectAll('.topic-circle')
     .attr('opacity', function(d) {
       if (hasFilter) {
-        if (activeThread && d.th !== activeThread) return 0.04;
-        if (activeAuthor && d.a !== activeAuthor) return 0.04;
-        return 0.85;
+        return topicMatchesFilter(d) ? 0.85 : 0.04;
       }
       return 0.7;
     })
@@ -673,15 +888,8 @@ function filterTimeline() {
       if (!hasFilter) return 0.06;
       const sT = DATA.topics[e.source];
       const tT = DATA.topics[e.target];
-      if (activeThread) {
-        if (sT && tT && sT.th === activeThread && tT.th === activeThread) return 0.25;
-        return 0.01;
-      }
-      if (activeAuthor) {
-        if ((sT && sT.a === activeAuthor) || (tT && tT.a === activeAuthor)) return 0.25;
-        return 0.01;
-      }
-      return 0.06;
+      if (sT && tT && topicMatchesFilter(sT) && topicMatchesFilter(tT)) return 0.25;
+      return 0.01;
     });
 }
 
@@ -815,15 +1023,13 @@ function buildNetwork() {
 }
 
 function filterNetwork() {
-  var hasFilter = activeThread || activeAuthor;
+  var hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
 
   d3.selectAll('.net-node circle').attr('opacity', function(d) {
     var t = DATA.topics[d.id];
     if (!t) return 0.7;
     if (hasFilter) {
-      if (activeThread && t.th !== activeThread) return 0.05;
-      if (activeAuthor && t.a !== activeAuthor) return 0.05;
-      return 0.85;
+      return topicMatchesFilter(t) ? 0.85 : 0.05;
     }
     return 0.7;
   });
@@ -833,12 +1039,320 @@ function filterNetwork() {
   });
 }
 
+// === CO-AUTHOR NETWORK ===
+function buildCoAuthorNetwork() {
+  var container = document.getElementById('coauthor-view');
+  var width = container.clientWidth || 800;
+  var height = container.clientHeight || 600;
+
+  var svg = d3.select(container).append('svg')
+    .attr('width', width).attr('height', height);
+
+  var g = svg.append('g');
+
+  // Zoom
+  svg.call(d3.zoom().scaleExtent([0.3, 5]).on('zoom', function(ev) {
+    g.attr('transform', ev.transform);
+  }));
+
+  // Prepare co-author data
+  var coNodes = (DATA.coGraph.nodes || []).map(function(n) { return Object.assign({}, n); });
+  var coNodeMap = {};
+  coNodes.forEach(function(n) { coNodeMap[n.id] = n; });
+
+  var coLinks = (DATA.coGraph.edges || [])
+    .filter(function(e) { return coNodeMap[e.source] && coNodeMap[e.target]; })
+    .map(function(e) { return {source: e.source, target: e.target, weight: e.weight || 1}; });
+
+  // Scales
+  var maxInf = d3.max(coNodes, function(n) { return n.inf || 0; }) || 1;
+  var rScale = d3.scaleSqrt().domain([0, maxInf]).range([5, 28]);
+
+  var maxWeight = d3.max(coLinks, function(e) { return e.weight; }) || 1;
+  var linkWidthScale = d3.scaleLinear().domain([1, maxWeight]).range([0.5, 4]);
+
+  // Determine dominant thread color for each author node
+  function getAuthorColor(n) {
+    // Use the author color map if available (top 15 get unique colors)
+    if (authorColorMap[n.id] && authorColorMap[n.id] !== '#555') return authorColorMap[n.id];
+    // Otherwise, color by dominant thread
+    var thrs = n.thrs || (DATA.authors[n.id] ? DATA.authors[n.id].ths : null);
+    if (thrs) {
+      var bestThread = null;
+      var bestCount = 0;
+      for (var tid in thrs) {
+        if (thrs[tid] > bestCount) { bestCount = thrs[tid]; bestThread = tid; }
+      }
+      if (bestThread && THREAD_COLORS[bestThread]) return THREAD_COLORS[bestThread];
+    }
+    return '#667';
+  }
+
+  // Force simulation
+  coAuthorSimulation = d3.forceSimulation(coNodes)
+    .force('link', d3.forceLink(coLinks).id(function(d) { return d.id; })
+      .distance(function(d) { return Math.max(40, 150 - d.weight * 10); })
+      .strength(function(d) { return 0.1 + (d.weight / maxWeight) * 0.3; }))
+    .force('charge', d3.forceManyBody().strength(-200))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(function(d) {
+      return rScale(d.inf || 0) + 4;
+    }));
+
+  // Draw links
+  var link = g.append('g').selectAll('line')
+    .data(coLinks).join('line')
+    .attr('class', 'coauthor-link')
+    .attr('stroke-width', function(d) { return linkWidthScale(d.weight); })
+    .attr('stroke-opacity', 0.2);
+
+  // Draw nodes
+  var node = g.append('g').selectAll('g')
+    .data(coNodes).join('g')
+    .attr('class', 'coauthor-node')
+    .call(d3.drag()
+      .on('start', function(ev, d) {
+        if (!ev.active) coAuthorSimulation.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on('drag', function(ev, d) { d.fx = ev.x; d.fy = ev.y; })
+      .on('end', function(ev, d) {
+        if (!ev.active) coAuthorSimulation.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      })
+    );
+
+  // Author circles
+  node.append('circle')
+    .attr('r', function(d) { return rScale(d.inf || 0); })
+    .attr('fill', function(d) { return getAuthorColor(d); })
+    .attr('stroke', function(d) { return getAuthorColor(d); })
+    .attr('stroke-width', 1)
+    .attr('opacity', 0.7);
+
+  // Persistent labels for top 15 by influence
+  node.filter(function(d) { return top15Authors.has(d.id); })
+    .append('text')
+    .attr('class', 'coauthor-label')
+    .attr('dy', function(d) { return rScale(d.inf || 0) + 12; })
+    .text(function(d) { return d.id; });
+
+  // Hover labels for all others (hidden by default)
+  node.filter(function(d) { return !top15Authors.has(d.id); })
+    .append('text')
+    .attr('class', 'coauthor-label-hover')
+    .attr('dy', function(d) { return rScale(d.inf || 0) + 10; })
+    .attr('opacity', 0)
+    .text(function(d) { return d.id; });
+
+  // Click -> show author detail
+  node.on('click', function(ev, d) {
+    showAuthorDetail(d.id);
+  });
+
+  // Hover -> tooltip + highlight connections
+  node.on('mouseover', function(ev, d) {
+    showCoAuthorTooltip(ev, d);
+
+    // Show hover label for this node
+    d3.select(this).select('.coauthor-label-hover').attr('opacity', 1);
+
+    // Highlight connections
+    var connected = coAuthorEdgeIndex[d.id] || new Set();
+    var connectedWithSelf = new Set(connected);
+    connectedWithSelf.add(d.id);
+
+    node.selectAll('circle').attr('opacity', function(n) {
+      return connectedWithSelf.has(n.id) ? 1 : 0.08;
+    });
+    node.selectAll('.coauthor-label').attr('opacity', function(n) {
+      return connectedWithSelf.has(n.id) ? 1 : 0.1;
+    });
+    // Show hover labels for connected nodes too
+    node.selectAll('.coauthor-label-hover').attr('opacity', function(n) {
+      return connected.has(n.id) ? 1 : (n.id === d.id ? 1 : 0);
+    });
+    link.attr('stroke-opacity', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (sid === d.id || tid === d.id) ? 0.7 : 0.02;
+    }).attr('stroke', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (sid === d.id || tid === d.id) ? '#88aaff' : '#445566';
+    });
+  });
+
+  node.on('mouseout', function() {
+    hideTooltip();
+    filterCoAuthorNetwork();
+  });
+
+  // Tick
+  coAuthorSimulation.on('tick', function() {
+    link.attr('x1', function(d) { return d.source.x; })
+        .attr('y1', function(d) { return d.source.y; })
+        .attr('x2', function(d) { return d.target.x; })
+        .attr('y2', function(d) { return d.target.y; });
+    node.attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
+  });
+}
+
+function filterCoAuthorNetwork() {
+  var hasFilter = activeAuthor;
+
+  d3.selectAll('.coauthor-node circle').attr('opacity', function(d) {
+    if (hasFilter) {
+      if (d.id === activeAuthor) return 1;
+      var connected = coAuthorEdgeIndex[activeAuthor] || new Set();
+      if (connected.has(d.id)) return 0.8;
+      return 0.06;
+    }
+    return 0.7;
+  });
+
+  d3.selectAll('.coauthor-label').attr('opacity', function(d) {
+    if (hasFilter) {
+      if (d.id === activeAuthor) return 1;
+      var connected = coAuthorEdgeIndex[activeAuthor] || new Set();
+      if (connected.has(d.id)) return 1;
+      return 0.1;
+    }
+    return 1;
+  });
+
+  d3.selectAll('.coauthor-label-hover').attr('opacity', function(d) {
+    if (hasFilter) {
+      var connected = coAuthorEdgeIndex[activeAuthor] || new Set();
+      return connected.has(d.id) ? 1 : 0;
+    }
+    return 0;
+  });
+
+  d3.selectAll('.coauthor-link')
+    .attr('stroke', '#445566')
+    .attr('stroke-opacity', function(l) {
+      if (!hasFilter) return 0.2;
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (sid === activeAuthor || tid === activeAuthor) ? 0.6 : 0.02;
+    });
+}
+
+function showCoAuthorTooltip(ev, d) {
+  var tip = document.getElementById('tooltip');
+  var a = DATA.authors[d.id];
+  var topThread = '';
+  if (d.thrs || (a && a.ths)) {
+    var thrs = d.thrs || a.ths;
+    var bestThread = null, bestCount = 0;
+    for (var tid in thrs) {
+      if (thrs[tid] > bestCount) { bestCount = thrs[tid]; bestThread = tid; }
+    }
+    if (bestThread && DATA.threads[bestThread]) {
+      topThread = '<br>Top thread: <span style="color:' + (THREAD_COLORS[bestThread] || '#888') + '">' +
+                  DATA.threads[bestThread].n + '</span>';
+    }
+  }
+  tip.innerHTML = '<strong>' + escHtml(d.id) + '</strong><br>' +
+    'Topics: ' + (d.tc || (a ? a.tc : '?')) +
+    ' &middot; Influence: ' + ((d.inf || (a ? a.inf : 0)).toFixed(2)) +
+    topThread;
+  tip.style.display = 'block';
+
+  var x = ev.clientX + 14;
+  var y = ev.clientY - 10;
+  var tw = tip.offsetWidth;
+  var th = tip.offsetHeight;
+  if (x + tw > window.innerWidth - 10) x = ev.clientX - tw - 14;
+  if (y + th > window.innerHeight - 10) y = window.innerHeight - th - 10;
+  if (y < 5) y = 5;
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
+}
+
+// === AUTHOR DETAIL PANEL ===
+function showAuthorDetail(username) {
+  var panel = document.getElementById('detail-panel');
+  var content = document.getElementById('detail-content');
+  var a = DATA.authors[username];
+  if (!a) return;
+
+  var color = authorColorMap[username] || '#667';
+
+  // Thread distribution bars
+  var thrs = a.ths || {};
+  var thrEntries = Object.entries(thrs).sort(function(a,b) { return b[1] - a[1]; });
+  var thrTotal = thrEntries.reduce(function(sum, e) { return sum + e[1]; }, 0) || 1;
+  var threadBarsHtml = thrEntries.slice(0, 6).map(function(entry) {
+    var tid = entry[0], count = entry[1];
+    var pct = Math.round(count / thrTotal * 100);
+    var tColor = THREAD_COLORS[tid] || '#555';
+    var tName = DATA.threads[tid] ? DATA.threads[tid].n : tid;
+    return '<div class="thread-bar-row">' +
+      '<span class="thread-bar-label" style="color:' + tColor + '">' + escHtml(tName) + '</span>' +
+      '<span class="thread-bar-track"><span class="thread-bar-fill" style="width:' + pct + '%;background:' + tColor + '"></span></span>' +
+      '<span class="thread-bar-pct">' + pct + '%</span></div>';
+  }).join('');
+
+  // Top topics
+  var topTopicsHtml = '';
+  if (a.tops && a.tops.length > 0) {
+    topTopicsHtml = a.tops.map(function(tid) {
+      var topic = DATA.topics[tid];
+      if (!topic) return '';
+      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + tid + '])">' +
+        escHtml(topic.t) + '</a> <span style="color:#666;font-size:10px">(' + topic.inf.toFixed(2) + ')</span></div>';
+    }).join('');
+  }
+
+  // Co-researchers
+  var coHtml = '';
+  if (a.co && Object.keys(a.co).length > 0) {
+    coHtml = Object.entries(a.co).map(function(entry) {
+      var coName = entry[0], coCount = entry[1];
+      var coColor = authorColorMap[coName] || '#667';
+      return '<span style="display:inline-block;font-size:11px;margin:2px 4px 2px 0;padding:1px 6px;' +
+        'background:' + coColor + '22;border:1px solid ' + coColor + '44;border-radius:3px;color:' + coColor + ';cursor:pointer" ' +
+        'onclick="showAuthorDetail(\'' + escHtml(coName) + '\')">' +
+        escHtml(coName) + ' <span style="color:#666;font-size:9px">(' + coCount + ')</span></span>';
+    }).join('');
+  }
+
+  // Active years
+  var yearsHtml = '';
+  if (a.yrs && a.yrs.length > 0) {
+    yearsHtml = a.yrs.join(', ');
+  }
+
+  content.innerHTML =
+    '<h2 style="color:' + color + '">' + escHtml(username) + '</h2>' +
+    '<div class="meta">Researcher &middot; <a href="https://ethresear.ch/u/' + encodeURIComponent(username) +
+    '" target="_blank">View profile &rarr;</a></div>' +
+    '<div class="detail-stat"><span class="label">Topics Created</span><span class="value">' + a.tc + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Total Posts</span><span class="value">' + a.tp.toLocaleString() + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Total Likes</span><span class="value">' + a.lk.toLocaleString() + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Influence Score</span><span class="value">' + a.inf.toFixed(3) + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Cited by</span><span class="value">' + a.ind + ' topics</span></div>' +
+    '<div class="detail-stat"><span class="label">Active Years</span><span class="value">' + yearsHtml + '</span></div>' +
+    (threadBarsHtml ?
+      '<div style="margin-top:12px"><strong style="font-size:11px;color:#888">Thread Distribution</strong>' +
+      '<div style="margin-top:6px">' + threadBarsHtml + '</div></div>' : '') +
+    (topTopicsHtml ?
+      '<div class="detail-refs" style="margin-top:12px"><h4>Top Topics</h4>' + topTopicsHtml + '</div>' : '') +
+    (coHtml ?
+      '<div style="margin-top:12px"><strong style="font-size:11px;color:#888">Co-Researchers</strong>' +
+      '<div style="margin-top:6px">' + coHtml + '</div></div>' : '');
+
+  panel.classList.add('open');
+}
+
 // === DETAIL PANEL ===
 function showDetail(t) {
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
 
-  // EIP tags — distinguish primary (topic is about this EIP) from mentions
+  // EIP tags -- distinguish primary (topic is about this EIP) from mentions
   var primarySet = new Set(t.peips || []);
 
   var thread = t.th ? DATA.threads[t.th] : null;
