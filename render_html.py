@@ -966,7 +966,7 @@ function populateDropdown(q) {
       var score = 0;
       var tl = t.t.toLowerCase();
       if (tl.includes(q)) score += 3;
-      if (t.a.toLowerCase().includes(q)) score += 2;
+      if (t.a.toLowerCase().includes(q) || (t.coauth || []).some(function(u) { return u.toLowerCase().includes(q); })) score += 2;
       if (t.cat && t.cat.toLowerCase().includes(q)) score += 1;
       if (t.eips.some(function(e) { return ('eip-'+e).includes(q) || (''+e) === q; })) score += 2;
       if ((t.tg || []).some(function(tag) { return tag.toLowerCase().includes(q); })) score += 1;
@@ -1022,6 +1022,7 @@ function filterBySearch(q) {
   const matching = new Set();
   Object.values(DATA.topics).forEach(t => {
     if (t.t.toLowerCase().includes(q) || t.a.toLowerCase().includes(q) ||
+        (t.coauth || []).some(u => u.toLowerCase().includes(q)) ||
         (t.cat && t.cat.toLowerCase().includes(q)) ||
         t.eips.some(e => ('eip-'+e).includes(q) || (''+e) === q) ||
         (t.tg || []).some(tag => tag.toLowerCase().includes(q))) {
