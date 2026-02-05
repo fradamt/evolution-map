@@ -95,11 +95,10 @@ def prepare_viz_data(data):
             "coauth": [u for u in t.get("coauthors", []) if u != t["author"]],
         }
 
-    # Minor topics (below influence threshold)
+    # Minor topics (below influence threshold) — merged into compact_topics
     minor_topics = data.get("minor_topics", {})
-    compact_minor = {}
     for tid, mt in minor_topics.items():
-        compact_minor[tid] = {
+        compact_topics[tid] = {
             "id": mt["id"],
             "t": mt["title"],
             "a": mt["author"],
@@ -119,6 +118,8 @@ def prepare_viz_data(data):
             "peips": mt.get("primary_eips", []),
             "ind": mt.get("in_degree", 0),
             "outd": mt.get("out_degree", 0),
+            "out": [],
+            "inc": [],
         }
 
     compact_authors = {}
@@ -176,7 +177,7 @@ def prepare_viz_data(data):
     return {
         "meta": data["metadata"],
         "topics": compact_topics,
-        "minorTopics": compact_minor,
+        "minorTopics": {},
         "authors": compact_authors,
         "threads": compact_threads,
         "forks": compact_forks,
@@ -217,7 +218,7 @@ def generate_html(viz_json, data):
   <header>
     <h1>Ethereum Research Evolution Map</h1>
     <div class="stats">
-      <span>{meta['included']} topics</span>
+      <span>{meta['total_topics']} topics</span>
       <span>{meta['included_edges']} citations</span>
       <span>2017\u20132026</span>
       <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
@@ -565,11 +566,6 @@ header .stats span { white-space: nowrap; }
            box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
 
 /* Minor topics */
-.minor-circle { stroke-dasharray: 2 1; }
-.minor-toggle { background: #1a1a2a; border: 1px solid #445; color: #889; padding: 2px 8px;
-                border-radius: 3px; font-size: 10px; cursor: pointer; white-space: nowrap; }
-.minor-toggle:hover { border-color: #667; color: #aab; }
-.minor-toggle.active { border-color: #7788aa; color: #99aacc; background: #1e1e2e; }
 .minor-ref a { color: #889 !important; font-style: italic; }
 .minor-ref a:hover { color: #aab !important; }
 """
@@ -662,34 +658,29 @@ authorList.forEach((a, i) => { authorColorMap[a.u] = i < 15 ? AUTHOR_COLORS[i] :
 // Top 15 authors by influence (for persistent labels in co-author network)
 const top15Authors = new Set(authorList.slice(0, 15).map(a => a.u));
 
-// Minor topics globals
-let showMinorTopics = false;
-
-// Build authorMinorIndex: username -> array of their minor topic objects (including coauthor matches)
-const authorMinorIndex = {};
-Object.values(DATA.minorTopics || {}).forEach(function(mt) {
-  var authors = [mt.a].concat(mt.coauth || []);
-  authors.forEach(function(u) {
-    if (!authorMinorIndex[u]) authorMinorIndex[u] = [];
-    authorMinorIndex[u].push(mt);
-  });
-});
-// Sort each author's minor topics by date
-Object.keys(authorMinorIndex).forEach(function(u) {
-  authorMinorIndex[u].sort(function(a, b) { return (a.d || '').localeCompare(b.d || ''); });
-});
 
 // Influence slider setup
 const maxDataInf = d3.max(Object.values(DATA.topics), t => t.inf) || 1;
+// Compute minimum influence among non-minor topics (the "included" threshold)
+const nonMinorInfs = Object.values(DATA.topics).filter(t => !t.mn).map(t => t.inf);
+const defaultInfluenceThreshold = nonMinorInfs.length > 0 ? d3.min(nonMinorInfs) : 0;
+const defaultSliderPct = maxDataInf > 0 ? Math.round(defaultInfluenceThreshold / maxDataInf * 100) : 0;
+
 function setupInfSlider() {
   var slider = document.getElementById('inf-slider');
   var label = document.getElementById('inf-slider-label');
+  // Set default value so initial view matches original (only non-minor topics visible)
+  slider.value = defaultSliderPct;
+  minInfluence = defaultInfluenceThreshold;
+  var initCount = 0;
+  Object.values(DATA.topics).forEach(function(t) { if (t.inf >= minInfluence) initCount++; });
+  label.textContent = defaultSliderPct === 0 ? 'all' : initCount;
   slider.addEventListener('input', function() {
     var pct = Number(this.value);
     minInfluence = pct / 100 * maxDataInf;
     var count = 0;
     Object.values(DATA.topics).forEach(function(t) { if (t.inf >= minInfluence) count++; });
-    label.textContent = pct === 0 ? '0' : count;
+    label.textContent = pct === 0 ? 'all' : count;
     applyFilters();
   });
 }
@@ -901,17 +892,19 @@ function clearFilters() {
   activeAuthor = null;
   activeCategory = null;
   activeTag = null;
-  minInfluence = 0;
+  minInfluence = defaultInfluenceThreshold;
   var slider = document.getElementById('inf-slider');
-  if (slider) { slider.value = 0; }
+  if (slider) { slider.value = defaultSliderPct; }
   var slLabel = document.getElementById('inf-slider-label');
-  if (slLabel) { slLabel.textContent = '0'; }
+  if (slLabel) {
+    var cnt = 0;
+    Object.values(DATA.topics).forEach(function(t) { if (t.inf >= minInfluence) cnt++; });
+    slLabel.textContent = defaultSliderPct === 0 ? 'all' : cnt;
+  }
   lineageActive = false;
   lineageSet = new Set();
   lineageEdgeSet = new Set();
   pathMode = false; pathStart = null; pathSet = new Set(); pathEdgeSet = new Set();
-  showMinorTopics = false;
-  removeMinorTopics();
   if (similarActive) clearSimilar();
   document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
@@ -949,8 +942,6 @@ function selectThread(tid) {
 function toggleAuthor(username) {
   activeAuthor = activeAuthor === username ? null : username;
   lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
-  showMinorTopics = false;
-  removeMinorTopics();
   document.querySelectorAll('.author-item').forEach(c =>
     c.classList.toggle('active', c.dataset.author === activeAuthor));
   document.getElementById('search-box').value = '';
@@ -961,8 +952,6 @@ function toggleAuthor(username) {
 function selectAuthor(username) {
   activeAuthor = username;
   lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
-  showMinorTopics = false;
-  removeMinorTopics();
   document.querySelectorAll('.author-item').forEach(c =>
     c.classList.toggle('active', c.dataset.author === activeAuthor));
   document.getElementById('search-box').value = '';
@@ -1130,28 +1119,9 @@ function populateDropdown(q) {
         '<div class="si-meta">' + escHtml(t.a) + ' \u00b7 ' + t.d.slice(0,7) + ' \u00b7 inf: ' + t.inf.toFixed(2) + '</div></div>';
     }).join('');
 
-    // Also search minor topics
-    var minorResults = [];
-    Object.values(DATA.minorTopics || {}).forEach(function(mt) {
-      var score = 0;
-      if (mt.t && mt.t.toLowerCase().includes(q)) score += 3;
-      if (mt.a && mt.a.toLowerCase().includes(q)) score += 2;
-      if ((mt.coauth || []).some(function(u) { return u.toLowerCase().includes(q); })) score += 2;
-      if (score > 0) minorResults.push({topic: mt, score: score});
-    });
-    minorResults.sort(function(a, b) { return b.score - a.score || (b.topic.inf || 0) - (a.topic.inf || 0); });
-    var maxMinor = Math.min(3, 8 - Math.min(authorResults.length, 3) - topicResults.slice(0, maxTopics).length);
-    var minorHtml = minorResults.slice(0, maxMinor).map(function(r) {
-      var mt = r.topic;
-      return '<div class="search-item minor-ref" data-minor-id="' + mt.id + '">' +
-        '<div class="si-title" style="color:#889">' + escHtml(mt.t) + ' <span style="color:#667;font-size:9px">(minor)</span></div>' +
-        '<div class="si-meta" style="color:#556">' + escHtml(mt.a) + ' \u00b7 ' + (mt.d || '').slice(0,7) + '</div></div>';
-    }).join('');
-
-    dropdown.innerHTML = authorHtml + topicHtml + minorHtml;
+    dropdown.innerHTML = authorHtml + topicHtml;
     results = authorResults.slice(0, 3).map(function(a) { return {type:'author'}; })
-      .concat(topicResults.slice(0, maxTopics).map(function(r) { return {type:'topic'}; }))
-      .concat(minorResults.slice(0, maxMinor).map(function(r) { return {type:'minor'}; }));
+      .concat(topicResults.slice(0, maxTopics).map(function(r) { return {type:'topic'}; }));
   }
 
   searchDropdownIdx = -1;
@@ -1162,13 +1132,9 @@ function populateDropdown(q) {
     el.addEventListener('click', function() {
       var topicId = el.dataset.topicId;
       var authorId = el.dataset.author;
-      var minorId = el.dataset.minorId;
       if (topicId) {
         var t = DATA.topics[Number(topicId)];
         if (t) showDetail(t);
-      } else if (minorId) {
-        var mt = (DATA.minorTopics || {})[Number(minorId)];
-        if (mt) showMinorDetail(mt);
       } else if (authorId) {
         showAuthorDetail(authorId);
       }
@@ -1203,11 +1169,6 @@ function filterBySearch(q) {
         (t.tg || []).some(tag => tag.toLowerCase().includes(q))) {
       matching.add(t.id);
     }
-  });
-  // Also check minor topics for author matching (highlight indicator only)
-  Object.values(DATA.minorTopics || {}).forEach(function(mt) {
-    if (mt.a && mt.a.toLowerCase().includes(q)) matching.add('minor_' + mt.id);
-    if ((mt.coauth || []).some(function(u) { return u.toLowerCase().includes(q); })) matching.add('minor_' + mt.id);
   });
   highlightTopicSet(matching);
 }
@@ -1435,18 +1396,19 @@ function buildTimeline() {
     if (t._yPos === undefined) return;
     const color = t.th ? (THREAD_COLORS[t.th] || '#555') : '#555';
 
-    circleG.append('circle')
+    var circle = circleG.append('circle')
       .attr('class', 'topic-circle')
       .attr('cx', xScale(t._date)).attr('cy', t._yPos)
       .attr('r', rScale(t.inf))
       .attr('fill', color)
       .attr('stroke', color)
-      .attr('stroke-width', 0.5)
+      .attr('stroke-width', t.mn ? 1 : 0.5)
       .attr('opacity', 0.65)
       .datum(t)
       .on('click', function(ev, d) { handleTopicClick(ev, d); })
       .on('mouseover', function(ev, d) { onTimelineHover(ev, d, true); })
       .on('mouseout', function(ev, d) { onTimelineHover(ev, d, false); });
+    if (t.mn) circle.attr('stroke-dasharray', '3 2');
   });
 
   // --- Topic labels for high-influence nodes ---
@@ -1690,8 +1652,6 @@ function onTimelineHover(ev, d, entering) {
 }
 
 function topicMatchesFilter(t) {
-  // Minor topic circles only appear for the active author — always pass them
-  if (t.mn) return true;
   if (minInfluence > 0 && (t.inf || 0) < minInfluence) return false;
   if (activeThread && t.th !== activeThread) return false;
   if (activeAuthor && t.a !== activeAuthor && (t.coauth || []).indexOf(activeAuthor) < 0) return false;
@@ -2363,12 +2323,14 @@ function showAuthorDetail(username) {
 
   // Other (minor) topics for this author
   var otherTopicsHtml = '';
-  var minorForAuthor = authorMinorIndex[username] || [];
+  var minorForAuthor = Object.values(DATA.topics).filter(function(t) {
+    return t.mn && (t.a === username || (t.coauth || []).indexOf(username) >= 0);
+  });
+  minorForAuthor.sort(function(a, b) { return (b.d || '').localeCompare(a.d || ''); });
   if (minorForAuthor.length > 0) {
     var showCount = Math.min(15, minorForAuthor.length);
-    var sorted = minorForAuthor.slice().sort(function(a, b) { return (b.d || '').localeCompare(a.d || ''); });
-    otherTopicsHtml = sorted.slice(0, showCount).map(function(mt) {
-      return '<div class="ref-item minor-ref"><a onclick="showMinorDetail(DATA.minorTopics[' + mt.id + '])" style="color:#889;font-style:italic">' +
+    otherTopicsHtml = minorForAuthor.slice(0, showCount).map(function(mt) {
+      return '<div class="ref-item minor-ref"><a onclick="showDetail(DATA.topics[' + mt.id + '])" style="color:#889;font-style:italic">' +
         escHtml(mt.t) + '</a> <span style="color:#556;font-size:10px">' + (mt.d || '').slice(0, 7) + '</span></div>';
     }).join('');
     if (minorForAuthor.length > showCount) {
@@ -2949,141 +2911,6 @@ function clearSimilar() {
   if (listEl) listEl.innerHTML = '';
 }
 
-// === MINOR TOPICS ===
-function toggleMinorTopics() {
-  showMinorTopics = !showMinorTopics;
-  if (showMinorTopics) renderMinorTopics();
-  else removeMinorTopics();
-  updateBreadcrumb();
-}
-
-function renderMinorTopics() {
-  if (!activeAuthor || activeView !== 'timeline') return;
-  removeMinorTopics();
-  var minors = authorMinorIndex[activeAuthor] || [];
-  if (minors.length === 0) return;
-
-  // Place minor topic circles in the _other swim lane area
-  var svg = d3.select('#timeline-view svg');
-  if (svg.empty()) return;
-  var zoomG = svg.select('g g[clip-path] g'); // the zoomable group
-  if (zoomG.empty()) return;
-
-  var minorG = zoomG.append('g').attr('class', 'minor-topics-group');
-
-  // Use the _other lane area: find the last lane's y range
-  // We use a deterministic y position based on topic id hash
-  var container = document.getElementById('timeline-view');
-  var height = container.clientHeight || 700;
-  var histH = 24;
-  var margin = {top: 50, bottom: 30 + histH};
-  var plotH = height - margin.top - margin.bottom;
-  var swimH = plotH - histH;
-
-  minors.forEach(function(mt) {
-    if (!mt.d) return;
-    var date = new Date(mt.d);
-    if (isNaN(date)) return;
-    var x = tlXScale(date);
-    // Spread across the full swim area (minor topics aren't lane-assigned)
-    var yMargin = swimH * 0.05;
-    var y = yMargin + (hashCode(mt.id) % 100) / 100 * (swimH - 2 * yMargin);
-    var r = Math.min(6, Math.max(3, (mt.inf || 0) * 20 + 3));
-    var fillColor = mt.th ? (THREAD_COLORS[mt.th] || '#556') : '#556';
-    var strokeColor = mt.th ? d3.color(fillColor).brighter(0.8).toString() : '#99a';
-
-    minorG.append('circle')
-      .attr('class', 'topic-circle minor-circle')
-      .attr('cx', x).attr('cy', y)
-      .attr('r', r)
-      .attr('fill', fillColor)
-      .attr('stroke', strokeColor)
-      .attr('stroke-width', 1)
-      .attr('stroke-dasharray', '3 2')
-      .attr('opacity', 0.55)
-      .datum({id: mt.id, _date: date, _yPos: y, inf: mt.inf || 0, mn: true, _fill: fillColor})
-      .on('click', function(ev, d) { showMinorDetail(DATA.minorTopics[d.id]); })
-      .on('mouseover', function(ev, d) {
-        d3.select(this).attr('opacity', 1).attr('r', r * 1.5);
-        showMinorTooltip(ev, DATA.minorTopics[d.id]);
-      })
-      .on('mouseout', function(ev, d) {
-        d3.select(this).attr('opacity', 0.55).attr('r', r);
-        hideTooltip();
-      });
-  });
-}
-
-function removeMinorTopics() {
-  d3.selectAll('.minor-topics-group').remove();
-}
-
-function showMinorTooltip(ev, mt) {
-  if (!mt) return;
-  var tip = document.getElementById('tooltip');
-  tip.innerHTML = '<strong>' + escHtml(mt.t) + '</strong><br>' +
-    escHtml(mt.a) + ' \u00b7 ' + mt.d + '<br>' +
-    '<span style="color:#888">Minor topic (below influence threshold)</span>';
-  tip.style.display = 'block';
-  var x = ev.clientX + 14;
-  var y = ev.clientY - 10;
-  var tw = tip.offsetWidth;
-  var th = tip.offsetHeight;
-  if (x + tw > window.innerWidth - 10) x = ev.clientX - tw - 14;
-  if (y + th > window.innerHeight - 10) y = window.innerHeight - th - 10;
-  if (y < 5) y = 5;
-  tip.style.left = x + 'px';
-  tip.style.top = y + 'px';
-}
-
-function showMinorDetail(mt) {
-  if (!mt) return;
-  var panel = document.getElementById('detail-panel');
-  var content = document.getElementById('detail-content');
-
-  var threadName = 'Unassigned';
-  var threadColor = '#555';
-  if (mt.th) {
-    var thread = DATA.threads[mt.th];
-    threadName = thread ? thread.n : mt.th;
-    threadColor = THREAD_COLORS[mt.th] || '#555';
-  }
-
-  var primarySet = new Set(mt.peips || []);
-
-  content.innerHTML =
-    '<h2>' + escHtml(mt.t) + '</h2>' +
-    '<div style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:3px;margin:4px 0 8px;' +
-    'background:#1a1a2a;border:1px solid #333;color:#889">Minor Topic</div>' +
-    '<div class="meta">by <strong onclick="openAuthor(\'' + escHtml(mt.a) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(mt.a) + '</strong> \u00b7 ' + (mt.d || '') +
-    ' \u00b7 <a href="https://ethresear.ch/t/' + mt.id + '" target="_blank">Open on ethresear.ch \u2192</a></div>' +
-    (mt.coauth && mt.coauth.length > 0 ? '<div class="detail-stat"><span class="label">Coauthors</span><span class="value">' + mt.coauth.map(function(u) { return '<span onclick="openAuthor(\'' + escHtml(u) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>'; }).join(', ') + '</span></div>' : '') +
-    '<div class="detail-stat"><span class="label">Thread</span><span class="value" style="color:' + threadColor + ';cursor:pointer" onclick="toggleThread(\'' + escHtml(mt.th || '') + '\')">' + escHtml(threadName) + '</span></div>' +
-    (mt.era ? '<div class="detail-stat"><span class="label">Era</span><span class="value">' + escHtml(mt.era) + '</span></div>' : '') +
-    '<div class="detail-stat"><span class="label">Influence</span><span class="value">' + (mt.inf || 0).toFixed(3) + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Views</span><span class="value">' + (mt.vw || 0).toLocaleString() + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Likes</span><span class="value">' + (mt.lk || 0) + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Posts</span><span class="value">' + (mt.pc || 0) + '</span></div>' +
-    ((mt.ind || mt.outd) ? '<div class="detail-stat"><span class="label">References</span><span class="value">' + (mt.ind || 0) + ' in / ' + (mt.outd || 0) + ' out</span></div>' : '') +
-    '<div class="detail-stat"><span class="label">Category</span><span class="value">' + escHtml(mt.cat || '') + '</span></div>' +
-    (mt.exc ? '<div class="detail-excerpt"><span id="excerpt-short">' + escHtml(mt.exc.length > 300 ? mt.exc.slice(0, 300) + '...' : mt.exc) + '</span>' +
-      '<span id="excerpt-full" style="display:none">' + escHtml(mt.exc) + '</span>' +
-      (mt.exc.length > 300 ? ' <span onclick="toggleExcerpt()" style="color:#66bbaa;cursor:pointer;font-size:10px;font-style:normal" id="excerpt-toggle">show more</span>' : '') +
-      '</div>' : '') +
-    (mt.tg && mt.tg.length > 0 ? '<div style="margin:6px 0">' + mt.tg.map(function(tag) { return '<span style="display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;margin:2px 3px 2px 0;background:#1a1a2a;border:1px solid #444;color:#99a">' + escHtml(tag) + '</span>'; }).join('') + '</div>' : '') +
-    (mt.peips && mt.peips.length > 0 ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">EIPs discussed:</strong> ' +
-      mt.peips.map(function(e) { return '<span class="eip-tag primary">EIP-' + e + '</span>'; }).join(' ') + '</div>' : '') +
-    (mt.eips && mt.eips.length > (mt.peips||[]).length ?
-      '<div style="margin:4px 0"><strong style="font-size:11px;color:#666">Also mentions:</strong> ' +
-      (mt.eips || []).filter(function(e) { return !primarySet.has(e); }).map(function(e) {
-        return '<span class="eip-tag">EIP-' + e + '</span>';
-      }).join(' ') + '</div>' : '') +
-    '<div class="detail-excerpt" style="font-style:normal;color:#777;margin-top:12px">' +
-    'This topic is below the influence threshold for the main visualization. ' +
-    'It appears here because it was authored by or co-authored with the selected author.</div>';
-
-  panel.classList.add('open');
-}
 
 // === EXCERPT TOGGLE ===
 function toggleExcerpt() {
@@ -3176,19 +3003,23 @@ function showDetail(t) {
       escHtml(msInfo.threadName) + '</span></div>';
   }
 
+  var minorBadge = t.mn ? '<div style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:3px;margin:4px 0 8px;' +
+    'background:#1a1a2a;border:1px solid #333;color:#889">Minor Topic</div>' : '';
+
   content.innerHTML =
     '<h2>' + escHtml(t.t) + '</h2>' +
+    minorBadge +
     msBadge +
-    '<div class="meta">by <strong onclick="openAuthor(\'' + escHtml(t.a) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(t.a) + '</strong> \u00b7 ' + t.d +
+    '<div class="meta">by <strong onclick="openAuthor(\'' + escHtml(t.a) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(t.a) + '</strong> \u00b7 ' + (t.d || '') +
     ' \u00b7 <a href="https://ethresear.ch/t/' + t.id + '" target="_blank">Open on ethresear.ch \u2192</a></div>' +
     (t.coauth && t.coauth.length > 0 ? '<div class="detail-stat"><span class="label">Coauthors</span><span class="value">' + t.coauth.map(function(u) { return '<span onclick="openAuthor(\'' + escHtml(u) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>'; }).join(', ') + '</span></div>' : '') +
     '<div class="detail-stat"><span class="label">Thread</span><span class="value" style="color:' + threadColor + ';cursor:pointer" onclick="toggleThread(\'' + escHtml(t.th || '') + '\')">' + threadName + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Influence</span><span class="value">' + t.inf.toFixed(3) + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Views</span><span class="value">' + t.vw.toLocaleString() + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Likes</span><span class="value">' + t.lk + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Posts</span><span class="value">' + t.pc + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Cited by</span><span class="value">' + t.ind + ' topics</span></div>' +
-    '<div class="detail-stat"><span class="label">Category</span><span class="value" style="cursor:pointer;color:#7788cc" onclick="toggleCategory(\'' + escHtml(t.cat) + '\')">' + escHtml(t.cat) + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Influence</span><span class="value">' + (t.inf || 0).toFixed(3) + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Views</span><span class="value">' + (t.vw || 0).toLocaleString() + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Likes</span><span class="value">' + (t.lk || 0) + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Posts</span><span class="value">' + (t.pc || 0) + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Cited by</span><span class="value">' + (t.ind || 0) + ' topics</span></div>' +
+    '<div class="detail-stat"><span class="label">Category</span><span class="value" style="cursor:pointer;color:#7788cc" onclick="toggleCategory(\'' + escHtml(t.cat || '') + '\')">' + escHtml(t.cat || '') + '</span></div>' +
     '<div style="margin:10px 0 6px;display:flex;gap:6px"><button id="lineage-btn" onclick="traceLineage(' + t.id + ')" ' +
     'style="background:#1a1a2e;border:1px solid ' + (lineageActive && lineageSet.has(t.id) ? '#88aaff' : '#5566aa') +
     ';color:' + (lineageActive && lineageSet.has(t.id) ? '#88aaff' : '#8899cc') +
@@ -3277,7 +3108,6 @@ function buildHash() {
   if (activeThread) parts.push('thread=' + encodeURIComponent(activeThread));
   if (activeAuthor) parts.push('author=' + encodeURIComponent(activeAuthor));
   if (pinnedTopicId) parts.push('topic=' + pinnedTopicId);
-  if (showMinorTopics && activeAuthor) parts.push('minor=1');
   return parts.length > 0 ? '#' + parts.join('&') : '';
 }
 
@@ -3329,13 +3159,6 @@ function applyHash() {
 
   if (changed) applyFilters();
 
-  // Apply minor topics toggle
-  if (params.minor === '1' && activeAuthor) {
-    showMinorTopics = true;
-    renderMinorTopics();
-    updateBreadcrumb();
-  }
-
   // Open topic detail
   if (params.topic) {
     var topicId = Number(params.topic);
@@ -3365,12 +3188,6 @@ function updateBreadcrumb() {
     var aColor = authorColorMap[activeAuthor] || '#667';
     parts.push('<span class="bc-tag" style="border-color:' + aColor + '55;color:' + aColor + '">' +
       activeAuthor + '<span class="bc-close" onclick="event.stopPropagation();toggleAuthor(\'' + activeAuthor + '\')">&times;</span></span>');
-    // Minor topics toggle button (only if author has minor topics)
-    var minorCount = (authorMinorIndex[activeAuthor] || []).length;
-    if (minorCount > 0) {
-      parts.push('<button class="minor-toggle' + (showMinorTopics ? ' active' : '') + '" onclick="event.stopPropagation();toggleMinorTopics()">' +
-        (showMinorTopics ? '\u2212 Minor posts (' + minorCount + ')' : '+ Minor posts (' + minorCount + ')') + '</button>');
-    }
   }
   if (activeCategory) {
     parts.push('<span class="bc-tag">' + escHtml(activeCategory) +

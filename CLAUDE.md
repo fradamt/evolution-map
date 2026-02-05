@@ -7,8 +7,8 @@ This is the **git repo**. When you finish a task — code changes work, local te
 An analysis pipeline over a scraped archive of **ethresear.ch** (Ethereum's Discourse research forum) that produces an "Evolution Map" — a narrative and interactive visualization tracing how Ethereum research ideas became protocol.
 
 - **~2,903 topics** scraped via the Discourse API (stdlib-only Python) — scraped data lives in the parent directory (`../topics/`, `../index.json`)
-- **550 influential topics** selected, connected by **1,007 cross-references**
-- **2,353 minor topics** below the influence threshold, enriched with thread/era/excerpt/tags/EIPs
+- **All 2,903 topics** in a unified dict — influence slider controls visibility (no separate "minor topics" toggle)
+- **550 influential topics** with **1,007 cross-references**, **2,353 lower-influence topics** (flagged `mn: true`)
 - **12 research threads** (PBS/MEV, Sharding/DA, Casper/PoS, Fee Markets, etc.) across **5 eras** (2017–2026)
 
 ## Repository Structure
@@ -68,7 +68,7 @@ python3 render_markdown.py
 
 **minor_topics{}** (~2,353): Below influence threshold — same fields as topics except no `outgoing_refs`, `incoming_refs`, `participants`, `shipped_in`.
 
-**HTML compact format**: Field names are abbreviated to reduce file size: `t` = title, `a` = author, `d` = date, `inf` = influence_score, `th` = research_thread, `vw` = views, `lk` = like_count, `pc` = posts_count, `ind` = in_degree, `outd` = out_degree, `eips` = eip_mentions, `peips` = primary_eips, `exc` = first_post_excerpt, `tg` = tags, `cat` = category_name, `out` = outgoing_refs, `inc` = incoming_refs, `coauth` = coauthors, `mn` = true (minor topic flag).
+**HTML compact format**: All 2,903 topics live in a single `DATA.topics` dict. Field names are abbreviated: `t` = title, `a` = author, `d` = date, `inf` = influence_score, `th` = research_thread, `vw` = views, `lk` = like_count, `pc` = posts_count, `ind` = in_degree, `outd` = out_degree, `eips` = eip_mentions, `peips` = primary_eips, `exc` = first_post_excerpt, `tg` = tags, `cat` = category_name, `out` = outgoing_refs, `inc` = incoming_refs, `coauth` = coauthors, `mn` = true (lower-influence topic flag — `out`/`inc` are `[]`). `DATA.minorTopics` is `{}` (kept for backward compat, always empty).
 
 **Scraped data** (parent directory):
 - `index.json`: `{ "topic_id_str": { id, title, category_id, category_name, posts_count, created_at, last_posted_at, views, like_count } }`
@@ -81,7 +81,7 @@ Self-contained single HTML file using D3.js v7 from CDN. Three views:
 - **Network**: force-directed citation graph with fork diamonds
 - **Co-Author**: force-directed collaboration network
 
-Minor topics appear on the timeline when an author is selected (toggle). They are colored by research thread (falling back to grey if unassigned) and show full detail in the sidebar panel.
+All topics live in one unified dict. The influence slider controls visibility — default threshold hides lower-influence topics so the initial view matches the original ~550. Slide to 0 to see all 2,903. Lower-influence topics are drawn with dashed circles and show a "Minor Topic" badge in the detail panel. Network view only shows topics with citation edges (no change). Search, author detail, and filtering work across the full spectrum.
 
 ## Scraper Details
 
