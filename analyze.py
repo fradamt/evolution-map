@@ -305,7 +305,7 @@ def _clean_excerpt(cooked_html):
     # 2. Remove boilerplate prefixes (may appear at the very start)
     text = _BOILERPLATE_RE.sub("", text).strip()
 
-    # 4. Extract first 2-3 complete sentences up to ~300 chars
+    # 4. Extract first 3-5 complete sentences up to ~600 chars
     # Find sentence boundaries
     boundaries = [m.end() - 1 for m in _SENTENCE_END_RE.finditer(text)]
     # Each boundary points to the position right after the period
@@ -315,27 +315,27 @@ def _clean_excerpt(cooked_html):
         # boundary is at the space after the period; the sentence ends at the period
         # We want to include up to and including the period
         candidate = text[: boundary + 1].strip()
-        if len(candidate) > 300:
-            # If the very first sentence is already > 300 chars, truncate it
+        if len(candidate) > 600:
+            # If the very first sentence is already > 600 chars, truncate it
             if i == 0:
                 excerpt = candidate
                 break
             # Otherwise, stop at the previous sentence boundary
             break
         excerpt = candidate
-        if i >= 2:  # collected 3 sentences (indices 0, 1, 2)
+        if i >= 4:  # collected 5 sentences (indices 0, 1, 2, 3, 4)
             break
 
     # If no sentence boundaries found, use the whole text
     if not excerpt:
         excerpt = text
 
-    # 5. Truncate at a word boundary at ~250 chars and add "..."
-    if len(excerpt) > 300:
-        # Find the last space at or before position 250
-        cut = excerpt.rfind(" ", 0, 250)
+    # 5. Truncate at a word boundary at ~550 chars and add "..."
+    if len(excerpt) > 600:
+        # Find the last space at or before position 550
+        cut = excerpt.rfind(" ", 0, 550)
         if cut == -1:
-            cut = 250
+            cut = 550
         excerpt = excerpt[:cut].rstrip(".,;:!? ") + "..."
 
     return excerpt
@@ -1046,7 +1046,7 @@ def main():
             "eip_mentions": t["eip_mentions"],
             "primary_eips": t["primary_eips"],
             "shipped_in": t.get("shipped_in", []),
-            "first_post_excerpt": t.get("first_post_excerpt", "")[:300],
+            "first_post_excerpt": t.get("first_post_excerpt", "")[:600],
             "participants": t["participants"][:5],
             "outgoing_refs": sorted(all_internal_links.get(tid, set()) & included),
             "incoming_refs": [e["source"] for e in graph_edges if e["target"] == tid],

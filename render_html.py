@@ -88,7 +88,7 @@ def prepare_viz_data(data):
             "peips": t.get("primary_eips", []),
             "cat": t.get("category_name", ""),
             "tg": t.get("tags", [])[:5],
-            "exc": t.get("first_post_excerpt", "")[:300],
+            "exc": t.get("first_post_excerpt", "")[:600],
             "out": t.get("outgoing_refs", []),
             "inc": t.get("incoming_refs", []),
             "parts": [p["username"] for p in t.get("participants", [])[:3]],
@@ -246,11 +246,13 @@ def generate_html(viz_json, data):
   </div>
 </div>
 <div class="tooltip" id="tooltip"></div>
+<div class="toast" id="toast"></div>
 <div id="help-overlay" class="help-overlay" onclick="toggleHelp()">
   <div class="help-card" onclick="event.stopPropagation()">
     <h3>Keyboard Shortcuts &amp; Interactions</h3>
     <div class="help-grid">
       <div class="help-key">Click node</div><div class="help-desc">Pin topic &amp; show detail panel</div>
+      <div class="help-key">Shift+Click</div><div class="help-desc">Find citation path from pinned to clicked topic</div>
       <div class="help-key">&larr; &rarr;</div><div class="help-desc">Navigate between connected topics</div>
       <div class="help-key">Hover ref link</div><div class="help-desc">Highlight referenced topic in view</div>
       <div class="help-key">Scroll / Trackpad</div><div class="help-desc">Pan timeline horizontally</div>
@@ -348,6 +350,10 @@ header .stats span { white-space: nowrap; }
 .thread-chip:hover, .thread-chip.active { opacity: 1; }
 .thread-chip .thread-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .thread-chip .thread-count { font-size: 9px; opacity: 0.6; flex-shrink: 0; }
+.thread-chip .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-left: -2px; }
+.thread-chip .status-dot.active { background: #4caf50; }
+.thread-chip .status-dot.moderate { background: #ffc107; }
+.thread-chip .status-dot.dormant { background: #555; }
 .thread-chip .sparkline-wrap { flex-shrink: 0; position: relative; }
 .thread-chip .sparkline-wrap svg { display: block; }
 .author-item { padding: 6px 0; cursor: pointer; display: flex; align-items: center; gap: 8px; }
@@ -493,6 +499,13 @@ header .stats span { white-space: nowrap; }
              text-anchor: middle; dominant-baseline: hanging;
              text-shadow: 0 0 3px #0a0a0f, 0 0 6px #0a0a0f; }
 
+/* Toast notification */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+         background: #2a3a2a; border: 1px solid #4a6a4a; color: #88cc88; padding: 8px 16px;
+         border-radius: 4px; font-size: 12px; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+         pointer-events: none; }
+.toast.show { opacity: 1; }
+
 .tooltip { position: fixed; background: #1e1e2e; border: 1px solid #444; border-radius: 4px;
            padding: 8px 12px; font-size: 11px; color: #ccc; pointer-events: none;
            z-index: 500; max-width: 350px; line-height: 1.4; display: none;
@@ -518,6 +531,10 @@ let lineageActive = false;
 let lineageSet = new Set();
 let lineageEdgeSet = new Set(); // "src-tgt" strings for fast edge lookup
 let milestonesVisible = true;
+let pathMode = false;
+let pathStart = null;
+let pathSet = new Set();
+let pathEdgeSet = new Set();
 
 // Build milestone index: topic_id -> {threadId, threadName, note, human}
 const MILESTONE_LABELS = {
@@ -549,6 +566,20 @@ DATA.graph.edges.forEach(e => {
   if (!topicEdgeIndex[t]) topicEdgeIndex[t] = new Set();
   topicEdgeIndex[s].add(Number(e.target));
   topicEdgeIndex[t].add(Number(e.source));
+});
+
+// Inverted indices for similarity search
+const eipToTopics = {};
+const tagToTopics = {};
+Object.values(DATA.topics).forEach(function(t) {
+  (t.eips || []).concat(t.peips || []).forEach(function(e) {
+    if (!eipToTopics[e]) eipToTopics[e] = new Set();
+    eipToTopics[e].add(t.id);
+  });
+  (t.tg || []).forEach(function(tag) {
+    if (!tagToTopics[tag]) tagToTopics[tag] = new Set();
+    tagToTopics[tag].add(t.id);
+  });
 });
 
 // Build co-author edge index: author_id -> set of connected author_ids
@@ -626,6 +657,16 @@ function buildSidebar() {
     chip.title = th.n + ' (' + th.tc + ' topics)';
     chip.onclick = () => toggleThread(tid);
     chip.dataset.thread = tid;
+
+    // Thread status: count topics from 2024+ quarters
+    var recentCount = (th.qc || []).reduce(function(sum, d) {
+      return sum + (d.q >= '2024' ? d.c : 0);
+    }, 0);
+    var statusClass = recentCount >= 5 ? 'active' : recentCount >= 2 ? 'moderate' : 'dormant';
+    var dot = document.createElement('span');
+    dot.className = 'status-dot ' + statusClass;
+    dot.title = recentCount + ' topics since 2024 (' + (statusClass === 'active' ? 'Active' : statusClass === 'moderate' ? 'Moderate' : 'Dormant') + ')';
+    chip.appendChild(dot);
 
     const lbl = document.createElement('span');
     lbl.className = 'thread-label';
@@ -739,6 +780,8 @@ function clearFilters() {
   lineageActive = false;
   lineageSet = new Set();
   lineageEdgeSet = new Set();
+  pathMode = false; pathStart = null; pathSet = new Set(); pathEdgeSet = new Set();
+  if (similarActive) clearSimilar();
   document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
@@ -1127,8 +1170,12 @@ function buildTimeline() {
     eraTexts.push(
       zoomG.append('text').attr('x', (x0 + x1) / 2).attr('y', -8)
         .attr('text-anchor', 'middle').attr('fill', '#555').attr('font-size', 10)
+        .style('cursor', 'pointer')
         .text(era.name)
-        .datum({start: new Date(era.start), end: new Date(era.end)})
+        .datum({start: new Date(era.start), end: new Date(era.end), idx: i})
+        .on('click', function(ev, d) { showEraDetail(d.idx); })
+        .on('mouseover', function() { d3.select(this).attr('fill', '#999'); })
+        .on('mouseout', function() { d3.select(this).attr('fill', '#555'); })
     );
   });
 
@@ -1218,7 +1265,7 @@ function buildTimeline() {
       .attr('stroke-width', 0.5)
       .attr('opacity', 0.65)
       .datum(t)
-      .on('click', function(ev, d) { showDetail(d); })
+      .on('click', function(ev, d) { handleTopicClick(ev, d); })
       .on('mouseover', function(ev, d) { onTimelineHover(ev, d, true); })
       .on('mouseout', function(ev, d) { onTimelineHover(ev, d, false); });
   });
@@ -1259,7 +1306,7 @@ function buildTimeline() {
       .attr('class', 'milestone-marker')
       .attr('points', starPoints(xScale(md.topic._date), md.topic._yPos, r, r * 0.5, 4))
       .datum(md.topic)
-      .on('click', function(ev, d) { showDetail(d); })
+      .on('click', function(ev, d) { handleTopicClick(ev, d); })
       .on('mouseover', function(ev, d) { showTooltip(ev, d); })
       .on('mouseout', function() { hideTooltip(); });
   });
@@ -1754,7 +1801,7 @@ function buildNetwork() {
   node.on('click', function(ev, d) {
     if (d.isFork) return;
     var t = DATA.topics[d.id];
-    if (t) showDetail(t);
+    if (t) handleTopicClick(ev, t);
   });
 
   node.on('mouseover', function(ev, d) {
@@ -2272,6 +2319,64 @@ function showThreadDetail(tid) {
   panel.classList.add('open');
 }
 
+// === ERA DETAIL ===
+function showEraDetail(eraIdx) {
+  var era = DATA.eras[eraIdx];
+  if (!era) return;
+  var panel = document.getElementById('detail-panel');
+  var content = document.getElementById('detail-content');
+
+  // Forks in this era
+  var eraForks = DATA.forks.filter(function(f) {
+    return f.d && f.d >= era.start && f.d <= era.end;
+  });
+  var forksHtml = eraForks.length > 0 ?
+    '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Forks Shipped</strong><div style="margin-top:4px">' +
+    eraForks.map(function(f) {
+      return '<span class="fork-tag">' + escHtml(f.cn || f.n) + ' (' + f.d.slice(0, 7) + ')</span>';
+    }).join(' ') + '</div></div>' : '';
+
+  // Most active threads in this era (count topics per thread)
+  var threadCounts = {};
+  Object.values(DATA.topics).forEach(function(t) {
+    if (t.d >= era.start && t.d <= era.end && t.th) {
+      threadCounts[t.th] = (threadCounts[t.th] || 0) + 1;
+    }
+  });
+  var sortedThreads = Object.entries(threadCounts).sort(function(a, b) { return b[1] - a[1]; });
+  var threadsHtml = sortedThreads.length > 0 ?
+    '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Most Active Threads</strong><div style="margin-top:4px">' +
+    sortedThreads.slice(0, 5).map(function(entry) {
+      var tid = entry[0], count = entry[1];
+      var color = THREAD_COLORS[tid] || '#555';
+      var name = DATA.threads[tid] ? DATA.threads[tid].n : tid;
+      return '<span style="display:inline-block;font-size:11px;margin:2px 4px 2px 0;padding:1px 6px;' +
+        'background:' + color + '22;border:1px solid ' + color + '44;border-radius:3px;color:' + color + ';cursor:pointer" ' +
+        'onclick="toggleThread(\'' + tid + '\')">' +
+        escHtml(name) + ' <span style="color:#666;font-size:9px">(' + count + ')</span></span>';
+    }).join('') + '</div></div>' : '';
+
+  // Top topics of this era
+  var eraTopics = Object.values(DATA.topics).filter(function(t) {
+    return t.d >= era.start && t.d <= era.end;
+  }).sort(function(a, b) { return b.inf - a.inf; });
+  var topsHtml = eraTopics.length > 0 ?
+    '<div class="detail-refs"><h4>Top Topics (' + eraTopics.length + ' total)</h4>' +
+    eraTopics.slice(0, 10).map(function(t) {
+      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + t.id + '])" ' +
+        'onmouseenter="highlightTopicInView(' + t.id + ')" onmouseleave="restorePinnedHighlight()">' +
+        escHtml(t.t) + '</a> <span style="color:#666;font-size:10px">(' + t.inf.toFixed(2) + ')</span></div>';
+    }).join('') + '</div>' : '';
+
+  content.innerHTML =
+    '<h2>' + escHtml(era.name) + '</h2>' +
+    '<div class="meta">Era \u00b7 ' + era.start.slice(0, 7) + ' to ' + era.end.slice(0, 7) + '</div>' +
+    '<div class="detail-excerpt" style="font-style:normal">' + escHtml(era.character) + '</div>' +
+    forksHtml + threadsHtml + topsHtml;
+
+  panel.classList.add('open');
+}
+
 // === LINEAGE TRACING ===
 function traceLineage(topicId) {
   if (lineageActive && lineageSet.has(topicId)) {
@@ -2419,6 +2524,233 @@ function applyLineageNetwork() {
     });
 }
 
+// === FIND PATH ===
+function handleTopicClick(ev, d) {
+  if (ev.shiftKey && pinnedTopicId && pinnedTopicId !== d.id) {
+    // Shift+click = find path from pinned to clicked
+    activatePath(pinnedTopicId, d.id);
+    return;
+  }
+  showDetail(d);
+}
+
+function findPath(startId, endId) {
+  // BFS on topicEdgeIndex to find shortest path
+  if (startId === endId) return [startId];
+  var visited = new Set([startId]);
+  var queue = [[startId]];
+  while (queue.length > 0) {
+    var path = queue.shift();
+    var current = path[path.length - 1];
+    var neighbors = topicEdgeIndex[String(current)] || new Set();
+    for (var n of neighbors) {
+      if (n === endId) return path.concat([n]);
+      if (!visited.has(n)) {
+        visited.add(n);
+        queue.push(path.concat([n]));
+      }
+    }
+    if (path.length > 8) break; // max depth
+  }
+  return null; // no path found
+}
+
+function activatePath(startId, endId) {
+  var path = findPath(startId, endId);
+  if (!path) {
+    showToast('No citation path found (max 8 hops)');
+    pathMode = false; pathStart = null;
+    return;
+  }
+  pathSet = new Set(path);
+  pathEdgeSet = new Set();
+  for (var i = 0; i < path.length - 1; i++) {
+    pathEdgeSet.add(path[i] + '-' + path[i + 1]);
+    pathEdgeSet.add(path[i + 1] + '-' + path[i]);
+  }
+  pathMode = true;
+
+  // Highlight path
+  applyPathHighlight();
+
+  // Show path in detail panel
+  var panel = document.getElementById('detail-panel');
+  var content = document.getElementById('detail-content');
+  content.innerHTML = '<h2>Citation Path (' + path.length + ' steps)</h2>' +
+    '<div class="meta">From ' + escHtml(DATA.topics[startId].t) + ' to ' + escHtml(DATA.topics[endId].t) + '</div>' +
+    '<div class="detail-refs" style="margin-top:12px">' +
+    path.map(function(id, i) {
+      var t = DATA.topics[id];
+      if (!t) return '';
+      return '<div class="ref-item" style="display:flex;align-items:center;gap:6px">' +
+        '<span style="color:#44cc88;font-size:10px;font-weight:600;flex-shrink:0">' + (i + 1) + '</span>' +
+        '<a onclick="showDetail(DATA.topics[' + id + '])" ' +
+        'onmouseenter="highlightTopicInView(' + id + ')" onmouseleave="restorePinnedHighlight()">' +
+        escHtml(t.t) + '</a> <span style="color:#666;font-size:10px">(' + t.d.slice(0, 7) + ')</span></div>';
+    }).join('') + '</div>' +
+    '<div style="margin-top:10px"><button onclick="clearPath()" ' +
+    'style="background:#1a1a2e;border:1px solid #44cc88;color:#44cc88;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">Clear Path</button></div>';
+  panel.classList.add('open');
+}
+
+function clearPath() {
+  pathMode = false; pathStart = null;
+  pathSet = new Set(); pathEdgeSet = new Set();
+  applyFilters();
+  document.getElementById('detail-panel').classList.remove('open');
+}
+
+function applyPathHighlight() {
+  if (activeView === 'timeline') {
+    d3.selectAll('.topic-circle')
+      .attr('opacity', function(d) { return pathSet.has(d.id) ? 1 : 0.04; })
+      .attr('r', function(d) { return pathSet.has(d.id) ? tlRScale(d.inf) * 1.3 : tlRScale(d.inf); });
+    d3.selectAll('.edge-line')
+      .attr('stroke', function(d) {
+        var key = d.source + '-' + d.target;
+        return pathEdgeSet.has(key) ? '#44cc88' : '#556';
+      })
+      .attr('stroke-opacity', function(d) {
+        var key = d.source + '-' + d.target;
+        return pathEdgeSet.has(key) ? 0.8 : 0.01;
+      })
+      .attr('stroke-width', function(d) {
+        var key = d.source + '-' + d.target;
+        return pathEdgeSet.has(key) ? 2.5 : 1;
+      });
+    syncLabels();
+  } else if (activeView === 'network') {
+    d3.selectAll('.net-node circle').attr('opacity', function(d) { return pathSet.has(d.id) ? 1 : 0.04; });
+    d3.selectAll('.net-link')
+      .attr('stroke', function(l) {
+        var sid = typeof l.source === 'object' ? l.source.id : l.source;
+        var tid = typeof l.target === 'object' ? l.target.id : l.target;
+        return pathEdgeSet.has(sid + '-' + tid) ? '#44cc88' : '#334';
+      })
+      .attr('stroke-opacity', function(l) {
+        var sid = typeof l.source === 'object' ? l.source.id : l.source;
+        var tid = typeof l.target === 'object' ? l.target.id : l.target;
+        return pathEdgeSet.has(sid + '-' + tid) ? 0.8 : 0.02;
+      });
+  }
+}
+
+// === FIND SIMILAR ===
+let similarActive = false;
+let similarSet = new Set();
+
+function jaccardSets(a, b) {
+  if (a.size === 0 && b.size === 0) return 0;
+  var inter = 0;
+  a.forEach(function(v) { if (b.has(v)) inter++; });
+  return inter / (a.size + b.size - inter);
+}
+
+function findSimilar(topicId) {
+  if (similarActive && similarSet.has(topicId)) {
+    clearSimilar();
+    return;
+  }
+  var t = DATA.topics[topicId];
+  if (!t) return;
+
+  var tRefs = new Set((t.out || []).concat(t.inc || []));
+  var tEips = new Set((t.eips || []).concat(t.peips || []));
+  var tTags = new Set(t.tg || []);
+  var tParts = new Set(t.parts || []);
+
+  var scores = [];
+  Object.values(DATA.topics).forEach(function(other) {
+    if (other.id === topicId) return;
+    var oRefs = new Set((other.out || []).concat(other.inc || []));
+    var oEips = new Set((other.eips || []).concat(other.peips || []));
+    var oTags = new Set(other.tg || []);
+    var oParts = new Set(other.parts || []);
+
+    var refScore = jaccardSets(tRefs, oRefs);
+    var eipScore = jaccardSets(tEips, oEips);
+    var tagScore = jaccardSets(tTags, oTags);
+    var threadBonus = (t.th && t.th === other.th) ? 1 : 0;
+    var partScore = jaccardSets(tParts, oParts);
+
+    var score = 0.4 * refScore + 0.2 * eipScore + 0.2 * tagScore + 0.1 * threadBonus + 0.1 * partScore;
+    if (score > 0.01) scores.push({id: other.id, score: score});
+  });
+
+  scores.sort(function(a, b) { return b.score - a.score; });
+  var top10 = scores.slice(0, 10);
+
+  similarSet = new Set([topicId]);
+  top10.forEach(function(s) { similarSet.add(s.id); });
+  similarActive = true;
+
+  highlightTopicSet(similarSet);
+
+  // Update button
+  var btn = document.getElementById('similar-btn');
+  if (btn) { btn.textContent = 'Clear Similar (' + top10.length + ')'; btn.style.borderColor = '#44aa88'; btn.style.color = '#44aa88'; }
+
+  // Show similar list in detail panel
+  var listEl = document.getElementById('similar-list');
+  if (listEl) {
+    listEl.innerHTML = '<h4>Similar Topics</h4>' + top10.map(function(s) {
+      var ref = DATA.topics[s.id];
+      if (!ref) return '';
+      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + s.id + '])" ' +
+        'onmouseenter="highlightTopicInView(' + s.id + ')" onmouseleave="restorePinnedHighlight()">' +
+        escHtml(ref.t) + '</a> <span style="color:#666;font-size:10px">(' + (s.score * 100).toFixed(0) + '%)</span></div>';
+    }).join('');
+  }
+}
+
+function clearSimilar() {
+  similarActive = false;
+  similarSet = new Set();
+  applyFilters();
+  var btn = document.getElementById('similar-btn');
+  if (btn) { btn.textContent = 'Find Similar'; btn.style.borderColor = '#44aa88'; btn.style.color = '#66bbaa'; }
+  var listEl = document.getElementById('similar-list');
+  if (listEl) listEl.innerHTML = '';
+}
+
+// === EXCERPT TOGGLE ===
+function toggleExcerpt() {
+  var short = document.getElementById('excerpt-short');
+  var full = document.getElementById('excerpt-full');
+  var btn = document.getElementById('excerpt-toggle');
+  if (!short || !full || !btn) return;
+  if (full.style.display === 'none') {
+    short.style.display = 'none'; full.style.display = 'inline'; btn.textContent = 'show less';
+  } else {
+    short.style.display = 'inline'; full.style.display = 'none'; btn.textContent = 'show more';
+  }
+}
+
+// === TOAST ===
+function showToast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 2000);
+}
+
+// === EXPORT REFS ===
+function exportRefsMarkdown(topicId, direction) {
+  var t = DATA.topics[topicId];
+  if (!t) return;
+  var refs = direction === 'out' ? (t.out || []) : (t.inc || []);
+  if (refs.length === 0) { showToast('No references to export'); return; }
+  var lines = refs.map(function(id) {
+    var ref = DATA.topics[id];
+    if (!ref) return null;
+    return '- [' + ref.t + '](https://ethresear.ch/t/' + id + ')';
+  }).filter(Boolean);
+  var header = '## ' + (direction === 'out' ? 'References from' : 'Citations of') + ': ' + t.t + '\n\n';
+  navigator.clipboard.writeText(header + lines.join('\n')).then(function() {
+    showToast('Copied ' + lines.length + ' references as Markdown');
+  });
+}
+
 // === DETAIL PANEL ===
 function showDetail(t) {
   var wasAlreadyPinned = pinnedTopicId !== null;
@@ -2484,13 +2816,22 @@ function showDetail(t) {
     '<div class="detail-stat"><span class="label">Posts</span><span class="value">' + t.pc + '</span></div>' +
     '<div class="detail-stat"><span class="label">Cited by</span><span class="value">' + t.ind + ' topics</span></div>' +
     '<div class="detail-stat"><span class="label">Category</span><span class="value">' + escHtml(t.cat) + '</span></div>' +
-    '<div style="margin:10px 0 6px"><button id="lineage-btn" onclick="traceLineage(' + t.id + ')" ' +
+    '<div style="margin:10px 0 6px;display:flex;gap:6px"><button id="lineage-btn" onclick="traceLineage(' + t.id + ')" ' +
     'style="background:#1a1a2e;border:1px solid ' + (lineageActive && lineageSet.has(t.id) ? '#88aaff' : '#5566aa') +
     ';color:' + (lineageActive && lineageSet.has(t.id) ? '#88aaff' : '#8899cc') +
     ';padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">' +
     (lineageActive && lineageSet.has(t.id) ? 'Clear Lineage (' + lineageSet.size + ' topics)' : 'Trace Lineage') +
+    '</button>' +
+    '<button id="similar-btn" onclick="findSimilar(' + t.id + ')" ' +
+    'style="background:#1a1a2e;border:1px solid ' + (similarActive && similarSet.has(t.id) ? '#44aa88' : '#44aa88') +
+    ';color:' + (similarActive && similarSet.has(t.id) ? '#44aa88' : '#66bbaa') +
+    ';padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">' +
+    (similarActive && similarSet.has(t.id) ? 'Clear Similar (' + (similarSet.size - 1) + ')' : 'Find Similar') +
     '</button></div>' +
-    (t.exc ? '<div class="detail-excerpt">' + escHtml(t.exc) + '</div>' : '') +
+    (t.exc ? '<div class="detail-excerpt"><span id="excerpt-short">' + escHtml(t.exc.length > 300 ? t.exc.slice(0, 300) + '...' : t.exc) + '</span>' +
+      '<span id="excerpt-full" style="display:none">' + escHtml(t.exc) + '</span>' +
+      (t.exc.length > 300 ? ' <span onclick="toggleExcerpt()" style="color:#66bbaa;cursor:pointer;font-size:10px;font-style:normal" id="excerpt-toggle">show more</span>' : '') +
+      '</div>' : '') +
     (t.peips && t.peips.length > 0 ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">EIPs discussed:</strong> ' +
       t.peips.map(function(e) { return '<span class="eip-tag primary">EIP-' + e + '</span>'; }).join(' ') + '</div>' : '') +
     (t.eips && t.eips.length > (t.peips||[]).length ?
@@ -2498,16 +2839,23 @@ function showDetail(t) {
       (t.eips || []).filter(function(e) { return !primarySet.has(e); }).map(function(e) {
         return '<span class="eip-tag">EIP-' + e + '</span>';
       }).join(' ') + '</div>' : '') +
-    (outRefs ? '<div class="detail-refs"><h4>References (' + t.out.length + ')</h4>' + outRefs + '</div>' : '') +
-    (incRefs ? '<div class="detail-refs"><h4>Cited by (' + t.inc.length + ')</h4>' + incRefs + '</div>' : '');
+    (outRefs ? '<div class="detail-refs"><h4>References (' + t.out.length + ') <span onclick="exportRefsMarkdown(' + t.id + ',\'out\')" ' +
+      'style="font-size:9px;color:#66bbaa;cursor:pointer;text-transform:none;font-weight:400;margin-left:6px">copy md</span></h4>' + outRefs + '</div>' : '') +
+    (incRefs ? '<div class="detail-refs"><h4>Cited by (' + t.inc.length + ') <span onclick="exportRefsMarkdown(' + t.id + ',\'inc\')" ' +
+      'style="font-size:9px;color:#66bbaa;cursor:pointer;text-transform:none;font-weight:400;margin-left:6px">copy md</span></h4>' + incRefs + '</div>' : '') +
+    '<div id="similar-list" class="detail-refs"></div>';
 
   panel.classList.add('open');
   updateHash();
+
+  // Re-populate similar list if still active for this topic
+  if (similarActive && similarSet.has(t.id)) findSimilar(t.id);
 }
 
 function closeDetail() {
   document.getElementById('detail-panel').classList.remove('open');
   pinnedTopicId = null;
+  if (similarActive) clearSimilar();
   applyFilters();
   updateHash();
 }
