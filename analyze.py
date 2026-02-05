@@ -1166,6 +1166,16 @@ def main():
     print(f"  Era distribution: {dict(era_counts)}")
 
     # -----------------------------------------------------------------------
+    # Author → all topic IDs (full corpus, for minor topics feature)
+    # -----------------------------------------------------------------------
+    print("Building author → all topic IDs index...")
+    author_all_topic_ids = defaultdict(set)
+    for tid in tids:
+        t = topics[tid]
+        for author_username in t.get("authors", [t["author"]]):
+            author_all_topic_ids[author_username].add(tid)
+
+    # -----------------------------------------------------------------------
     # Author profiles
     # -----------------------------------------------------------------------
     print("Building author profiles...")
@@ -1235,6 +1245,7 @@ def main():
             "thread_focus": dict(data["threads"].most_common(3)),
             "top_topics": top_topics,
             "co_researchers": dict(co_researchers.most_common(10)),
+            "all_topic_ids": sorted(author_all_topic_ids.get(username, set())),
         }
 
     print(f"  {len(authors_output)} author profiles")
@@ -1456,6 +1467,30 @@ def main():
         }
 
     # -----------------------------------------------------------------------
+    # Minor topics (below threshold, for author detail view)
+    # -----------------------------------------------------------------------
+    print("Building minor topics...")
+    minor_topics_output = {}
+    for tid in tids:
+        if tid in included:
+            continue
+        t = topics[tid]
+        minor_topics_output[str(tid)] = {
+            "id": tid,
+            "title": t["title"],
+            "author": t["author"],
+            "coauthors": t.get("coauthors", []),
+            "authors": t.get("authors", [t["author"]]),
+            "date": t["date"],
+            "category_name": t["category_name"],
+            "views": t["views"],
+            "like_count": t["like_count"],
+            "posts_count": t["posts_count"],
+            "influence_score": t["influence_score"],
+        }
+    print(f"  {len(minor_topics_output)} minor topics")
+
+    # -----------------------------------------------------------------------
     # Assemble output
     # -----------------------------------------------------------------------
     print("Writing analysis.json...")
@@ -1470,6 +1505,7 @@ def main():
         "eras": ERAS,
         "forks": forks_output,
         "topics": topics_output,
+        "minor_topics": minor_topics_output,
         "authors": authors_output,
         "research_threads": threads_output,
         "graph": {
