@@ -544,12 +544,31 @@ def _split_author_phrase(text):
     return [n for n in names if n]
 
 
+_REF_HEADER_RE = re.compile(
+    r"(?i)^(?:related\s+(?:work|research|posts?|reading)|references?|"
+    r"previous\s+(?:work|research)|prior\s+(?:work|art)|see\s+also)\s*:?\s*$"
+)
+
+# Citation pattern: "Title, by Author – Date" (a reference, not a byline)
+_CITATION_RE = re.compile(
+    r".{10,},\s*by\s+\w+.*[-–—]\s*"
+    r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{2,4}",
+    re.IGNORECASE,
+)
+
+
 def extract_coauthor_names(lines):
     """Extract coauthor name strings from intro lines."""
     names = []
     seen = set()
     for idx, line in enumerate(lines):
         low = line.lower()
+        # Stop scanning at reference/related-work headers
+        if _REF_HEADER_RE.match(line):
+            break
+        # Skip citation-style lines ("Title, by Author – Date")
+        if _CITATION_RE.search(line):
+            continue
         if "thanks to" in low or "special thanks" in low:
             continue
         for pat in _COAUTHOR_PATTERNS:
