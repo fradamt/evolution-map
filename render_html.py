@@ -201,7 +201,10 @@ def generate_html(viz_json, data):
   </div>
   <div id="sidebar">
     <div class="sidebar-section">
-      <input type="text" id="search-box" placeholder="Search topics, authors, EIPs...">
+      <div class="search-wrap">
+        <input type="text" id="search-box" placeholder="Search topics, authors, EIPs...">
+        <div class="search-dropdown" id="search-dropdown"></div>
+      </div>
     </div>
     <div class="sidebar-section">
       <h3>Research Threads</h3>
@@ -391,8 +394,27 @@ header .stats span { white-space: nowrap; }
 .thread-bar-pct { color: #666; font-size: 10px; width: 32px; text-align: right; flex-shrink: 0; }
 
 #search-box { width: 100%; padding: 6px 8px; background: #1a1a2a; border: 1px solid #333;
-              border-radius: 4px; color: #ccc; font-size: 12px; margin-bottom: 8px; }
+              border-radius: 4px; color: #ccc; font-size: 12px; }
 #search-box:focus { outline: none; border-color: #555; }
+.search-wrap { position: relative; margin-bottom: 8px; }
+.search-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #1a1a2e;
+                   border: 1px solid #444; border-top: none; border-radius: 0 0 4px 4px;
+                   max-height: 280px; overflow-y: auto; z-index: 200; display: none; }
+.search-dropdown::-webkit-scrollbar { width: 5px; }
+.search-dropdown::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+.search-item { padding: 6px 10px; cursor: pointer; font-size: 11px; border-bottom: 1px solid #1e1e2e; }
+.search-item:hover, .search-item.active { background: #252540; }
+.search-item .si-title { color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-item .si-meta { color: #666; font-size: 10px; margin-top: 1px; }
+.search-item .si-thread { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
+
+/* Topic labels on timeline */
+.topic-label { fill: #bbb; font-size: 9px; pointer-events: none; font-weight: 500;
+               text-shadow: 0 0 4px #0a0a0f, 0 0 8px #0a0a0f, 0 1px 3px #0a0a0f; }
+
+/* Fork line hover area */
+.fork-hover-line { stroke: transparent; stroke-width: 16; cursor: pointer; }
+.fork-hover-line:hover + .fork-line { stroke: #888; stroke-width: 1.5; }
 
 .tooltip { position: fixed; background: #1e1e2e; border: 1px solid #444; border-radius: 4px;
            padding: 8px 12px; font-size: 11px; color: #ccc; pointer-events: none;
@@ -610,6 +632,8 @@ function clearFilters() {
   document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
+  var dd = document.getElementById('search-dropdown');
+  if (dd) { dd.style.display = 'none'; searchDropdownIdx = -1; }
   var btn = document.getElementById('lineage-btn');
   if (btn) { btn.textContent = 'Trace Lineage'; btn.style.borderColor = '#5566aa'; btn.style.color = '#8899cc'; }
   applyFilters();
@@ -664,6 +688,29 @@ function selectAuthor(username) {
   updateHash();
 }
 
+function toggleCategory(cat) {
+  activeCategory = activeCategory === cat ? null : cat;
+  document.querySelectorAll('.cat-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.cat === activeCategory));
+  applyFilters();
+}
+
+function toggleTag(tag) {
+  activeTag = activeTag === tag ? null : tag;
+  document.querySelectorAll('.tag-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.tag === activeTag));
+  applyFilters();
+}
+
+function toggleCollapse(id) {
+  var body = document.getElementById(id + '-body');
+  var arrow = document.getElementById(id + '-arrow');
+  if (body && arrow) {
+    body.classList.toggle('open');
+    arrow.classList.toggle('open');
+  }
+}
+
 function applyFilters() {
   if (activeView === 'timeline') filterTimeline();
   else if (activeView === 'network') filterNetwork();
@@ -671,27 +718,138 @@ function applyFilters() {
 }
 
 // === SEARCH ===
+var searchDropdownIdx = -1; // keyboard nav index
+
 function setupSearch() {
   const box = document.getElementById('search-box');
+  const dropdown = document.getElementById('search-dropdown');
   let timeout;
+
   box.addEventListener('input', () => {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
       const q = box.value.toLowerCase().trim();
-      if (!q) { applyFilters(); return; }
+      if (!q) {
+        dropdown.style.display = 'none';
+        searchDropdownIdx = -1;
+        applyFilters();
+        return;
+      }
       // Clear sidebar filters when searching
       activeThread = null;
       activeAuthor = null;
       document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
       document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
       filterBySearch(q);
-    }, 200);
+      populateDropdown(q);
+    }, 150);
+  });
+
+  box.addEventListener('keydown', function(ev) {
+    var items = dropdown.querySelectorAll('.search-item');
+    if (!items.length || dropdown.style.display === 'none') return;
+    if (ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      searchDropdownIdx = Math.min(searchDropdownIdx + 1, items.length - 1);
+      items.forEach(function(el, i) { el.classList.toggle('active', i === searchDropdownIdx); });
+    } else if (ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      searchDropdownIdx = Math.max(searchDropdownIdx - 1, 0);
+      items.forEach(function(el, i) { el.classList.toggle('active', i === searchDropdownIdx); });
+    } else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      if (searchDropdownIdx >= 0 && searchDropdownIdx < items.length) {
+        items[searchDropdownIdx].click();
+      } else if (items.length > 0) {
+        items[0].click();
+      }
+    } else if (ev.key === 'Escape') {
+      dropdown.style.display = 'none';
+      searchDropdownIdx = -1;
+    }
+  });
+
+  // Close dropdown on outside click
+  document.addEventListener('click', function(ev) {
+    if (!box.contains(ev.target) && !dropdown.contains(ev.target)) {
+      dropdown.style.display = 'none';
+      searchDropdownIdx = -1;
+    }
+  });
+}
+
+function populateDropdown(q) {
+  var dropdown = document.getElementById('search-dropdown');
+  var results = [];
+
+  if (activeView === 'coauthor') {
+    // Show matching authors
+    (DATA.coGraph.nodes || []).forEach(function(n) {
+      if (n.id.toLowerCase().includes(q)) {
+        results.push({type: 'author', id: n.id, inf: n.inf || 0});
+      }
+    });
+    results.sort(function(a, b) { return b.inf - a.inf; });
+    results = results.slice(0, 8);
+    dropdown.innerHTML = results.map(function(r, i) {
+      var a = DATA.authors[r.id];
+      var color = authorColorMap[r.id] || '#667';
+      return '<div class="search-item" data-author="' + escHtml(r.id) + '">' +
+        '<div class="si-title"><span style="color:' + color + '">\u25CF</span> ' + escHtml(r.id) + '</div>' +
+        '<div class="si-meta">' + (a ? a.tc + ' topics' : '') + ' \u00b7 inf: ' + r.inf.toFixed(2) + '</div></div>';
+    }).join('');
+  } else {
+    // Show matching topics
+    Object.values(DATA.topics).forEach(function(t) {
+      var score = 0;
+      var tl = t.t.toLowerCase();
+      if (tl.includes(q)) score += 3;
+      if (t.a.toLowerCase().includes(q)) score += 2;
+      if (t.cat && t.cat.toLowerCase().includes(q)) score += 1;
+      if (t.eips.some(function(e) { return ('eip-'+e).includes(q) || (''+e) === q; })) score += 2;
+      if ((t.tg || []).some(function(tag) { return tag.toLowerCase().includes(q); })) score += 1;
+      if (score > 0) results.push({topic: t, score: score});
+    });
+    results.sort(function(a, b) { return b.score - a.score || b.topic.inf - a.topic.inf; });
+    results = results.slice(0, 8);
+    dropdown.innerHTML = results.map(function(r) {
+      var t = r.topic;
+      var thColor = t.th ? (THREAD_COLORS[t.th] || '#555') : '#555';
+      return '<div class="search-item" data-topic-id="' + t.id + '">' +
+        '<div class="si-title"><span class="si-thread" style="background:' + thColor + '"></span>' + escHtml(t.t) + '</div>' +
+        '<div class="si-meta">' + escHtml(t.a) + ' \u00b7 ' + t.d.slice(0,7) + ' \u00b7 inf: ' + t.inf.toFixed(2) + '</div></div>';
+    }).join('');
+  }
+
+  searchDropdownIdx = -1;
+  dropdown.style.display = results.length > 0 ? 'block' : 'none';
+
+  // Attach click handlers
+  dropdown.querySelectorAll('.search-item').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var topicId = el.dataset.topicId;
+      var authorId = el.dataset.author;
+      if (topicId) {
+        var t = DATA.topics[Number(topicId)];
+        if (t) showDetail(t);
+      } else if (authorId) {
+        showAuthorDetail(authorId);
+      }
+      dropdown.style.display = 'none';
+      searchDropdownIdx = -1;
+    });
+    el.addEventListener('mouseenter', function() {
+      var topicId = el.dataset.topicId;
+      if (topicId) highlightTopicInView(Number(topicId));
+    });
+    el.addEventListener('mouseleave', function() {
+      restorePinnedHighlight();
+    });
   });
 }
 
 function filterBySearch(q) {
   if (activeView === 'coauthor') {
-    // Search authors in co-author view
     var matchingAuthors = new Set();
     (DATA.coGraph.nodes || []).forEach(function(n) {
       if (n.id.toLowerCase().includes(q)) matchingAuthors.add(n.id);
@@ -703,7 +861,8 @@ function filterBySearch(q) {
   Object.values(DATA.topics).forEach(t => {
     if (t.t.toLowerCase().includes(q) || t.a.toLowerCase().includes(q) ||
         (t.cat && t.cat.toLowerCase().includes(q)) ||
-        t.eips.some(e => ('eip-'+e).includes(q) || (''+e) === q)) {
+        t.eips.some(e => ('eip-'+e).includes(q) || (''+e) === q) ||
+        (t.tg || []).some(tag => tag.toLowerCase().includes(q))) {
       matching.add(t.id);
     }
   });
@@ -716,6 +875,7 @@ function highlightTopicSet(ids) {
       .attr('opacity', d => ids.has(d.id) ? 0.9 : 0.04)
       .attr('r', d => ids.has(d.id) ? tlRScale(d.inf) * 1.3 : tlRScale(d.inf));
     d3.selectAll('.edge-line').attr('stroke-opacity', 0.01);
+    syncLabels();
   } else {
     d3.selectAll('.net-node circle').attr('opacity', d => ids.has(d.id) ? 0.9 : 0.06);
     d3.selectAll('.net-link').attr('stroke-opacity', 0.02);
@@ -842,9 +1002,10 @@ function buildTimeline() {
     );
   });
 
-  // Fork lines + labels
+  // Fork lines + labels + hover areas
   const forkLines = [];
   const forkLabels = [];
+  const forkHoverLines = [];
   DATA.forks.forEach(f => {
     if (!f.d) return;
     const fd = new Date(f.d);
@@ -860,6 +1021,13 @@ function buildTimeline() {
         .text(f.cn || f.n)
         .datum(fd)
     );
+    // Invisible wide hover area for fork interaction
+    var hoverLine = zoomG.append('line').attr('class', 'fork-hover-line')
+      .attr('x1', x).attr('x2', x).attr('y1', -5).attr('y2', swimH + histH)
+      .datum({date: fd, fork: f})
+      .on('mouseover', function(ev, d) { showForkTooltip(ev, d.fork); })
+      .on('mouseout', function() { hideTooltip(); });
+    forkHoverLines.push(hoverLine);
   });
 
   // Swim lane labels + separators (labels are fixed; separators are in zoomG)
@@ -923,6 +1091,23 @@ function buildTimeline() {
       .on('click', function(ev, d) { showDetail(d); })
       .on('mouseover', function(ev, d) { onTimelineHover(ev, d, true); })
       .on('mouseout', function(ev, d) { onTimelineHover(ev, d, false); });
+  });
+
+  // --- Topic labels for high-influence nodes ---
+  var topByInf = Object.values(DATA.topics).filter(function(t) { return t._yPos !== undefined; })
+    .sort(function(a, b) { return b.inf - a.inf; }).slice(0, 30);
+  var labelSet = new Set(topByInf.map(function(t) { return t.id; }));
+
+  var labelG = zoomG.append('g');
+  topByInf.forEach(function(t) {
+    var maxChars = 28;
+    var txt = t.t.length > maxChars ? t.t.slice(0, maxChars - 1) + '\u2026' : t.t;
+    labelG.append('text').attr('class', 'topic-label')
+      .attr('x', xScale(t._date) + rScale(t.inf) + 3)
+      .attr('y', t._yPos + 3)
+      .attr('opacity', 0.75)
+      .datum(t)
+      .text(txt);
   });
 
   // --- Monthly activity histogram ---
@@ -1020,6 +1205,9 @@ function buildTimeline() {
     // Update topic circles (only cx changes)
     d3.selectAll('.topic-circle').attr('cx', function(d) { return newX(d._date); });
 
+    // Update topic labels (x position tracks circle + offset)
+    d3.selectAll('.topic-label').attr('x', function(d) { return newX(d._date) + rScale(d.inf) + 3; });
+
     // Update edges
     d3.selectAll('.edge-line')
       .attr('x1', function(d) { return newX(d.sd); })
@@ -1035,9 +1223,10 @@ function buildTimeline() {
       txt.attr('x', (newX(d.start) + newX(d.end)) / 2);
     });
 
-    // Update fork lines + labels
+    // Update fork lines + labels + hover areas
     forkLines.forEach(function(l) { var d = l.datum(); l.attr('x1', newX(d)).attr('x2', newX(d)); });
     forkLabels.forEach(function(l) { var d = l.datum(); l.attr('x', newX(d)); });
+    forkHoverLines.forEach(function(l) { var d = l.datum(); l.attr('x1', newX(d.date)).attr('x2', newX(d.date)); });
 
     // Update histogram bars
     var zoomedBarW = Math.max(1, (newX(new Date(2020, 1, 1)) - newX(new Date(2020, 0, 1))) * 0.85);
@@ -1093,6 +1282,7 @@ function onTimelineHover(ev, d, entering) {
         if (e.source === d.id || e.target === d.id) return 'url(#arrow-highlight)';
         return 'url(#arrow-default)';
       });
+    syncLabels();
   } else {
     hoveredTopicId = null;
     hideTooltip();
@@ -1142,6 +1332,7 @@ function applyPinnedHighlightTimeline() {
       if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 'url(#arrow-highlight)';
       return 'url(#arrow-default)';
     });
+  syncLabels();
 }
 
 function applyPinnedHighlightNetwork() {
@@ -1193,6 +1384,7 @@ function highlightTopicInView(topicId) {
         if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 'url(#arrow-highlight)';
         return 'url(#arrow-default)';
       });
+    syncLabels();
   } else if (activeView === 'network') {
     var connected = topicEdgeIndex[String(topicId)] || new Set();
     var connSet = new Set(connected);
@@ -1247,6 +1439,41 @@ function filterTimeline() {
       return 0.01;
     })
     .attr('marker-end', 'url(#arrow-default)');
+  syncLabels();
+}
+
+// Sync topic label opacity to match their circle opacity
+function syncLabels() {
+  var opMap = {};
+  d3.selectAll('.topic-circle').each(function(d) {
+    opMap[d.id] = parseFloat(d3.select(this).attr('opacity'));
+  });
+  d3.selectAll('.topic-label').attr('opacity', function(d) {
+    var cOp = opMap[d.id];
+    return (cOp !== undefined && cOp > 0.25) ? Math.min(cOp + 0.05, 0.9) : 0;
+  });
+}
+
+function showForkTooltip(ev, f) {
+  var tip = document.getElementById('tooltip');
+  var eipList = (f.eips || []).map(function(e) { return 'EIP-' + e; }).join(', ');
+  var relCount = (f.rt || []).length;
+  tip.innerHTML = '<strong>' + escHtml(f.cn || f.n) + '</strong>' +
+    (f.d ? '<br><span style="color:#888">' + f.d + '</span>' : '') +
+    (f.el ? '<br>EL: ' + escHtml(f.el) : '') +
+    (f.cl ? ' &middot; CL: ' + escHtml(f.cl) : '') +
+    (eipList ? '<br><span style="color:#88aacc">EIPs: ' + eipList + '</span>' : '') +
+    (relCount > 0 ? '<br><span style="color:#666">' + relCount + ' related topics</span>' : '');
+  tip.style.display = 'block';
+  var x = ev.clientX + 14;
+  var y = ev.clientY - 10;
+  var tw = tip.offsetWidth;
+  var th = tip.offsetHeight;
+  if (x + tw > window.innerWidth - 10) x = ev.clientX - tw - 14;
+  if (y + th > window.innerHeight - 10) y = window.innerHeight - th - 10;
+  if (y < 5) y = 5;
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
 }
 
 // === NETWORK ===
@@ -1843,6 +2070,7 @@ function applyLineageTimeline() {
       var key = e.source + '-' + e.target;
       return lineageEdgeSet.has(key) ? 'url(#arrow-lineage)' : 'url(#arrow-default)';
     });
+  syncLabels();
 }
 
 function applyLineageNetwork() {
