@@ -192,10 +192,12 @@ def generate_html(viz_json, data):
       <span>{meta['included_edges']} citations</span>
       <span>2017\u20132026</span>
     </div>
+    <div id="filter-breadcrumb" class="breadcrumb"></div>
     <div class="controls">
       <button id="btn-timeline" class="active" onclick="showView('timeline')">Timeline</button>
       <button id="btn-network" onclick="showView('network')">Network</button>
       <button id="btn-coauthor" onclick="showView('coauthor')">Authors</button>
+      <button class="help-btn" onclick="toggleHelp()" title="Keyboard shortcuts">?</button>
     </div>
   </header>
   <div id="main-area">
@@ -243,6 +245,25 @@ def generate_html(viz_json, data):
   </div>
 </div>
 <div class="tooltip" id="tooltip"></div>
+<div id="help-overlay" class="help-overlay" onclick="toggleHelp()">
+  <div class="help-card" onclick="event.stopPropagation()">
+    <h3>Keyboard Shortcuts &amp; Interactions</h3>
+    <div class="help-grid">
+      <div class="help-key">Click node</div><div class="help-desc">Pin topic &amp; show detail panel</div>
+      <div class="help-key">&larr; &rarr;</div><div class="help-desc">Navigate between connected topics</div>
+      <div class="help-key">Hover ref link</div><div class="help-desc">Highlight referenced topic in view</div>
+      <div class="help-key">Scroll / Trackpad</div><div class="help-desc">Pan timeline horizontally</div>
+      <div class="help-key">Ctrl+Scroll / Pinch</div><div class="help-desc">Zoom timeline</div>
+      <div class="help-key">Double-click</div><div class="help-desc">Reset zoom</div>
+      <div class="help-key">Esc</div><div class="help-desc">Clear all filters &amp; close panels</div>
+      <div class="help-key">?</div><div class="help-desc">Toggle this help overlay</div>
+    </div>
+    <p style="margin-top:12px;color:#888;font-size:11px">
+      Click thread chips for thread details. Use search to find topics by title, author, or EIP number.
+      Trace Lineage shows the citation tree (2 hops up and down) from any topic.
+    </p>
+  </div>
+</div>
 
 <script>
 const DATA = {viz_json};
@@ -437,6 +458,33 @@ header .stats span { white-space: nowrap; }
 .milestone-item .ms-title { color: #ccc; flex: 1; cursor: pointer; }
 .milestone-item .ms-title:hover { color: #fff; text-decoration: underline; }
 
+/* Filter breadcrumb */
+.breadcrumb { font-size: 11px; color: #888; display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.breadcrumb:empty { display: none; }
+.bc-tag { display: inline-flex; align-items: center; gap: 4px; background: #1e1e2e; border: 1px solid #333;
+          border-radius: 3px; padding: 2px 8px; color: #bbb; white-space: nowrap; }
+.bc-tag .bc-close { cursor: pointer; color: #666; margin-left: 2px; }
+.bc-tag .bc-close:hover { color: #fff; }
+
+/* Help overlay */
+.help-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+.help-overlay.open { display: flex; }
+.help-card { background: #1a1a2a; border: 1px solid #333; border-radius: 8px; padding: 24px;
+             max-width: 480px; width: 90%; }
+.help-card h3 { color: #fff; font-size: 15px; margin-bottom: 16px; }
+.help-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; }
+.help-key { font-size: 11px; color: #88aaff; font-weight: 600; white-space: nowrap; }
+.help-desc { font-size: 11px; color: #bbb; }
+.help-btn { background: none !important; border: 1px solid #444 !important; width: 24px; height: 24px;
+            font-size: 13px !important; font-weight: 700; border-radius: 50% !important;
+            padding: 0 !important; display: flex; align-items: center; justify-content: center; }
+
+/* Network node labels */
+.net-label { fill: #bbb; font-size: 8px; pointer-events: none; font-weight: 500;
+             text-anchor: middle; dominant-baseline: hanging;
+             text-shadow: 0 0 3px #0a0a0f, 0 0 6px #0a0a0f; }
+
 .tooltip { position: fixed; background: #1e1e2e; border: 1px solid #444; border-radius: 4px;
            padding: 8px 12px; font-size: 11px; color: #ccc; pointer-events: none;
            z-index: 500; max-width: 350px; line-height: 1.4; display: none;
@@ -495,9 +543,16 @@ document.addEventListener('DOMContentLoaded', () => {
   buildTimeline();
   setupSearch();
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeDetail(); clearFilters(); }
+    if (e.key === 'Escape') {
+      var helpEl = document.getElementById('help-overlay');
+      if (helpEl.classList.contains('open')) { helpEl.classList.remove('open'); return; }
+      closeDetail(); clearFilters();
+    }
+    if (e.key === '?' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+      toggleHelp();
+    }
     // Arrow key navigation between connected topics
-    if (pinnedTopicId && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    if (pinnedTopicId && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && document.activeElement.tagName !== 'INPUT') {
       e.preventDefault();
       navigateConnected(e.key === 'ArrowRight' ? 'next' : 'prev');
     }
@@ -746,6 +801,7 @@ function applyFilters() {
   if (activeView === 'timeline') filterTimeline();
   else if (activeView === 'network') filterNetwork();
   else if (activeView === 'coauthor') filterCoAuthorNetwork();
+  updateBreadcrumb();
 }
 
 // === SEARCH ===
@@ -930,6 +986,10 @@ function highlightCoAuthorSet(ids) {
 let tlRScale; // shared so search can use it
 let tlXScale; // current x scale (updated on zoom)
 let tlXScaleOrig; // original x scale (for zoom reset)
+let tlSvg = null; // timeline SVG element (for programmatic zoom)
+let tlZoom = null; // D3 zoom behavior (for programmatic transform)
+let tlPlotW = 0; // plot width
+let tlMarginLeft = 0; // left margin
 
 function buildTimeline() {
   const container = document.getElementById('timeline-view');
@@ -1212,6 +1272,9 @@ function buildTimeline() {
   // === D3 ZOOM (horizontal only) ===
   // Strategy: ctrl+wheel / pinch = zoom, plain wheel / trackpad = horizontal pan,
   // drag = pan, double-click = reset.
+  tlPlotW = plotW;
+  tlMarginLeft = margin.left;
+
   var zoom = d3.zoom()
     .scaleExtent([0.5, 8])
     .translateExtent([[0, 0], [plotW, height]])
@@ -1228,6 +1291,8 @@ function buildTimeline() {
     .on('zoom', onZoom);
 
   svg.call(zoom);
+  tlSvg = svg;
+  tlZoom = zoom;
 
   // Custom wheel handler: translate scroll delta into horizontal pan.
   // This runs for plain wheel events (no ctrl/meta) that D3 zoom ignores.
@@ -1630,6 +1695,19 @@ function buildNetwork() {
     .attr('stroke-width', 0.5)
     .attr('opacity', 0.65);
 
+  // Network node labels for top 20 by influence
+  var netTopNodes = nodes.filter(function(n) { return !n.isFork && n.influence; })
+    .sort(function(a, b) { return (b.influence || 0) - (a.influence || 0); }).slice(0, 20);
+  var netLabelSet = new Set(netTopNodes.map(function(n) { return n.id; }));
+  node.filter(function(d) { return netLabelSet.has(d.id); }).append('text')
+    .attr('class', 'net-label')
+    .attr('dy', function(d) { return rScale(d.influence || 0) + 10; })
+    .text(function(d) {
+      var t = DATA.topics[d.id];
+      var title = t ? t.t : (d.title || '');
+      return title.length > 24 ? title.slice(0, 23) + '\u2026' : title;
+    });
+
   // Events
   node.on('click', function(ev, d) {
     if (d.isFork) return;
@@ -2016,6 +2094,26 @@ function showAuthorDetail(username) {
   panel.classList.add('open');
 }
 
+// === SCROLL TO TOPIC ===
+function scrollToTopic(topicId) {
+  if (activeView !== 'timeline' || !tlSvg || !tlZoom || !tlXScaleOrig) return;
+  var topic = DATA.topics[topicId];
+  if (!topic || !topic._date) return;
+
+  // Compute where this topic is in the original (unzoomed) scale
+  var origX = tlXScaleOrig(topic._date);
+  var centerTarget = tlPlotW / 2;
+
+  // Get current transform
+  var cur = d3.zoomTransform(tlSvg.node());
+  // We want: cur.k * origX + newTx = centerTarget
+  // newTx = centerTarget - cur.k * origX
+  var newTx = centerTarget - cur.k * origX;
+
+  var newTransform = d3.zoomIdentity.translate(newTx, 0).scale(cur.k);
+  tlSvg.transition().duration(400).call(tlZoom.transform, newTransform);
+}
+
 // === KEYBOARD NAVIGATION ===
 function navigateConnected(direction) {
   if (!pinnedTopicId) return;
@@ -2049,6 +2147,7 @@ function navigateConnected(direction) {
 
   if (target && target.id !== pinnedTopicId) {
     showDetail(target);
+    scrollToTopic(target.id);
   }
 }
 
@@ -2280,8 +2379,11 @@ function applyLineageNetwork() {
 
 // === DETAIL PANEL ===
 function showDetail(t) {
+  var wasAlreadyPinned = pinnedTopicId !== null;
   pinnedTopicId = t.id;
   applyPinnedHighlight();
+  // Auto-scroll timeline when navigating between topics (not on first click)
+  if (wasAlreadyPinned) scrollToTopic(t.id);
 
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
@@ -2465,6 +2567,36 @@ function applyHash() {
       changed = true;
     }
   }
+}
+
+// === HELP & BREADCRUMB ===
+function toggleHelp() {
+  document.getElementById('help-overlay').classList.toggle('open');
+}
+
+function updateBreadcrumb() {
+  var bc = document.getElementById('filter-breadcrumb');
+  var parts = [];
+  if (activeThread) {
+    var th = DATA.threads[activeThread];
+    var color = THREAD_COLORS[activeThread] || '#555';
+    parts.push('<span class="bc-tag" style="border-color:' + color + '55;color:' + color + '">' +
+      (th ? th.n : activeThread) + '<span class="bc-close" onclick="event.stopPropagation();toggleThread(\'' + activeThread + '\')">&times;</span></span>');
+  }
+  if (activeAuthor) {
+    var aColor = authorColorMap[activeAuthor] || '#667';
+    parts.push('<span class="bc-tag" style="border-color:' + aColor + '55;color:' + aColor + '">' +
+      activeAuthor + '<span class="bc-close" onclick="event.stopPropagation();toggleAuthor(\'' + activeAuthor + '\')">&times;</span></span>');
+  }
+  if (activeCategory) {
+    parts.push('<span class="bc-tag">' + escHtml(activeCategory) +
+      '<span class="bc-close" onclick="event.stopPropagation();toggleCategory(\'' + escHtml(activeCategory) + '\')">&times;</span></span>');
+  }
+  if (activeTag) {
+    parts.push('<span class="bc-tag">' + escHtml(activeTag) +
+      '<span class="bc-close" onclick="event.stopPropagation();toggleTag(\'' + escHtml(activeTag) + '\')">&times;</span></span>');
+  }
+  bc.innerHTML = parts.join('');
 }
 
 // === UTILS ===
