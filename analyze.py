@@ -285,8 +285,8 @@ COAUTHOR_ALIASES = {
     "thomas": "soispoke",
     "barry whitehat": "barryWhiteHat",
     "caspar": "casparschwa",
-    "joachim neu": None,  # Stanford — no Discourse account
-    "david tse": None,  # Stanford — no Discourse account
+    "joachim neu": "jneu",
+    "david tse": "David Tse",  # Stanford professor — no Discourse account
 }
 
 # Names that should never be treated as coauthors (blacklist)
