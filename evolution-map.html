@@ -1474,6 +1474,8 @@ function onTimelineHover(ev, d, entering) {
 }
 
 function topicMatchesFilter(t) {
+  // Minor topic circles only appear for the active author — always pass them
+  if (t.mn) return true;
   if (minInfluence > 0 && (t.inf || 0) < minInfluence) return false;
   if (activeThread && t.th !== activeThread) return false;
   if (activeAuthor && t.a !== activeAuthor && (t.coauth || []).indexOf(activeAuthor) < 0) return false;
