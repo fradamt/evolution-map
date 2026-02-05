@@ -661,26 +661,31 @@ const top15Authors = new Set(authorList.slice(0, 15).map(a => a.u));
 
 // Influence slider setup
 const maxDataInf = d3.max(Object.values(DATA.topics), t => t.inf) || 1;
-// Compute minimum influence among non-minor topics (the "included" threshold)
-const nonMinorInfs = Object.values(DATA.topics).filter(t => !t.mn).map(t => t.inf);
-const defaultInfluenceThreshold = nonMinorInfs.length > 0 ? d3.min(nonMinorInfs) : 0;
+// Compute default threshold: show the same count as original non-minor topics.
+// Sort all influences descending, pick the Nth value (N = non-minor count).
+const nonMinorCount = Object.values(DATA.topics).filter(t => !t.mn).length;
+const allInfsSorted = Object.values(DATA.topics).map(t => t.inf).sort((a, b) => b - a);
+const defaultInfluenceThreshold = nonMinorCount > 0 && nonMinorCount < allInfsSorted.length
+  ? allInfsSorted[nonMinorCount - 1] : 0;
 const defaultSliderPct = maxDataInf > 0 ? Math.round(defaultInfluenceThreshold / maxDataInf * 100) : 0;
+
+function sliderTopicCount(threshold) {
+  var count = 0;
+  Object.values(DATA.topics).forEach(function(t) { if (t.inf >= threshold) count++; });
+  return count;
+}
 
 function setupInfSlider() {
   var slider = document.getElementById('inf-slider');
   var label = document.getElementById('inf-slider-label');
-  // Set default value so initial view matches original (only non-minor topics visible)
+  // Set default value so initial view matches original (~550 topics visible)
   slider.value = defaultSliderPct;
   minInfluence = defaultInfluenceThreshold;
-  var initCount = 0;
-  Object.values(DATA.topics).forEach(function(t) { if (t.inf >= minInfluence) initCount++; });
-  label.textContent = defaultSliderPct === 0 ? 'all' : initCount;
+  label.textContent = sliderTopicCount(minInfluence);
   slider.addEventListener('input', function() {
     var pct = Number(this.value);
     minInfluence = pct / 100 * maxDataInf;
-    var count = 0;
-    Object.values(DATA.topics).forEach(function(t) { if (t.inf >= minInfluence) count++; });
-    label.textContent = pct === 0 ? 'all' : count;
+    label.textContent = sliderTopicCount(minInfluence);
     applyFilters();
   });
 }
@@ -896,11 +901,7 @@ function clearFilters() {
   var slider = document.getElementById('inf-slider');
   if (slider) { slider.value = defaultSliderPct; }
   var slLabel = document.getElementById('inf-slider-label');
-  if (slLabel) {
-    var cnt = 0;
-    Object.values(DATA.topics).forEach(function(t) { if (t.inf >= minInfluence) cnt++; });
-    slLabel.textContent = defaultSliderPct === 0 ? 'all' : cnt;
-  }
+  if (slLabel) { slLabel.textContent = sliderTopicCount(minInfluence); }
   lineageActive = false;
   lineageSet = new Set();
   lineageEdgeSet = new Set();
