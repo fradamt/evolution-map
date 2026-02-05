@@ -973,17 +973,38 @@ function buildTimeline() {
   xAxisG.selectAll('.domain, .tick line').attr('stroke', '#333');
 
   // === D3 ZOOM (horizontal only) ===
+  // Strategy: ctrl+wheel / pinch = zoom, plain wheel / trackpad = horizontal pan,
+  // drag = pan, double-click = reset.
   var zoom = d3.zoom()
     .scaleExtent([0.5, 8])
     .translateExtent([[0, 0], [plotW, height]])
     .extent([[0, 0], [plotW, height]])
     .filter(function(ev) {
-      // Allow wheel, touch, and drag -- but not double-click (handled separately)
-      return !ev.ctrlKey && !ev.button && ev.type !== 'dblclick';
+      // For wheel events: only let D3 zoom handle ctrl+wheel (pinch-to-zoom).
+      // Plain wheel / shift+wheel are handled by our custom handler below.
+      if (ev.type === 'wheel') return ev.ctrlKey || ev.metaKey;
+      // Block double-click (handled separately below)
+      if (ev.type === 'dblclick') return false;
+      // Allow drag (button 0) and touch events
+      return !ev.button;
     })
     .on('zoom', onZoom);
 
   svg.call(zoom);
+
+  // Custom wheel handler: translate scroll delta into horizontal pan.
+  // This runs for plain wheel events (no ctrl/meta) that D3 zoom ignores.
+  svg.on('wheel.pan', function(ev) {
+    if (ev.ctrlKey || ev.metaKey) return; // let D3 zoom handle pinch/ctrl+wheel
+    ev.preventDefault();
+    // Use deltaX for horizontal scroll (trackpad swipe) and deltaY for vertical
+    // scroll wheel — both map to horizontal pan on the timeline.
+    var dx = ev.deltaX !== 0 ? ev.deltaX : ev.deltaY;
+    // Get current transform and shift it horizontally
+    var cur = d3.zoomTransform(svg.node());
+    var newT = cur.translate(-dx, 0);
+    svg.call(zoom.transform, newT);
+  }, {passive: false});
 
   // Double-click to reset zoom
   svg.on('dblclick.zoom', function() {

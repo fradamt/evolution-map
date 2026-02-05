@@ -110,6 +110,9 @@ THREAD_SEEDS = {
             r"proposer.builder", r"\bpbs\b", r"\bmev\b", r"block.?build",
             r"mev.?burn", r"epbs", r"enshrined.*proposer", r"builder.?separation",
             r"auction", r"block.?production", r"payload.?timeliness",
+            # Broader PBS/MEV patterns
+            r"proposer.?builder", r"block.?builder", r"mev.?boost",
+            r"order.?flow", r"block.?auction", r"timing.?game",
         ],
         "tag_patterns": [r"pbs", r"mev", r"builder"],
         "category_hints": [],
@@ -121,6 +124,10 @@ THREAD_SEEDS = {
             r"\bshard", r"data.?availab", r"\bdas\b", r"danksharding", r"proto.?dank",
             r"blob", r"4844", r"peer.?das", r"data.?column", r"erasure.?cod",
             r"kzg", r"kate.?commitment", r"stateless.?client",
+            # Broader DA patterns
+            r"fulldas", r"full.?das", r"peerdas", r"peer.?das",
+            r"big.?block", r"block.?size", r"blob.?count", r"target.?blob",
+            r"blob.?market", r"data.?column",
         ],
         "tag_patterns": [r"shard", r"data-availab", r"blob", r"das"],
         "category_hints": [],
@@ -132,31 +139,30 @@ THREAD_SEEDS = {
             r"\bplasma\b", r"rollup", r"\bl2\b", r"layer.?2", r"based.?rollup",
             r"native.?rollup", r"optimistic.?roll", r"zk.?roll", r"state.?channel",
             r"pre.?confirmation", r"sequenc",
+            # Broader L2 patterns
+            r"layer.?2", r"optimistic", r"based.?rollup", r"native.?rollup",
+            r"sequenc", r"bridge", r"cross.?chain",
         ],
         "tag_patterns": [r"plasma", r"rollup", r"layer-2"],
         "category_hints": [],
         "key_authors": ["vbuterin", "JustinDrake", "karl"],
     },
     "pos_casper": {
-        "name": "Proof-of-Stake & Casper",
+        "name": "Consensus & Finality",
         "title_patterns": [
             r"casper", r"proof.?of.?stake", r"\bpos\b", r"beacon.?chain",
             r"finality", r"fork.?choice", r"lmd.?ghost", r"ffg",
             r"cbc", r"slashing", r"attestat",
-        ],
-        "tag_patterns": [r"casper", r"pos", r"beacon"],
-        "category_hints": [],
-        "key_authors": ["vbuterin", "JustinDrake", "djrtwo"],
-    },
-    "ssf": {
-        "name": "Single Slot Finality",
-        "title_patterns": [
+            # SSF patterns (merged from ssf thread)
             r"single.?slot.?final", r"\bssf\b", r"orbit.?ssf",
             r"3sf", r"slot.?final",
+            # Broader consensus patterns
+            r"finality.?gadget", r"committee", r"validator.?set",
+            r"rainbow.?staking", r"liquid.?staking",
         ],
-        "tag_patterns": [r"ssf"],
+        "tag_patterns": [r"casper", r"pos", r"beacon", r"ssf"],
         "category_hints": [],
-        "key_authors": ["vbuterin", "fradamt"],
+        "key_authors": ["vbuterin", "JustinDrake", "djrtwo", "fradamt"],
     },
     "issuance_economics": {
         "name": "Issuance & Staking Economics",
@@ -165,6 +171,9 @@ THREAD_SEEDS = {
             r"minimum.?viable.?issuance", r"reward.?curve", r"staking.?ratio",
             r"max.?eb\b", r"max_effective_balance", r"validator.?economics",
             r"consolidat",
+            # Broader economics patterns
+            r"staking.?reward", r"issuance.?curve",
+            r"endgame.*stak", r"minimum.?viable.?issuance",
         ],
         "tag_patterns": [r"issuance", r"staking", r"economics"],
         "category_hints": [],
@@ -175,6 +184,9 @@ THREAD_SEEDS = {
         "title_patterns": [
             r"inclusion.?list", r"\bfocil\b", r"censorship.?resist",
             r"unconditional.?inclusion", r"crlist", r"force.?inclus",
+            # Broader censorship resistance patterns
+            r"censorship", r"inclusion.?list", r"il.?design",
+            r"focil", r"unconditional",
         ],
         "tag_patterns": [r"inclusion-list", r"censorship"],
         "category_hints": [],
@@ -185,6 +197,8 @@ THREAD_SEEDS = {
         "title_patterns": [
             r"based.?sequenc", r"pre.?confirm", r"preconf",
             r"based.?rollup", r"proposer.?commit",
+            # Broader preconf patterns
+            r"based.?sequenc", r"preconf", r"pre.?conf",
         ],
         "tag_patterns": [r"preconf", r"based"],
         "category_hints": [],
@@ -196,6 +210,9 @@ THREAD_SEEDS = {
             r"\bzk\b", r"snark", r"stark", r"plonk", r"zero.?knowledge",
             r"zkp", r"groth16", r"proof.?system", r"verifiable.?comput",
             r"recursive.?proof",
+            # Broader ZK patterns
+            r"zero.?knowledge", r"recursive", r"folding",
+            r"plonk", r"halo", r"groth16", r"kzg",
         ],
         "tag_patterns": [r"zk", r"snark", r"stark"],
         "category_hints": [],
@@ -207,6 +224,9 @@ THREAD_SEEDS = {
             r"1559", r"fee.?market", r"base.?fee", r"gas.?price",
             r"multidimensional", r"resource.?pric", r"eip.?4844.*fee",
             r"blob.?fee", r"gas.?limit",
+            # Broader fee market patterns
+            r"gas.?price", r"gas.?cost", r"gas.?limit",
+            r"resource.?pric", r"blob.?fee", r"base.?fee",
         ],
         "tag_patterns": [r"1559", r"fee-market", r"gas"],
         "category_hints": [],
@@ -218,6 +238,9 @@ THREAD_SEEDS = {
             r"privacy", r"\bmaci\b", r"mixer", r"anonymous", r"stealth.?addr",
             r"tornado", r"ring.?sig", r"zk.?passport", r"identity",
             r"semaphore",
+            # Broader privacy patterns
+            r"stealth.?address", r"zk.?passport", r"anonymous",
+            r"rln", r"semaphore",
         ],
         "tag_patterns": [r"privacy", r"identity"],
         "category_hints": [],
@@ -230,6 +253,10 @@ THREAD_SEEDS = {
             r"state.?size", r"trie", r"witness", r"binary.?trie",
             r"portal.?network", r"history.?expir", r"purge",
             r"evm.*improv", r"eof\b",
+            # Broader state/execution patterns
+            r"verkle", r"state.?expir", r"state.?rent",
+            r"access.?list", r"stateless", r"witness",
+            r"trie", r"state.?growth",
         ],
         "tag_patterns": [r"verkle", r"stateless", r"state"],
         "category_hints": [],
@@ -611,7 +638,7 @@ def main():
             if s > best_score:
                 best_score = s
                 best_thread = thread_id
-        if best_score >= 1.5:
+        if best_score >= 1.0:
             t["research_thread"] = best_thread
         else:
             t["research_thread"] = None
