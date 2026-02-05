@@ -2938,25 +2938,30 @@ function renderMinorTopics() {
     var date = new Date(mt.d);
     if (isNaN(date)) return;
     var x = tlXScale(date);
-    // Spread across the bottom quarter of the swim area
-    var yBase = swimH * 0.75;
-    var yRange = swimH * 0.22;
-    var y = yBase + (hashCode(mt.id) % 100) / 100 * yRange;
-    var r = Math.min(4, Math.max(1.5, (mt.inf || 0) * 15 + 1.5));
+    // Spread across the full swim area (minor topics aren't lane-assigned)
+    var yMargin = swimH * 0.05;
+    var y = yMargin + (hashCode(mt.id) % 100) / 100 * (swimH - 2 * yMargin);
+    var r = Math.min(6, Math.max(3, (mt.inf || 0) * 20 + 3));
 
     minorG.append('circle')
       .attr('class', 'topic-circle minor-circle')
       .attr('cx', x).attr('cy', y)
       .attr('r', r)
-      .attr('fill', 'none')
-      .attr('stroke', '#778')
-      .attr('stroke-width', 0.8)
-      .attr('stroke-dasharray', '2 1')
-      .attr('opacity', 0.4)
+      .attr('fill', '#556')
+      .attr('stroke', '#99a')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '3 2')
+      .attr('opacity', 0.55)
       .datum({id: mt.id, _date: date, _yPos: y, inf: mt.inf || 0, mn: true})
       .on('click', function(ev, d) { showMinorDetail(DATA.minorTopics[d.id]); })
-      .on('mouseover', function(ev, d) { showMinorTooltip(ev, DATA.minorTopics[d.id]); })
-      .on('mouseout', function() { hideTooltip(); });
+      .on('mouseover', function(ev, d) {
+        d3.select(this).attr('opacity', 1).attr('r', r * 1.5).attr('fill', '#88a');
+        showMinorTooltip(ev, DATA.minorTopics[d.id]);
+      })
+      .on('mouseout', function() {
+        d3.select(this).attr('opacity', 0.55).attr('r', r).attr('fill', '#556');
+        hideTooltip();
+      });
   });
 }
 
