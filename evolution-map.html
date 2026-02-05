@@ -296,7 +296,15 @@ header .stats span { white-space: nowrap; }
       </div>
     </div>
     <div class="sidebar-section">
-      <h3>Top Authors</h3>
+      <h3 style="display:flex;align-items:center;justify-content:space-between">Top Authors
+        <select id="author-sort" onchange="sortAuthorList(this.value)" style="font-size:10px;background:#1a1a2e;color:#aaa;border:1px solid #333;border-radius:3px;padding:1px 4px;cursor:pointer">
+          <option value="inf">Influence</option>
+          <option value="tc">Topics</option>
+          <option value="lk">Likes</option>
+          <option value="ind">Citations</option>
+          <option value="tp">Posts</option>
+        </select>
+      </h3>
       <div id="author-list"></div>
     </div>
   </div>
@@ -308,6 +316,8 @@ header .stats span { white-space: nowrap; }
     <h3>Keyboard Shortcuts &amp; Interactions</h3>
     <div class="help-grid">
       <div class="help-key">Click node</div><div class="help-desc">Pin topic &amp; show detail panel</div>
+      <div class="help-key">Click thread/author</div><div class="help-desc">Filter by thread or author</div>
+      <div class="help-key">Double-click thread/author</div><div class="help-desc">Filter &amp; open detail sidebar</div>
       <div class="help-key">Shift+Click</div><div class="help-desc">Find citation path from pinned to clicked topic</div>
       <div class="help-key">&larr; &rarr;</div><div class="help-desc">Navigate between connected topics</div>
       <div class="help-key">Hover ref link</div><div class="help-desc">Highlight referenced topic in view</div>
@@ -468,7 +478,16 @@ function buildSidebar() {
     chip.style.color = color;
     chip.style.border = '1px solid ' + color + '66';
     chip.title = th.n + ' (' + th.tc + ' topics)';
-    chip.onclick = () => toggleThread(tid);
+    chip.onclick = (function(id) {
+      var clickTimer = null;
+      return function(ev) {
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
+        clickTimer = setTimeout(function() { clickTimer = null; toggleThread(id); }, 250);
+      };
+    })(tid);
+    chip.ondblclick = (function(id) {
+      return function() { selectThread(id); showThreadDetail(id); };
+    })(tid);
     chip.dataset.thread = tid;
 
     // Thread status: count topics from 2024+ quarters
@@ -572,15 +591,34 @@ function buildSidebar() {
     tagContainer.appendChild(chip);
   });
 
-  const list = document.getElementById('author-list');
-  authorList.slice(0, 25).forEach((a, i) => {
-    const item = document.createElement('div');
+  sortAuthorList('inf');
+}
+
+var authorSortLabels = {inf: 'inf', tc: 'topics', lk: 'likes', ind: 'cited', tp: 'posts'};
+
+function sortAuthorList(field) {
+  var sorted = Object.values(DATA.authors).slice().sort(function(a, b) { return (b[field] || 0) - (a[field] || 0); });
+  var list = document.getElementById('author-list');
+  list.innerHTML = '';
+  sorted.slice(0, 25).forEach(function(a) {
+    var item = document.createElement('div');
     item.className = 'author-item';
     item.dataset.author = a.u;
-    item.innerHTML = '<span class="author-dot" style="background:' + authorColorMap[a.u] + '"></span>' +
+    var valLabel = field === 'inf' ? a.inf.toFixed(1) : (a[field] || 0);
+    item.innerHTML = '<span class="author-dot" style="background:' + (authorColorMap[a.u] || '#555') + '"></span>' +
       '<span class="author-name">' + a.u + '</span>' +
-      '<span class="author-count">' + a.tc + '</span>';
-    item.onclick = () => toggleAuthor(a.u);
+      '<span class="author-count">' + valLabel + '</span>';
+    item.onclick = (function(username) {
+      var clickTimer = null;
+      return function() {
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
+        clickTimer = setTimeout(function() { clickTimer = null; toggleAuthor(username); }, 250);
+      };
+    })(a.u);
+    item.ondblclick = (function(username) {
+      return function() { selectAuthor(username); showAuthorDetail(username); };
+    })(a.u);
+    if (activeAuthor === a.u) item.classList.add('active');
     list.appendChild(item);
   });
 }
@@ -615,11 +653,6 @@ function toggleThread(tid) {
     c.classList.toggle('active', c.dataset.thread === activeThread));
   document.getElementById('search-box').value = '';
   applyFilters();
-  if (activeThread) {
-    showThreadDetail(activeThread);
-  } else if (!activeAuthor) {
-    document.getElementById('detail-panel').classList.remove('open');
-  }
   updateHash();
 }
 
@@ -758,22 +791,36 @@ function populateDropdown(q) {
 
   if (activeView === 'coauthor') {
     // Show matching authors
-    (DATA.coGraph.nodes || []).forEach(function(n) {
-      if (n.id.toLowerCase().includes(q)) {
-        results.push({type: 'author', id: n.id, inf: n.inf || 0});
+    Object.values(DATA.authors).forEach(function(a) {
+      if (a.u.toLowerCase().includes(q)) {
+        results.push({type: 'author', id: a.u, inf: a.inf || 0, tc: a.tc || 0});
       }
     });
     results.sort(function(a, b) { return b.inf - a.inf; });
     results = results.slice(0, 8);
-    dropdown.innerHTML = results.map(function(r, i) {
-      var a = DATA.authors[r.id];
+    dropdown.innerHTML = results.map(function(r) {
       var color = authorColorMap[r.id] || '#667';
       return '<div class="search-item" data-author="' + escHtml(r.id) + '">' +
         '<div class="si-title"><span style="color:' + color + '">\u25CF</span> ' + escHtml(r.id) + '</div>' +
-        '<div class="si-meta">' + (a ? a.tc + ' topics' : '') + ' \u00b7 inf: ' + r.inf.toFixed(2) + '</div></div>';
+        '<div class="si-meta">' + r.tc + ' topics \u00b7 inf: ' + r.inf.toFixed(2) + '</div></div>';
     }).join('');
   } else {
-    // Show matching topics
+    // Show matching authors first, then topics
+    var authorResults = [];
+    Object.values(DATA.authors).forEach(function(a) {
+      if (a.u.toLowerCase().includes(q)) {
+        authorResults.push(a);
+      }
+    });
+    authorResults.sort(function(a, b) { return b.inf - a.inf; });
+    var authorHtml = authorResults.slice(0, 3).map(function(a) {
+      var color = authorColorMap[a.u] || '#667';
+      return '<div class="search-item" data-author="' + escHtml(a.u) + '">' +
+        '<div class="si-title"><span style="color:' + color + '">\u25CF</span> ' + escHtml(a.u) + '</div>' +
+        '<div class="si-meta">' + a.tc + ' topics \u00b7 inf: ' + a.inf.toFixed(2) + '</div></div>';
+    }).join('');
+
+    var topicResults = [];
     Object.values(DATA.topics).forEach(function(t) {
       var score = 0;
       var tl = t.t.toLowerCase();
@@ -782,17 +829,20 @@ function populateDropdown(q) {
       if (t.cat && t.cat.toLowerCase().includes(q)) score += 1;
       if (t.eips.some(function(e) { return ('eip-'+e).includes(q) || (''+e) === q; })) score += 2;
       if ((t.tg || []).some(function(tag) { return tag.toLowerCase().includes(q); })) score += 1;
-      if (score > 0) results.push({topic: t, score: score});
+      if (score > 0) topicResults.push({topic: t, score: score});
     });
-    results.sort(function(a, b) { return b.score - a.score || b.topic.inf - a.topic.inf; });
-    results = results.slice(0, 8);
-    dropdown.innerHTML = results.map(function(r) {
+    topicResults.sort(function(a, b) { return b.score - a.score || b.topic.inf - a.topic.inf; });
+    var maxTopics = 8 - Math.min(authorResults.length, 3);
+    var topicHtml = topicResults.slice(0, maxTopics).map(function(r) {
       var t = r.topic;
       var thColor = t.th ? (THREAD_COLORS[t.th] || '#555') : '#555';
       return '<div class="search-item" data-topic-id="' + t.id + '">' +
         '<div class="si-title"><span class="si-thread" style="background:' + thColor + '"></span>' + escHtml(t.t) + '</div>' +
         '<div class="si-meta">' + escHtml(t.a) + ' \u00b7 ' + t.d.slice(0,7) + ' \u00b7 inf: ' + t.inf.toFixed(2) + '</div></div>';
     }).join('');
+    dropdown.innerHTML = authorHtml + topicHtml;
+    results = authorResults.slice(0, 3).map(function(a) { return {type:'author'}; })
+      .concat(topicResults.slice(0, maxTopics).map(function(r) { return {type:'topic'}; }));
   }
 
   searchDropdownIdx = -1;
@@ -1728,7 +1778,11 @@ function buildCoAuthorNetwork() {
   }));
 
   // Prepare co-author data
-  var coNodes = (DATA.coGraph.nodes || []).map(function(n) { return Object.assign({}, n); });
+  var coNodes = (DATA.coGraph.nodes || []).map(function(n) {
+    var copy = Object.assign({}, n);
+    if (copy.influence !== undefined && copy.inf === undefined) copy.inf = copy.influence;
+    return copy;
+  });
   var coNodeMap = {};
   coNodes.forEach(function(n) { coNodeMap[n.id] = n; });
 
@@ -1817,8 +1871,14 @@ function buildCoAuthorNetwork() {
     .attr('opacity', 0)
     .text(function(d) { return d.id; });
 
-  // Click -> show author detail
+  // Click -> filter by author, double-click -> show author detail sidebar
+  var coauthorClickTimer = null;
   node.on('click', function(ev, d) {
+    if (coauthorClickTimer) { clearTimeout(coauthorClickTimer); coauthorClickTimer = null; return; }
+    coauthorClickTimer = setTimeout(function() { coauthorClickTimer = null; toggleAuthor(d.id); }, 250);
+  });
+  node.on('dblclick', function(ev, d) {
+    selectAuthor(d.id);
     showAuthorDetail(d.id);
   });
 
