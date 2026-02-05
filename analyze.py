@@ -276,9 +276,29 @@ ETHRESEAR_URL_RE = re.compile(r"https?://ethresear\.ch/t/[^/]+/(\d+)")
 
 # Coauthor detection helpers
 COAUTHOR_ALIASES = {
-    # Add manual alias overrides here (normalized name -> username)
+    # normalized name -> username
     "vitalik": "vbuterin",
     "vitalik buterin": "vbuterin",
+    "francesco": "fradamt",
+    "francesco d amato": "fradamt",
+    "thomas thiery": "soispoke",
+    "thomas": "soispoke",
+    "barry whitehat": "barryWhiteHat",
+    "caspar": "casparschwa",
+    "joachim neu": None,  # Stanford — no Discourse account
+    "david tse": None,  # Stanford — no Discourse account
+}
+
+# Names that should never be treated as coauthors (blacklist)
+_COAUTHOR_BLACKLIST = {
+    "myself", "me", "team", "the quilt team", "the storagebeat team",
+    "from the codex team", "from titania research", "chorus one",
+    "option i mean", "mastodon", "ethereum",
+    # Orgs / projects (not people)
+    "anoma", "fairblock", "ethgas", "zeropool", "sigma prime", "kiln",
+    "decipherglobal", "nobitex labs",
+    # Stray fragments
+    "inspiration", "bm",
 }
 
 _COAUTHOR_CUT_RE = re.compile(
@@ -429,6 +449,73 @@ def _trim_author_phrase(text):
     return text.strip()
 
 
+_JUNK_NAME_RE = re.compile(
+    r"^(?:\d{4}|et al\)?|on behalf of .+|in collaboration with .+|"
+    r"from .+|both .+|all .+|significant input by|"
+    r"co-?founder|zk researcher at .+|core dev of .+|"
+    r"a .+ team member|members of .+|whose .+|inspiration from .+|"
+    r"now|here|found here.*|"
+    # Sentence fragments starting with common non-name words
+    r"other .+|the \w+|a \w.*|an \w+|on \w+ \d.*|have \w.*|"
+    # Org / role suffixes that leaked through
+    r".+ labs?$|.+ research$|.+ protocol$)$",
+    re.IGNORECASE,
+)
+
+# Trailing date or Discourse link-count patterns to strip
+_TRAILING_DATE_RE = re.compile(
+    r"\s*[-–—]\s*(?:January|February|March|April|May|June|July|August|"
+    r"September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?\s*$",
+    re.IGNORECASE,
+)
+_TRAILING_NUM_RE = re.compile(r"\s+\d{1,2}\s*$")
+_TRAILING_YEAR_RE = re.compile(r"\s*[-–—;,]\s*(?:may|june|july)?\s*\d{4}\s*$", re.IGNORECASE)
+
+
+def _is_valid_name(name):
+    """Reject names that are obviously not people."""
+    if not name or len(name) <= 1:
+        return False
+    low = name.lower().strip()
+    if low in _COAUTHOR_BLACKLIST:
+        return False
+    # Pure numbers (years, etc.)
+    if re.fullmatch(r"\d+", name):
+        return False
+    # Too many words = sentence fragment
+    if len(name.split()) > 5:
+        return False
+    if _JUNK_NAME_RE.match(name):
+        return False
+    return True
+
+
+def _clean_name(name):
+    """Strip trailing dates, Discourse link counts, org suffixes, and junk."""
+    name = _TRAILING_DATE_RE.sub("", name)
+    name = _TRAILING_YEAR_RE.sub("", name)
+    name = _TRAILING_NUM_RE.sub("", name)
+    # Strip trailing " in" or " in YYYY" (e.g. "Julian in", "Vitalik Buterin in 2021")
+    name = re.sub(r"\s+in\s*(?:\d{4})?\s*$", "", name, flags=re.IGNORECASE)
+    # Strip trailing "; month" without year (e.g. "justin drake ; may")
+    name = re.sub(r"\s*;\s*\w+\s*$", "", name)
+    # Strip " - OrgName" suffix (e.g. "Alex Watts  - FastLane Labs")
+    name = re.sub(r"\s+-\s+.+$", "", name)
+    # Strip " from OrgName" suffix (e.g. "Lichu from Semiotic Labs")
+    name = re.sub(r"\s+from\s+.+$", "", name, flags=re.IGNORECASE)
+    # Strip " et al" suffix
+    name = re.sub(r"\s+et\s+al\.?\s*$", "", name, flags=re.IGNORECASE)
+    # Strip title prefixes (Professor, Dr., Prof.)
+    name = re.sub(r"^(?:Professor|Prof\.?|Dr\.?)\s+", "", name, flags=re.IGNORECASE)
+    # Strip quoted nicknames (e.g. Brandon \u201cCryptskii\u201d Ramsay → Brandon Ramsay)
+    name = re.sub(r'\s*[\u201c\u201d""][^\u201c\u201d""]*[\u201c\u201d""]\s*', " ", name)
+    # Strip trailing unclosed parenthesis (e.g. "Nobitex Labs (")
+    name = re.sub(r"\s*\([^)]*$", "", name)
+    # Strip "@ " prefix (e.g. "@ d1ll0n" → "d1ll0n")
+    name = re.sub(r"^@\s+", "", name)
+    return name.strip()
+
+
 def _split_author_phrase(text):
     text = _trim_author_phrase(text)
     if not text:
@@ -438,10 +525,10 @@ def _split_author_phrase(text):
     for part in parts:
         if not part:
             continue
-        # Extract @handles
+        # Extract @handles (still validate against blacklist)
         handles = re.findall(r"@([A-Za-z0-9_\-]+)", part)
         for h in handles:
-            if h:
+            if h and _is_valid_name(h):
                 names.append(h)
         part = re.sub(r"@([A-Za-z0-9_\-]+)", "", part)
         part = re.sub(r"\([^)]*\)", "", part).strip()
@@ -450,7 +537,9 @@ def _split_author_phrase(text):
             continue
         if _COAUTHOR_CUT_RE.search(part):
             continue
-        names.append(part)
+        part = _clean_name(part)
+        if _is_valid_name(part):
+            names.append(part)
     return [n for n in names if n]
 
 
