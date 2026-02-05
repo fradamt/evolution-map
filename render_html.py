@@ -86,7 +86,7 @@ def prepare_viz_data(data):
             "eips": t.get("eip_mentions", []),
             "peips": t.get("primary_eips", []),
             "cat": t.get("category_name", ""),
-            "exc": t.get("first_post_excerpt", "")[:200],
+            "exc": t.get("first_post_excerpt", "")[:300],
             "out": t.get("outgoing_refs", []),
             "inc": t.get("incoming_refs", []),
             "parts": [p["username"] for p in t.get("participants", [])[:3]],

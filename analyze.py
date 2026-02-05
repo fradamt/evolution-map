@@ -243,6 +243,76 @@ THREAD_SEEDS = {
 EIP_RE = re.compile(r"EIP[- ]?(\d{1,5})", re.IGNORECASE)
 ETHRESEAR_URL_RE = re.compile(r"https?://ethresear\.ch/t/[^/]+/(\d+)")
 
+# Boilerplate prefixes to strip from post excerpts
+_BOILERPLATE_RE = re.compile(
+    r"^(?:introduction|abstract|summary|tl;?dr|background|motivation|overview|edit:|update:)\s*",
+    re.IGNORECASE,
+)
+
+# Sentence boundary: period followed by whitespace and a capital letter
+_SENTENCE_END_RE = re.compile(r"\.\s+(?=[A-Z])")
+
+
+def _clean_excerpt(cooked_html):
+    """Extract a clean 2-3 sentence excerpt from a Discourse post's cooked HTML.
+
+    Steps:
+      1. Strip all HTML tags
+      2. Remove common boilerplate prefix words (Introduction, Abstract, etc.)
+      3. Collapse whitespace
+      4. Take the first 2-3 complete sentences (up to ~300 chars)
+      5. Truncate at a word boundary if still too long
+    """
+    if not cooked_html:
+        return ""
+
+    # 1. Strip HTML tags
+    text = re.sub(r"<[^>]+>", " ", cooked_html)
+
+    # 3. Collapse whitespace (do this before prefix removal so we work on clean text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    if not text:
+        return ""
+
+    # 2. Remove boilerplate prefixes (may appear at the very start)
+    text = _BOILERPLATE_RE.sub("", text).strip()
+
+    # 4. Extract first 2-3 complete sentences up to ~300 chars
+    # Find sentence boundaries
+    boundaries = [m.end() - 1 for m in _SENTENCE_END_RE.finditer(text)]
+    # Each boundary points to the position right after the period
+
+    excerpt = ""
+    for i, boundary in enumerate(boundaries):
+        # boundary is at the space after the period; the sentence ends at the period
+        # We want to include up to and including the period
+        candidate = text[: boundary + 1].strip()
+        if len(candidate) > 300:
+            # If the very first sentence is already > 300 chars, truncate it
+            if i == 0:
+                excerpt = candidate
+                break
+            # Otherwise, stop at the previous sentence boundary
+            break
+        excerpt = candidate
+        if i >= 2:  # collected 3 sentences (indices 0, 1, 2)
+            break
+
+    # If no sentence boundaries found, use the whole text
+    if not excerpt:
+        excerpt = text
+
+    # 5. Truncate at a word boundary at ~250 chars and add "..."
+    if len(excerpt) > 300:
+        # Find the last space at or before position 250
+        cut = excerpt.rfind(" ", 0, 250)
+        if cut == -1:
+            cut = 250
+        excerpt = excerpt[:cut].rstrip(".,;:!? ") + "..."
+
+    return excerpt
+
 
 def parse_date(iso_str):
     """Parse ISO timestamp to YYYY-MM-DD."""
@@ -354,9 +424,7 @@ def main():
                 for e in EIP_RE.findall(cooked):
                     op_eip_counts[int(e)] += 1
                 if cooked:
-                    text = re.sub(r"<[^>]+>", " ", cooked)
-                    text = re.sub(r"\s+", " ", text).strip()
-                    first_post_excerpt = text[:500]
+                    first_post_excerpt = _clean_excerpt(cooked)
 
         # Primary EIPs: what this topic is actually ABOUT
         # - Title EIPs: always primary (strongest signal)
