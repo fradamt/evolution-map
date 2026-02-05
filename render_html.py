@@ -407,6 +407,7 @@ let activeTag = null;
 let simulation = null;
 let coAuthorSimulation = null;
 let hoveredTopicId = null;
+let pinnedTopicId = null;
 let lineageActive = false;
 let lineageSet = new Set();
 let lineageEdgeSet = new Set(); // "src-tgt" strings for fast edge lookup
@@ -1010,8 +1011,11 @@ function onTimelineHover(ev, d, entering) {
   } else {
     hoveredTopicId = null;
     hideTooltip();
-    // Restore to current filter state
-    filterTimeline();
+    if (pinnedTopicId) {
+      applyPinnedHighlightTimeline();
+    } else {
+      filterTimeline();
+    }
   }
 }
 
@@ -1021,6 +1025,100 @@ function topicMatchesFilter(t) {
   if (activeCategory && t.cat !== activeCategory) return false;
   if (activeTag && !(t.tg || []).includes(activeTag)) return false;
   return true;
+}
+
+// === PINNED TOPIC HIGHLIGHTING ===
+function applyPinnedHighlight() {
+  if (!pinnedTopicId) return;
+  if (activeView === 'timeline') applyPinnedHighlightTimeline();
+  else if (activeView === 'network') applyPinnedHighlightNetwork();
+}
+
+function applyPinnedHighlightTimeline() {
+  if (!pinnedTopicId) return;
+  var connected = topicEdgeIndex[String(pinnedTopicId)] || new Set();
+  d3.selectAll('.topic-circle')
+    .attr('opacity', function(t) {
+      if (t.id === pinnedTopicId) return 1;
+      if (connected.has(t.id)) return 0.8;
+      if (!topicMatchesFilter(t)) return 0.03;
+      return 0.12;
+    });
+  d3.selectAll('.edge-line')
+    .attr('stroke-opacity', function(e) {
+      if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 0.5;
+      return 0.02;
+    })
+    .attr('stroke', function(e) {
+      if (e.source === pinnedTopicId || e.target === pinnedTopicId) return '#88aaff';
+      return '#556';
+    });
+}
+
+function applyPinnedHighlightNetwork() {
+  if (!pinnedTopicId) return;
+  var connected = topicEdgeIndex[String(pinnedTopicId)] || new Set();
+  connected = new Set(connected);
+  connected.add(pinnedTopicId);
+
+  d3.selectAll('.net-node circle').attr('opacity', function(n) {
+    return connected.has(n.id) ? 1 : 0.08;
+  });
+  d3.selectAll('.net-link').attr('stroke-opacity', function(l) {
+    var sid = typeof l.source === 'object' ? l.source.id : l.source;
+    var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    return (sid === pinnedTopicId || tid === pinnedTopicId) ? 0.6 : 0.02;
+  });
+}
+
+function highlightTopicInView(topicId) {
+  // Temporarily highlight a topic (for reference link hover)
+  if (activeView === 'timeline') {
+    var connected = topicEdgeIndex[String(topicId)] || new Set();
+    d3.selectAll('.topic-circle')
+      .attr('opacity', function(t) {
+        if (t.id === topicId) return 1;
+        if (t.id === pinnedTopicId) return 0.7;
+        if (connected.has(t.id)) return 0.8;
+        if (!topicMatchesFilter(t)) return 0.03;
+        return 0.12;
+      })
+      .attr('stroke-width', function(t) { return t.id === topicId ? 2.5 : 0.5; });
+    d3.selectAll('.edge-line')
+      .attr('stroke-opacity', function(e) {
+        if (e.source === topicId || e.target === topicId) return 0.5;
+        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 0.25;
+        return 0.02;
+      })
+      .attr('stroke', function(e) {
+        if (e.source === topicId || e.target === topicId) return '#ffaa44';
+        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return '#88aaff';
+        return '#556';
+      });
+  } else if (activeView === 'network') {
+    var connected = topicEdgeIndex[String(topicId)] || new Set();
+    var connSet = new Set(connected);
+    connSet.add(topicId);
+    d3.selectAll('.net-node circle')
+      .attr('opacity', function(n) { return connSet.has(n.id) ? 1 : (n.id === pinnedTopicId ? 0.7 : 0.08); })
+      .attr('stroke-width', function(n) { return n.id === topicId ? 2.5 : 0.5; });
+    d3.selectAll('.net-link').attr('stroke-opacity', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (sid === topicId || tid === topicId) ? 0.6 : 0.02;
+    });
+  }
+}
+
+function restorePinnedHighlight() {
+  // Revert stroke-width and restore pinned or filter state
+  d3.selectAll('.topic-circle').attr('stroke-width', 0.5);
+  d3.selectAll('.net-node circle').attr('stroke-width', 0.5);
+  if (pinnedTopicId) {
+    applyPinnedHighlight();
+  } else {
+    applyFilters();
+  }
 }
 
 function filterTimeline() {
@@ -1164,8 +1262,11 @@ function buildNetwork() {
 
   node.on('mouseout', function() {
     hideTooltip();
-    // Restore to filter state
-    filterNetwork();
+    if (pinnedTopicId) {
+      applyPinnedHighlightNetwork();
+    } else {
+      filterNetwork();
+    }
   });
 
   simulation.on('tick', function() {
@@ -1460,7 +1561,9 @@ function showAuthorDetail(username) {
     topTopicsHtml = a.tops.map(function(tid) {
       var topic = DATA.topics[tid];
       if (!topic) return '';
-      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + tid + '])">' +
+      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + tid + '])" ' +
+        'onmouseenter="highlightTopicInView(' + tid + ')" ' +
+        'onmouseleave="restorePinnedHighlight()">' +
         escHtml(topic.t) + '</a> <span style="color:#666;font-size:10px">(' + topic.inf.toFixed(2) + ')</span></div>';
     }).join('');
   }
@@ -1644,6 +1747,9 @@ function applyLineageNetwork() {
 
 // === DETAIL PANEL ===
 function showDetail(t) {
+  pinnedTopicId = t.id;
+  applyPinnedHighlight();
+
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
 
@@ -1660,7 +1766,9 @@ function showDetail(t) {
     outRefs = t.out.slice(0, 10).map(function(id) {
       var ref = DATA.topics[id];
       if (!ref) return '';
-      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + id + '])">' +
+      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + id + '])" ' +
+             'onmouseenter="highlightTopicInView(' + id + ')" ' +
+             'onmouseleave="restorePinnedHighlight()">' +
              escHtml(ref.t) + '</a></div>';
     }).join('');
   }
@@ -1670,7 +1778,9 @@ function showDetail(t) {
     incRefs = t.inc.slice(0, 10).map(function(id) {
       var ref = DATA.topics[id];
       if (!ref) return '';
-      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + id + '])">' +
+      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + id + '])" ' +
+             'onmouseenter="highlightTopicInView(' + id + ')" ' +
+             'onmouseleave="restorePinnedHighlight()">' +
              escHtml(ref.t) + '</a></div>';
     }).join('');
   }
@@ -1708,6 +1818,8 @@ function showDetail(t) {
 
 function closeDetail() {
   document.getElementById('detail-panel').classList.remove('open');
+  pinnedTopicId = null;
+  applyFilters();
 }
 
 // === TOOLTIP ===
