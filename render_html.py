@@ -2886,23 +2886,23 @@ function showDetail(t) {
   if (msInfo) {
     var msColor = THREAD_COLORS[msInfo.threadId] || '#ffcc44';
     msBadge = '<div class="milestone-badge"><span class="mb-icon">\u2605</span>' +
-      escHtml(msInfo.human) + ' in <span style="color:' + msColor + '">' +
+      escHtml(msInfo.human) + ' in <span style="color:' + msColor + ';cursor:pointer" onclick="toggleThread(\'' + escHtml(msInfo.threadId) + '\')">' +
       escHtml(msInfo.threadName) + '</span></div>';
   }
 
   content.innerHTML =
     '<h2>' + escHtml(t.t) + '</h2>' +
     msBadge +
-    '<div class="meta">by <strong>' + escHtml(t.a) + '</strong> \u00b7 ' + t.d +
+    '<div class="meta">by <strong onclick="toggleAuthor(\'' + escHtml(t.a) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(t.a) + '</strong> \u00b7 ' + t.d +
     ' \u00b7 <a href="https://ethresear.ch/t/' + t.id + '" target="_blank">Open on ethresear.ch \u2192</a></div>' +
     (t.coauth && t.coauth.length > 0 ? '<div class="detail-stat"><span class="label">Coauthors</span><span class="value">' + t.coauth.map(function(u) { return '<span onclick="toggleAuthor(\'' + escHtml(u) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>'; }).join(', ') + '</span></div>' : '') +
-    '<div class="detail-stat"><span class="label">Thread</span><span class="value" style="color:' + threadColor + '">' + threadName + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Thread</span><span class="value" style="color:' + threadColor + ';cursor:pointer" onclick="toggleThread(\'' + escHtml(t.th || '') + '\')">' + threadName + '</span></div>' +
     '<div class="detail-stat"><span class="label">Influence</span><span class="value">' + t.inf.toFixed(3) + '</span></div>' +
     '<div class="detail-stat"><span class="label">Views</span><span class="value">' + t.vw.toLocaleString() + '</span></div>' +
     '<div class="detail-stat"><span class="label">Likes</span><span class="value">' + t.lk + '</span></div>' +
     '<div class="detail-stat"><span class="label">Posts</span><span class="value">' + t.pc + '</span></div>' +
     '<div class="detail-stat"><span class="label">Cited by</span><span class="value">' + t.ind + ' topics</span></div>' +
-    '<div class="detail-stat"><span class="label">Category</span><span class="value">' + escHtml(t.cat) + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Category</span><span class="value" style="cursor:pointer;color:#7788cc" onclick="toggleCategory(\'' + escHtml(t.cat) + '\')">' + escHtml(t.cat) + '</span></div>' +
     '<div style="margin:10px 0 6px;display:flex;gap:6px"><button id="lineage-btn" onclick="traceLineage(' + t.id + ')" ' +
     'style="background:#1a1a2e;border:1px solid ' + (lineageActive && lineageSet.has(t.id) ? '#88aaff' : '#5566aa') +
     ';color:' + (lineageActive && lineageSet.has(t.id) ? '#88aaff' : '#8899cc') +
