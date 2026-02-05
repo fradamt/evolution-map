@@ -1038,8 +1038,8 @@ def main():
 
         return score
 
-    # Assign each included topic to best-matching thread
-    for tid in included:
+    # Assign each topic to best-matching thread (all topics, not just included)
+    for tid in tids:
         t = topics[tid]
         best_thread = None
         best_score = 0
@@ -1177,7 +1177,7 @@ def main():
     # -----------------------------------------------------------------------
     # Era assignment
     # -----------------------------------------------------------------------
-    for tid in included:
+    for tid in tids:
         t = topics[tid]
         t["era"] = era_for_date(t["date"]) if t["date"] else "endgame"
 
@@ -1506,6 +1506,14 @@ def main():
             "like_count": t["like_count"],
             "posts_count": t["posts_count"],
             "influence_score": t["influence_score"],
+            "research_thread": t.get("research_thread"),
+            "era": t.get("era"),
+            "first_post_excerpt": t.get("first_post_excerpt", "")[:600],
+            "tags": t.get("tags", [])[:5],
+            "eip_mentions": t.get("eip_mentions", []),
+            "primary_eips": t.get("primary_eips", []),
+            "in_degree": t.get("in_degree", 0),
+            "out_degree": t.get("out_degree", 0),
         }
     print(f"  {len(minor_topics_output)} minor topics")
 

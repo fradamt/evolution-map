@@ -111,6 +111,14 @@ def prepare_viz_data(data):
             "cat": mt.get("category_name", ""),
             "coauth": [u for u in mt.get("coauthors", []) if u != mt["author"]],
             "mn": True,
+            "th": mt.get("research_thread"),
+            "era": mt.get("era"),
+            "exc": mt.get("first_post_excerpt", "")[:600],
+            "tg": mt.get("tags", [])[:5],
+            "eips": mt.get("eip_mentions", []),
+            "peips": mt.get("primary_eips", []),
+            "ind": mt.get("in_degree", 0),
+            "outd": mt.get("out_degree", 0),
         }
 
     compact_authors = {}
@@ -2942,24 +2950,26 @@ function renderMinorTopics() {
     var yMargin = swimH * 0.05;
     var y = yMargin + (hashCode(mt.id) % 100) / 100 * (swimH - 2 * yMargin);
     var r = Math.min(6, Math.max(3, (mt.inf || 0) * 20 + 3));
+    var fillColor = mt.th ? (THREAD_COLORS[mt.th] || '#556') : '#556';
+    var strokeColor = mt.th ? d3.color(fillColor).brighter(0.8).toString() : '#99a';
 
     minorG.append('circle')
       .attr('class', 'topic-circle minor-circle')
       .attr('cx', x).attr('cy', y)
       .attr('r', r)
-      .attr('fill', '#556')
-      .attr('stroke', '#99a')
+      .attr('fill', fillColor)
+      .attr('stroke', strokeColor)
       .attr('stroke-width', 1)
       .attr('stroke-dasharray', '3 2')
       .attr('opacity', 0.55)
-      .datum({id: mt.id, _date: date, _yPos: y, inf: mt.inf || 0, mn: true})
+      .datum({id: mt.id, _date: date, _yPos: y, inf: mt.inf || 0, mn: true, _fill: fillColor})
       .on('click', function(ev, d) { showMinorDetail(DATA.minorTopics[d.id]); })
       .on('mouseover', function(ev, d) {
-        d3.select(this).attr('opacity', 1).attr('r', r * 1.5).attr('fill', '#88a');
+        d3.select(this).attr('opacity', 1).attr('r', r * 1.5);
         showMinorTooltip(ev, DATA.minorTopics[d.id]);
       })
-      .on('mouseout', function() {
-        d3.select(this).attr('opacity', 0.55).attr('r', r).attr('fill', '#556');
+      .on('mouseout', function(ev, d) {
+        d3.select(this).attr('opacity', 0.55).attr('r', r);
         hideTooltip();
       });
   });
@@ -2992,6 +3002,16 @@ function showMinorDetail(mt) {
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
 
+  var threadName = 'Unassigned';
+  var threadColor = '#555';
+  if (mt.th) {
+    var thread = DATA.threads[mt.th];
+    threadName = thread ? thread.n : mt.th;
+    threadColor = THREAD_COLORS[mt.th] || '#555';
+  }
+
+  var primarySet = new Set(mt.peips || []);
+
   content.innerHTML =
     '<h2>' + escHtml(mt.t) + '</h2>' +
     '<div style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:3px;margin:4px 0 8px;' +
@@ -2999,11 +3019,26 @@ function showMinorDetail(mt) {
     '<div class="meta">by <strong onclick="openAuthor(\'' + escHtml(mt.a) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(mt.a) + '</strong> \u00b7 ' + (mt.d || '') +
     ' \u00b7 <a href="https://ethresear.ch/t/' + mt.id + '" target="_blank">Open on ethresear.ch \u2192</a></div>' +
     (mt.coauth && mt.coauth.length > 0 ? '<div class="detail-stat"><span class="label">Coauthors</span><span class="value">' + mt.coauth.map(function(u) { return '<span onclick="openAuthor(\'' + escHtml(u) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>'; }).join(', ') + '</span></div>' : '') +
+    '<div class="detail-stat"><span class="label">Thread</span><span class="value" style="color:' + threadColor + ';cursor:pointer" onclick="toggleThread(\'' + escHtml(mt.th || '') + '\')">' + escHtml(threadName) + '</span></div>' +
+    (mt.era ? '<div class="detail-stat"><span class="label">Era</span><span class="value">' + escHtml(mt.era) + '</span></div>' : '') +
+    '<div class="detail-stat"><span class="label">Influence</span><span class="value">' + (mt.inf || 0).toFixed(3) + '</span></div>' +
     '<div class="detail-stat"><span class="label">Views</span><span class="value">' + (mt.vw || 0).toLocaleString() + '</span></div>' +
     '<div class="detail-stat"><span class="label">Likes</span><span class="value">' + (mt.lk || 0) + '</span></div>' +
     '<div class="detail-stat"><span class="label">Posts</span><span class="value">' + (mt.pc || 0) + '</span></div>' +
+    ((mt.ind || mt.outd) ? '<div class="detail-stat"><span class="label">References</span><span class="value">' + (mt.ind || 0) + ' in / ' + (mt.outd || 0) + ' out</span></div>' : '') +
     '<div class="detail-stat"><span class="label">Category</span><span class="value">' + escHtml(mt.cat || '') + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Influence</span><span class="value">' + (mt.inf || 0).toFixed(3) + '</span></div>' +
+    (mt.exc ? '<div class="detail-excerpt"><span id="excerpt-short">' + escHtml(mt.exc.length > 300 ? mt.exc.slice(0, 300) + '...' : mt.exc) + '</span>' +
+      '<span id="excerpt-full" style="display:none">' + escHtml(mt.exc) + '</span>' +
+      (mt.exc.length > 300 ? ' <span onclick="toggleExcerpt()" style="color:#66bbaa;cursor:pointer;font-size:10px;font-style:normal" id="excerpt-toggle">show more</span>' : '') +
+      '</div>' : '') +
+    (mt.tg && mt.tg.length > 0 ? '<div style="margin:6px 0">' + mt.tg.map(function(tag) { return '<span style="display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;margin:2px 3px 2px 0;background:#1a1a2a;border:1px solid #444;color:#99a">' + escHtml(tag) + '</span>'; }).join('') + '</div>' : '') +
+    (mt.peips && mt.peips.length > 0 ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">EIPs discussed:</strong> ' +
+      mt.peips.map(function(e) { return '<span class="eip-tag primary">EIP-' + e + '</span>'; }).join(' ') + '</div>' : '') +
+    (mt.eips && mt.eips.length > (mt.peips||[]).length ?
+      '<div style="margin:4px 0"><strong style="font-size:11px;color:#666">Also mentions:</strong> ' +
+      (mt.eips || []).filter(function(e) { return !primarySet.has(e); }).map(function(e) {
+        return '<span class="eip-tag">EIP-' + e + '</span>';
+      }).join(' ') + '</div>' : '') +
     '<div class="detail-excerpt" style="font-style:normal;color:#777;margin-top:12px">' +
     'This topic is below the influence threshold for the main visualization. ' +
     'It appears here because it was authored by or co-authored with the selected author.</div>';
