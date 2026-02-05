@@ -192,7 +192,7 @@ def generate_html(viz_json, data):
       <span>{meta['included']} topics</span>
       <span>{meta['included_edges']} citations</span>
       <span>2017\u20132026</span>
-      <button id="milestone-toggle" class="milestone-toggle active" onclick="toggleMilestones()" title="Toggle milestone markers">\u2605 Milestones</button>
+      <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
     </div>
     <div id="filter-breadcrumb" class="breadcrumb"></div>
     <div class="controls">
@@ -531,7 +531,7 @@ let pinnedTopicId = null;
 let lineageActive = false;
 let lineageSet = new Set();
 let lineageEdgeSet = new Set(); // "src-tgt" strings for fast edge lookup
-let milestonesVisible = true;
+let milestonesVisible = false;
 let pathMode = false;
 let pathStart = null;
 let pathSet = new Set();
@@ -1306,7 +1306,8 @@ function buildTimeline() {
       .datum(md.topic)
       .on('click', function(ev, d) { handleTopicClick(ev, d); })
       .on('mouseover', function(ev, d) { showTooltip(ev, d); })
-      .on('mouseout', function() { hideTooltip(); });
+      .on('mouseout', function() { hideTooltip(); })
+      .style('display', milestonesVisible ? null : 'none');
   });
 
   // --- Monthly activity histogram ---
@@ -2307,7 +2308,7 @@ function showThreadDetail(tid) {
   // Milestones
   var msHtml = '';
   if (th.ms && th.ms.length > 0) {
-    msHtml = '<div style="margin:12px 0"><strong style="font-size:11px;color:#888">Milestones</strong>' +
+    msHtml = '<div style="margin:12px 0"><strong style="font-size:11px;color:#888">Influential Posts</strong>' +
       '<div class="milestone-list">';
     th.ms.forEach(function(ms) {
       var noteLabel = ms.n.replace('_', ' ');
