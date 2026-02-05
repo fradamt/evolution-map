@@ -191,6 +191,7 @@ def generate_html(viz_json, data):
       <span>{meta['included']} topics</span>
       <span>{meta['included_edges']} citations</span>
       <span>2017\u20132026</span>
+      <button id="milestone-toggle" class="milestone-toggle active" onclick="toggleMilestones()" title="Toggle milestone markers">\u2605 Milestones</button>
     </div>
     <div id="filter-breadcrumb" class="breadcrumb"></div>
     <div class="controls">
@@ -445,7 +446,14 @@ header .stats span { white-space: nowrap; }
 .fork-hover-line { stroke: transparent; stroke-width: 16; cursor: pointer; }
 
 /* Milestone markers on timeline */
-.milestone-marker { fill: #ffcc44; stroke: #aa8800; stroke-width: 1; pointer-events: none; }
+.milestone-marker { fill: #ffcc44; stroke: #aa8800; stroke-width: 1; cursor: pointer; pointer-events: all; }
+.milestone-badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 3px; margin: 8px 0;
+                   background: #3a3010; border: 1px solid #5a5020; color: #ffcc44; }
+.milestone-badge .mb-icon { margin-right: 4px; }
+.milestone-toggle { background: none !important; border: 1px solid #5a5020 !important; color: #aa8800;
+                    padding: 2px 8px !important; border-radius: 3px !important; font-size: 10px !important;
+                    cursor: pointer; margin-left: 6px; }
+.milestone-toggle.active { border-color: #ffcc44 !important; color: #ffcc44; }
 
 /* Thread detail stats */
 .thread-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 10px 0; }
@@ -509,6 +517,29 @@ let pinnedTopicId = null;
 let lineageActive = false;
 let lineageSet = new Set();
 let lineageEdgeSet = new Set(); // "src-tgt" strings for fast edge lookup
+let milestonesVisible = true;
+
+// Build milestone index: topic_id -> {threadId, threadName, note, human}
+const MILESTONE_LABELS = {
+  earliest: 'Earliest topic',
+  latest: 'Most recent topic',
+  peak_influence: 'Most influential topic',
+  peak_citations: 'Most cited within thread',
+  interval: 'Key topic in this period'
+};
+const milestoneIndex = {};
+THREAD_ORDER.forEach(function(tid) {
+  var th = DATA.threads[tid];
+  if (!th || !th.ms) return;
+  th.ms.forEach(function(ms) {
+    milestoneIndex[ms.id] = {
+      threadId: tid,
+      threadName: th.n,
+      note: ms.n,
+      human: MILESTONE_LABELS[ms.n] || ms.n
+    };
+  });
+});
 
 // Build index: topic_id -> set of connected topic_ids (for edge highlighting)
 const topicEdgeIndex = {};
@@ -786,6 +817,14 @@ function toggleTag(tag) {
   document.querySelectorAll('.tag-chip').forEach(c =>
     c.classList.toggle('active', c.dataset.tag === activeTag));
   applyFilters();
+}
+
+function toggleMilestones() {
+  milestonesVisible = !milestonesVisible;
+  d3.selectAll('.milestone-marker')
+    .style('display', milestonesVisible ? null : 'none');
+  var btn = document.getElementById('milestone-toggle');
+  if (btn) btn.classList.toggle('active', milestonesVisible);
 }
 
 function toggleCollapse(id) {
@@ -1219,7 +1258,10 @@ function buildTimeline() {
     milestoneG.append('polygon')
       .attr('class', 'milestone-marker')
       .attr('points', starPoints(xScale(md.topic._date), md.topic._yPos, r, r * 0.5, 4))
-      .datum(md.topic);
+      .datum(md.topic)
+      .on('click', function(ev, d) { showDetail(d); })
+      .on('mouseover', function(ev, d) { showTooltip(ev, d); })
+      .on('mouseout', function() { hideTooltip(); });
   });
 
   // --- Monthly activity histogram ---
@@ -2420,8 +2462,19 @@ function showDetail(t) {
     }).join('');
   }
 
+  // Milestone badge
+  var msBadge = '';
+  var msInfo = milestoneIndex[t.id];
+  if (msInfo) {
+    var msColor = THREAD_COLORS[msInfo.threadId] || '#ffcc44';
+    msBadge = '<div class="milestone-badge"><span class="mb-icon">\u2605</span>' +
+      escHtml(msInfo.human) + ' in <span style="color:' + msColor + '">' +
+      escHtml(msInfo.threadName) + '</span></div>';
+  }
+
   content.innerHTML =
     '<h2>' + escHtml(t.t) + '</h2>' +
+    msBadge +
     '<div class="meta">by <strong>' + escHtml(t.a) + '</strong> \u00b7 ' + t.d +
     ' \u00b7 <a href="https://ethresear.ch/t/' + t.id + '" target="_blank">Open on ethresear.ch \u2192</a></div>' +
     '<div class="detail-stat"><span class="label">Thread</span><span class="value" style="color:' + threadColor + '">' + threadName + '</span></div>' +
