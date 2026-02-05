@@ -123,6 +123,14 @@ def prepare_viz_data(data):
             "eips": th.get("eip_mentions", []),
             "tops": th["top_topics"][:10],
             "qc": th.get("quarterly_counts", []),
+            "ms": [  # milestones
+                {"id": m["id"], "t": m["title"][:60], "d": m["date"], "n": m["note"]}
+                for m in th.get("milestones", [])
+            ],
+            "py": th.get("peak_year"),
+            "ay": th.get("active_years", []),
+            "ad": th.get("author_diversity"),
+            "te": th.get("top_eips", [])[:5],
         }
 
     compact_forks = []
@@ -414,7 +422,20 @@ header .stats span { white-space: nowrap; }
 
 /* Fork line hover area */
 .fork-hover-line { stroke: transparent; stroke-width: 16; cursor: pointer; }
-.fork-hover-line:hover + .fork-line { stroke: #888; stroke-width: 1.5; }
+
+/* Milestone markers on timeline */
+.milestone-marker { fill: #ffcc44; stroke: #aa8800; stroke-width: 1; pointer-events: none; }
+
+/* Thread detail stats */
+.thread-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 10px 0; }
+.thread-stat-box { background: #1a1a2a; border-radius: 4px; padding: 6px 8px; text-align: center; }
+.thread-stat-box .tsb-val { font-size: 16px; font-weight: 600; color: #fff; }
+.thread-stat-box .tsb-lbl { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+.milestone-list { margin: 8px 0; }
+.milestone-item { font-size: 11px; padding: 4px 0; border-bottom: 1px solid #1a1a2a; display: flex; gap: 8px; }
+.milestone-item .ms-note { color: #ffcc44; font-size: 9px; text-transform: uppercase; min-width: 65px; }
+.milestone-item .ms-title { color: #ccc; flex: 1; cursor: pointer; }
+.milestone-item .ms-title:hover { color: #fff; text-decoration: underline; }
 
 .tooltip { position: fixed; background: #1e1e2e; border: 1px solid #444; border-radius: 4px;
            padding: 8px 12px; font-size: 11px; color: #ccc; pointer-events: none;
@@ -475,6 +496,11 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSearch();
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeDetail(); clearFilters(); }
+    // Arrow key navigation between connected topics
+    if (pinnedTopicId && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      navigateConnected(e.key === 'ArrowRight' ? 'next' : 'prev');
+    }
   });
   // Apply initial hash state after a short delay to ensure views are ready
   setTimeout(function() { applyHash(); }, 50);
@@ -649,6 +675,11 @@ function toggleThread(tid) {
   document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
   applyFilters();
+  if (activeThread) {
+    showThreadDetail(activeThread);
+  } else {
+    document.getElementById('detail-panel').classList.remove('open');
+  }
   updateHash();
 }
 
@@ -1110,6 +1141,27 @@ function buildTimeline() {
       .text(txt);
   });
 
+  // --- Milestone markers (star-shaped markers for thread milestones) ---
+  var milestoneG = zoomG.append('g');
+  var milestoneData = [];
+  THREAD_ORDER.forEach(function(tid) {
+    var th = DATA.threads[tid];
+    if (!th || !th.ms) return;
+    th.ms.forEach(function(ms) {
+      var topic = DATA.topics[ms.id];
+      if (topic && topic._yPos !== undefined) {
+        milestoneData.push({topic: topic, note: ms.n, threadId: tid});
+      }
+    });
+  });
+  milestoneData.forEach(function(md) {
+    var r = rScale(md.topic.inf) + 4;
+    milestoneG.append('polygon')
+      .attr('class', 'milestone-marker')
+      .attr('points', starPoints(xScale(md.topic._date), md.topic._yPos, r, r * 0.5, 4))
+      .datum(md.topic);
+  });
+
   // --- Monthly activity histogram ---
   var monthBins = {};
   Object.values(DATA.topics).forEach(function(t) {
@@ -1207,6 +1259,12 @@ function buildTimeline() {
 
     // Update topic labels (x position tracks circle + offset)
     d3.selectAll('.topic-label').attr('x', function(d) { return newX(d._date) + rScale(d.inf) + 3; });
+
+    // Update milestone markers
+    d3.selectAll('.milestone-marker').attr('points', function(d) {
+      var r = rScale(d.inf) + 4;
+      return starPoints(newX(d._date), d._yPos, r, r * 0.5, 4);
+    });
 
     // Update edges
     d3.selectAll('.edge-line')
@@ -1958,6 +2016,121 @@ function showAuthorDetail(username) {
   panel.classList.add('open');
 }
 
+// === KEYBOARD NAVIGATION ===
+function navigateConnected(direction) {
+  if (!pinnedTopicId) return;
+  var current = DATA.topics[pinnedTopicId];
+  if (!current) return;
+
+  // Get connected topics sorted by date
+  var refs = direction === 'next' ? (current.inc || []) : (current.out || []);
+  if (refs.length === 0) {
+    // Fallback: try the other direction
+    refs = direction === 'next' ? (current.out || []) : (current.inc || []);
+  }
+  if (refs.length === 0) return;
+
+  // Sort by date and pick the closest one in the chosen direction
+  var candidates = refs.map(function(id) { return DATA.topics[id]; }).filter(Boolean);
+  candidates.sort(function(a, b) { return new Date(a.d) - new Date(b.d); });
+
+  var currentDate = new Date(current.d);
+  var target = null;
+  if (direction === 'next') {
+    // Pick earliest topic after current date, or first if all are before
+    target = candidates.find(function(t) { return new Date(t.d) >= currentDate && t.id !== current.id; });
+    if (!target) target = candidates[candidates.length - 1];
+  } else {
+    // Pick latest topic before current date, or last if all are after
+    var reversed = candidates.slice().reverse();
+    target = reversed.find(function(t) { return new Date(t.d) <= currentDate && t.id !== current.id; });
+    if (!target) target = candidates[0];
+  }
+
+  if (target && target.id !== pinnedTopicId) {
+    showDetail(target);
+  }
+}
+
+// === THREAD DETAIL PANEL ===
+function showThreadDetail(tid) {
+  var panel = document.getElementById('detail-panel');
+  var content = document.getElementById('detail-content');
+  var th = DATA.threads[tid];
+  if (!th) return;
+
+  var color = THREAD_COLORS[tid] || '#555';
+
+  // Stats grid
+  var statsHtml = '<div class="thread-stat-grid">' +
+    '<div class="thread-stat-box"><div class="tsb-val">' + th.tc + '</div><div class="tsb-lbl">Topics</div></div>' +
+    '<div class="thread-stat-box"><div class="tsb-val">' + (th.ay || []).length + '</div><div class="tsb-lbl">Active Years</div></div>' +
+    '<div class="thread-stat-box"><div class="tsb-val">' + (th.py || '\u2014') + '</div><div class="tsb-lbl">Peak Year</div></div>' +
+    '<div class="thread-stat-box"><div class="tsb-val">' + ((th.ad || 0) * 100).toFixed(0) + '%</div><div class="tsb-lbl">Author Diversity</div></div>' +
+    '</div>';
+
+  // Key authors
+  var authorsHtml = '';
+  if (th.ka && Object.keys(th.ka).length > 0) {
+    authorsHtml = '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Key Authors</strong><div style="margin-top:4px">';
+    Object.entries(th.ka).forEach(function(entry) {
+      var name = entry[0], count = entry[1];
+      var aColor = authorColorMap[name] || '#667';
+      authorsHtml += '<span style="display:inline-block;font-size:11px;margin:2px 4px 2px 0;padding:1px 6px;' +
+        'background:' + aColor + '22;border:1px solid ' + aColor + '44;border-radius:3px;color:' + aColor + ';cursor:pointer" ' +
+        'onclick="showAuthorDetail(\'' + escHtml(name) + '\')">' +
+        escHtml(name) + ' <span style="color:#666;font-size:9px">(' + count + ')</span></span>';
+    });
+    authorsHtml += '</div></div>';
+  }
+
+  // EIPs
+  var eipsHtml = '';
+  if (th.te && th.te.length > 0) {
+    eipsHtml = '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Top EIPs</strong> ';
+    eipsHtml += th.te.map(function(e) { return '<span class="eip-tag primary">EIP-' + e + '</span>'; }).join(' ');
+    eipsHtml += '</div>';
+  }
+
+  // Milestones
+  var msHtml = '';
+  if (th.ms && th.ms.length > 0) {
+    msHtml = '<div style="margin:12px 0"><strong style="font-size:11px;color:#888">Milestones</strong>' +
+      '<div class="milestone-list">';
+    th.ms.forEach(function(ms) {
+      var noteLabel = ms.n.replace('_', ' ');
+      msHtml += '<div class="milestone-item">' +
+        '<span class="ms-note">' + noteLabel + '</span>' +
+        '<span class="ms-title" onclick="showDetail(DATA.topics[' + ms.id + '])" ' +
+        'onmouseenter="highlightTopicInView(' + ms.id + ')" onmouseleave="restorePinnedHighlight()">' +
+        escHtml(ms.t) + '</span>' +
+        '<span style="color:#666;font-size:10px;flex-shrink:0">' + (ms.d || '').slice(0, 7) + '</span></div>';
+    });
+    msHtml += '</div></div>';
+  }
+
+  // Top topics
+  var topsHtml = '';
+  if (th.tops && th.tops.length > 0) {
+    topsHtml = '<div class="detail-refs"><h4>Top Topics</h4>';
+    th.tops.forEach(function(tid) {
+      var topic = DATA.topics[tid];
+      if (!topic) return;
+      topsHtml += '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + tid + '])" ' +
+        'onmouseenter="highlightTopicInView(' + tid + ')" onmouseleave="restorePinnedHighlight()">' +
+        escHtml(topic.t) + '</a> <span style="color:#666;font-size:10px">(' + topic.inf.toFixed(2) + ')</span></div>';
+    });
+    topsHtml += '</div>';
+  }
+
+  content.innerHTML =
+    '<h2 style="color:' + color + '">' + escHtml(th.n) + '</h2>' +
+    '<div class="meta">Research Thread \u00b7 ' + (th.dr ? th.dr[0] + ' to ' + th.dr[1] : '') + '</div>' +
+    statsHtml + authorsHtml + eipsHtml + msHtml + topsHtml;
+
+  panel.classList.add('open');
+}
+
 // === LINEAGE TRACING ===
 function traceLineage(topicId) {
   if (lineageActive && lineageSet.has(topicId)) {
@@ -2303,6 +2476,16 @@ function escHtml(s) {
   if (!s) return '';
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;');
+}
+
+function starPoints(cx, cy, outerR, innerR, nPoints) {
+  var pts = [];
+  for (var i = 0; i < nPoints * 2; i++) {
+    var angle = (i * Math.PI / nPoints) - Math.PI / 2;
+    var r = i % 2 === 0 ? outerR : innerR;
+    pts.push((cx + r * Math.cos(angle)).toFixed(1) + ',' + (cy + r * Math.sin(angle)).toFixed(1));
+  }
+  return pts.join(' ');
 }
 """
 
