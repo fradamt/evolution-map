@@ -610,16 +610,14 @@ function clearFilters() {
 
 function toggleThread(tid) {
   activeThread = activeThread === tid ? null : tid;
-  activeAuthor = null;
   lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
   document.querySelectorAll('.thread-chip').forEach(c =>
     c.classList.toggle('active', c.dataset.thread === activeThread));
-  document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
   applyFilters();
   if (activeThread) {
     showThreadDetail(activeThread);
-  } else {
+  } else if (!activeAuthor) {
     document.getElementById('detail-panel').classList.remove('open');
   }
   updateHash();
@@ -627,11 +625,9 @@ function toggleThread(tid) {
 
 function selectThread(tid) {
   activeThread = tid;
-  activeAuthor = null;
   lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
   document.querySelectorAll('.thread-chip').forEach(c =>
     c.classList.toggle('active', c.dataset.thread === activeThread));
-  document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
   applyFilters();
   updateHash();
@@ -639,11 +635,9 @@ function selectThread(tid) {
 
 function toggleAuthor(username) {
   activeAuthor = activeAuthor === username ? null : username;
-  activeThread = null;
   lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
   document.querySelectorAll('.author-item').forEach(c =>
     c.classList.toggle('active', c.dataset.author === activeAuthor));
-  document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
   applyFilters();
   updateHash();
@@ -651,11 +645,9 @@ function toggleAuthor(username) {
 
 function selectAuthor(username) {
   activeAuthor = username;
-  activeThread = null;
   lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
   document.querySelectorAll('.author-item').forEach(c =>
     c.classList.toggle('active', c.dataset.author === activeAuthor));
-  document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
   document.getElementById('search-box').value = '';
   applyFilters();
   updateHash();
@@ -853,11 +845,16 @@ function filterBySearch(q) {
 
 function highlightTopicSet(ids) {
   if (activeView === 'timeline') {
+    var targetOp = {};
+    d3.selectAll('.topic-circle').each(function(d) {
+      targetOp[d.id] = ids.has(d.id) ? 0.9 : 0.08;
+    });
     d3.selectAll('.topic-circle')
-      .attr('opacity', d => ids.has(d.id) ? 0.9 : 0.04)
+      .transition().duration(200)
+      .attr('opacity', d => targetOp[d.id])
       .attr('r', d => ids.has(d.id) ? tlRScale(d.inf) * 1.3 : tlRScale(d.inf));
     d3.selectAll('.edge-line').attr('stroke-opacity', 0.01);
-    syncLabels();
+    syncLabelsFromMap(targetOp);
   } else {
     d3.selectAll('.net-node circle').attr('opacity', d => ids.has(d.id) ? 0.9 : 0.06);
     d3.selectAll('.net-link').attr('stroke-opacity', 0.02);
@@ -1275,24 +1272,25 @@ function buildTimeline() {
 }
 
 function onTimelineHover(ev, d, entering) {
+  var hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
   if (entering) {
     hoveredTopicId = d.id;
     showTooltip(ev, d);
 
+    // If a filter is active and this node doesn't match, only show tooltip
+    if (hasFilter && !topicMatchesFilter(d)) return;
+
     // Highlight this topic and its direct connections
     const connected = topicEdgeIndex[String(d.id)] || new Set();
 
-    d3.selectAll('.topic-circle')
-      .attr('opacity', function(t) {
-        if (t.id === d.id) return 1;
-        if (connected.has(t.id)) return 0.8;
-        // Respect active filter
-        if (activeThread && t.th !== activeThread) return 0.03;
-        if (activeAuthor && t.a !== activeAuthor) return 0.03;
-        if (activeCategory && t.cat !== activeCategory) return 0.03;
-        if (activeTag && !(t.tg || []).includes(activeTag)) return 0.03;
-        return 0.12;
-      });
+    var targetOp = {};
+    d3.selectAll('.topic-circle').each(function(t) {
+      if (t.id === d.id) { targetOp[t.id] = 1; return; }
+      if (connected.has(t.id) && (!hasFilter || topicMatchesFilter(t))) { targetOp[t.id] = 0.8; return; }
+      if (hasFilter && !topicMatchesFilter(t)) { targetOp[t.id] = 0.03; return; }
+      targetOp[t.id] = 0.12;
+    });
+    d3.selectAll('.topic-circle').attr('opacity', function(t) { return targetOp[t.id]; });
 
     d3.selectAll('.edge-line')
       .attr('stroke-opacity', function(e) {
@@ -1307,10 +1305,12 @@ function onTimelineHover(ev, d, entering) {
         if (e.source === d.id || e.target === d.id) return 'url(#arrow-highlight)';
         return 'url(#arrow-default)';
       });
-    syncLabels();
+    syncLabelsFromMap(targetOp);
   } else {
     hoveredTopicId = null;
     hideTooltip();
+    // If we didn't change opacities (dimmed node hover), nothing to restore
+    if (hasFilter && !topicMatchesFilter(d)) return;
     if (pinnedTopicId) {
       applyPinnedHighlightTimeline();
     } else {
@@ -1444,13 +1444,15 @@ function filterTimeline() {
   if (lineageActive) { applyLineageTimeline(); return; }
   const hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
 
+  // Compute target opacities upfront so labels/milestones can sync immediately
+  var targetOp = {};
+  d3.selectAll('.topic-circle').each(function(d) {
+    targetOp[d.id] = hasFilter ? (topicMatchesFilter(d) ? 0.85 : 0.08) : 0.7;
+  });
+
   d3.selectAll('.topic-circle')
-    .attr('opacity', function(d) {
-      if (hasFilter) {
-        return topicMatchesFilter(d) ? 0.85 : 0.04;
-      }
-      return 0.7;
-    })
+    .transition().duration(200)
+    .attr('opacity', function(d) { return targetOp[d.id]; })
     .attr('r', function(d) { return tlRScale(d.inf); });
 
   d3.selectAll('.edge-line')
@@ -1464,19 +1466,29 @@ function filterTimeline() {
       return 0.01;
     })
     .attr('marker-end', 'url(#arrow-default)');
-  syncLabels();
+  syncLabelsFromMap(targetOp);
 }
 
-// Sync topic label opacity to match their circle opacity
+// Sync topic labels and milestones to match circle opacity.
+// syncLabels reads current DOM opacity; syncLabelsFromMap uses precomputed target values
+// (needed when circles are animated via transition).
+function syncLabelsFromMap(opMap) {
+  d3.selectAll('.topic-label').attr('opacity', function(d) {
+    var cOp = opMap[d.id];
+    return (cOp !== undefined && cOp > 0.25) ? Math.min(cOp + 0.05, 0.9) : 0;
+  });
+  d3.selectAll('.milestone-marker').each(function(d) {
+    var cOp = opMap[d.id];
+    var vis = milestonesVisible && (cOp === undefined || cOp > 0.25);
+    d3.select(this).style('display', vis ? null : 'none');
+  });
+}
 function syncLabels() {
   var opMap = {};
   d3.selectAll('.topic-circle').each(function(d) {
     opMap[d.id] = parseFloat(d3.select(this).attr('opacity'));
   });
-  d3.selectAll('.topic-label').attr('opacity', function(d) {
-    var cOp = opMap[d.id];
-    return (cOp !== undefined && cOp > 0.25) ? Math.min(cOp + 0.05, 0.9) : 0;
-  });
+  syncLabelsFromMap(opMap);
 }
 
 function showForkTooltip(ev, f) {
@@ -1622,6 +1634,10 @@ function buildNetwork() {
     var t = DATA.topics[d.id];
     if (t) showTooltip(ev, t);
 
+    // If a filter is active and this node doesn't match, only show tooltip
+    var hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
+    if (hasFilter && t && !topicMatchesFilter(t)) return;
+
     // Highlight connections
     var connected = new Set();
     links.forEach(function(l) {
@@ -1633,7 +1649,10 @@ function buildNetwork() {
     connected.add(d.id);
 
     node.selectAll('circle').attr('opacity', function(n) {
-      return connected.has(n.id) ? 1 : 0.08;
+      var nt = DATA.topics[n.id];
+      if (connected.has(n.id) && (!hasFilter || (nt && topicMatchesFilter(nt)))) return 1;
+      if (hasFilter && nt && !topicMatchesFilter(nt)) return 0.05;
+      return 0.08;
     });
     link.attr('stroke-opacity', function(l) {
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
@@ -1646,8 +1665,12 @@ function buildNetwork() {
     });
   });
 
-  node.on('mouseout', function() {
+  node.on('mouseout', function(ev, d) {
     hideTooltip();
+    // If we didn't change opacities (dimmed node hover), nothing to restore
+    var hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
+    var t = DATA.topics[d.id];
+    if (hasFilter && t && !topicMatchesFilter(t)) return;
     if (pinnedTopicId) {
       applyPinnedHighlightNetwork();
     } else {
@@ -1672,7 +1695,7 @@ function filterNetwork() {
     var t = DATA.topics[d.id];
     if (!t) return 0.7;
     if (hasFilter) {
-      return topicMatchesFilter(t) ? 0.85 : 0.05;
+      return topicMatchesFilter(t) ? 0.85 : 0.08;
     }
     return 0.7;
   });
@@ -2748,12 +2771,9 @@ function applyHash() {
   if (params.thread && params.thread !== activeThread) {
     if (DATA.threads[params.thread]) {
       activeThread = params.thread;
-      activeAuthor = null;
       document.querySelectorAll('.thread-chip').forEach(function(c) {
         c.classList.toggle('active', c.dataset.thread === activeThread);
       });
-      document.querySelectorAll('.author-item').forEach(function(c) { c.classList.remove('active'); });
-      applyFilters();
       changed = true;
     }
   }
@@ -2762,15 +2782,14 @@ function applyHash() {
   if (params.author && params.author !== activeAuthor) {
     if (DATA.authors[params.author]) {
       activeAuthor = params.author;
-      activeThread = null;
       document.querySelectorAll('.author-item').forEach(function(c) {
         c.classList.toggle('active', c.dataset.author === activeAuthor);
       });
-      document.querySelectorAll('.thread-chip').forEach(function(c) { c.classList.remove('active'); });
-      applyFilters();
       changed = true;
     }
   }
+
+  if (changed) applyFilters();
 
   // Open topic detail
   if (params.topic) {
