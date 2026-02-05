@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ethereum Research Evolution Map</title>
+<style>
+/* ── Reset & Base ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0d1117;
+  --bg-card: #161b22;
+  --bg-card-hover: #1c2333;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-dim: #8b949e;
+  --text-bright: #f0f6fc;
+  --accent: #58a6ff;
+  --accent-dim: #1f6feb;
+
+  /* Thread colors */
+  --c-consensus: #e63946;
+  --c-sharding: #457b9d;
+  --c-l2: #2a9d8f;
+  --c-fees: #e9c46a;
+  --c-pbs: #f4a261;
+  --c-issuance: #6a994e;
+  --c-inclusion: #bc6c25;
+  --c-preconf: #7209b7;
+  --c-zk: #4361ee;
+  --c-state: #606c38;
+  --c-privacy: #9d4edd;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Layout ────────────────────────────────────────────────────── */
+.container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+section { padding: 80px 0; }
+section + section { border-top: 1px solid var(--border); }
+
+h2 {
+  font-size: 1.75rem;
+  color: var(--text-bright);
+  margin-bottom: 12px;
+}
+h3 {
+  font-size: 1.15rem;
+  color: var(--text-bright);
+  margin-bottom: 6px;
+}
+.section-subtitle {
+  color: var(--text-dim);
+  font-size: 1.05rem;
+  margin-bottom: 40px;
+  max-width: 680px;
+}
+
+/* ── Nav ───────────────────────────────────────────────────────── */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+}
+nav .nav-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+}
+nav .logo {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+}
+nav .logo span { color: var(--accent); }
+nav .nav-links { display: flex; gap: 28px; }
+nav .nav-links a {
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+nav .nav-links a:hover { color: var(--text-bright); text-decoration: none; }
+
+/* ── Hero ──────────────────────────────────────────────────────── */
+.hero {
+  padding: 120px 0 100px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(88,166,255,0.08), transparent);
+}
+.hero h1 {
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  color: var(--text-bright);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: 20px;
+}
+.hero h1 .accent { color: var(--accent); }
+.hero .tagline {
+  font-size: 1.15rem;
+  color: var(--text-dim);
+  max-width: 600px;
+  margin: 0 auto 40px;
+  line-height: 1.6;
+}
+.hero .cta-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn:hover { text-decoration: none; transform: translateY(-1px); }
+.btn-primary { background: var(--accent-dim); color: #fff; }
+.btn-primary:hover { background: var(--accent); }
+.btn-secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--bg-card-hover); }
+
+/* ── Stats ─────────────────────────────────────────────────────── */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 48px;
+}
+.stat {
+  background: var(--bg-card);
+  padding: 24px 16px;
+  text-align: center;
+}
+.stat .number {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  font-variant-numeric: tabular-nums;
+}
+.stat .label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── Threads Grid ──────────────────────────────────────────────── */
+.threads-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.thread-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 22px;
+  transition: background 0.15s, border-color 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.thread-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--text-dim);
+}
+.thread-card .thread-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.thread-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.thread-card p {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+.thread-card .thread-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+.thread-tag {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(88,166,255,0.1);
+  color: var(--accent);
+}
+
+/* ── Timeline ──────────────────────────────────────────────────── */
+.timeline {
+  position: relative;
+  padding-left: 32px;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+.era {
+  position: relative;
+  margin-bottom: 48px;
+}
+.era:last-child { margin-bottom: 0; }
+.era::before {
+  content: '';
+  position: absolute;
+  left: -29px;
+  top: 6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  border: 2px solid var(--bg);
+}
+.era h3 { margin-bottom: 4px; }
+.era .era-date {
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.era .era-desc {
+  color: var(--text-dim);
+  font-size: 0.92rem;
+  margin-bottom: 12px;
+}
+.fork-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fork-chip {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: rgba(88,166,255,0.08);
+  border: 1px solid rgba(88,166,255,0.2);
+  color: var(--text);
+}
+
+/* ── Methodology ───────────────────────────────────────────────── */
+.method-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+.method-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+}
+.method-card .icon {
+  font-size: 1.4rem;
+  margin-bottom: 12px;
+  display: block;
+}
+.method-card h3 { margin-bottom: 8px; }
+.method-card p {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+/* ── Forks Table ───────────────────────────────────────────────── */
+.forks-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-top: 32px;
+}
+table.forks-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+table.forks-table th {
+  text-align: left;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+table.forks-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+table.forks-table tr:last-child td { border-bottom: none; }
+table.forks-table tr:hover td { background: var(--bg-card-hover); }
+.fork-name { font-weight: 600; color: var(--text-bright); }
+.fork-date { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.eip-list { color: var(--text-dim); font-size: 0.82rem; }
+
+/* ── CTA Section ───────────────────────────────────────────────── */
+.cta-section {
+  text-align: center;
+  padding: 80px 0;
+}
+.cta-section h2 { margin-bottom: 16px; }
+.cta-section p {
+  color: var(--text-dim);
+  max-width: 520px;
+  margin: 0 auto 32px;
+}
+
+/* ── Footer ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 32px 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+footer a { color: var(--text-dim); }
+footer a:hover { color: var(--accent); }
+
+/* ── Responsive ────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  section { padding: 56px 0; }
+  .hero { padding: 80px 0 64px; }
+  .threads-grid { grid-template-columns: 1fr; }
+  .method-grid { grid-template-columns: 1fr; }
+  nav .nav-links { gap: 16px; }
+  nav .nav-links a { font-size: 0.78rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Nav ──────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <div class="logo"><span>&#x25C8;</span> Evolution Map</div>
+    <div class="nav-links">
+      <a href="#threads">Threads</a>
+      <a href="#eras">Eras</a>
+      <a href="#forks">Forks</a>
+      <a href="#methodology">Methodology</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ─────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <h1>Ethereum Research<br><span class="accent">Evolution Map</span></h1>
+    <p class="tagline">
+      Tracing how ideas on ethresear.ch evolved into Ethereum protocol
+      changes &mdash; from Casper and sharding debates in 2017 to
+      ePBS and PeerDAS in 2026.
+    </p>
+    <div class="cta-row">
+      <a href="evolution-map.html" class="btn btn-primary">Open Interactive Map &rarr;</a>
+      <a href="https://ethresear.ch" class="btn btn-secondary">ethresear.ch</a>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat">
+        <div class="number">2,903</div>
+        <div class="label">Topics Analyzed</div>
+      </div>
+      <div class="stat">
+        <div class="number">11</div>
+        <div class="label">Research Threads</div>
+      </div>
+      <div class="stat">
+        <div class="number">13</div>
+        <div class="label">Protocol Forks</div>
+      </div>
+      <div class="stat">
+        <div class="number">5</div>
+        <div class="label">Eras (2017&ndash;2026)</div>
+      </div>
+      <div class="stat">
+        <div class="number">9</div>
+        <div class="label">Years of Research</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Research Threads ─────────────────────────────────────────── -->
+<section id="threads">
+  <div class="container">
+    <h2>Research Threads</h2>
+    <p class="section-subtitle">
+      Eleven thematic threads that capture the major lines of inquiry on
+      ethresear.ch, from consensus design to privacy tooling.
+    </p>
+
+    <div class="threads-grid">
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-consensus)"></span>
+          <h3>Consensus &amp; Finality</h3>
+        </div>
+        <p>
+          The longest-running thread: Casper FFG/CBC, proof-of-stake
+          mechanics, beacon chain design, fork-choice rules (LMD GHOST),
+          and single-slot finality.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">Casper</span>
+          <span class="thread-tag">PoS</span>
+          <span class="thread-tag">SSF</span>
+          <span class="thread-tag">Beacon Chain</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-sharding)"></span>
+          <h3>Sharding &amp; Data Availability</h3>
+        </div>
+        <p>
+          From cross-shard messaging to danksharding, blob transactions (EIP-4844),
+          PeerDAS, KZG commitments, and erasure coding schemes.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">Sharding</span>
+          <span class="thread-tag">Danksharding</span>
+          <span class="thread-tag">EIP-4844</span>
+          <span class="thread-tag">PeerDAS</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-l2)"></span>
+          <h3>Plasma &amp; L2 Scaling</h3>
+        </div>
+        <p>
+          Plasma chains, state channels, optimistic and ZK rollups, based
+          rollups, sequencer design, pre-confirmations, and bridging.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">Plasma</span>
+          <span class="thread-tag">Rollups</span>
+          <span class="thread-tag">L2</span>
+          <span class="thread-tag">Sequencing</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-fees)"></span>
+          <h3>Fee Markets &amp; EIP-1559</h3>
+        </div>
+        <p>
+          Gas pricing theory, EIP-1559 base-fee mechanism, multidimensional
+          resource pricing, blob fees, and gas limit debates.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">EIP-1559</span>
+          <span class="thread-tag">Gas</span>
+          <span class="thread-tag">Base Fee</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-pbs)"></span>
+          <h3>PBS, MEV &amp; Block Production</h3>
+        </div>
+        <p>
+          Proposer-builder separation, MEV extraction and mitigation,
+          enshrined PBS (ePBS), block auctions, order-flow dynamics,
+          and timing games.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">PBS</span>
+          <span class="thread-tag">MEV</span>
+          <span class="thread-tag">ePBS</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-issuance)"></span>
+          <h3>Issuance &amp; Staking Economics</h3>
+        </div>
+        <p>
+          Validator reward curves, minimum viable issuance, staking ratio
+          targets, MaxEB consolidation, and long-term issuance policy.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">Issuance</span>
+          <span class="thread-tag">Staking</span>
+          <span class="thread-tag">Economics</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-inclusion)"></span>
+          <h3>Inclusion Lists &amp; Censorship Resistance</h3>
+        </div>
+        <p>
+          Force-inclusion mechanisms, FOCIL, unconditional inclusion lists,
+          and protocol-level censorship resistance guarantees.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">FOCIL</span>
+          <span class="thread-tag">Censorship Resistance</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-preconf)"></span>
+          <h3>Based Sequencing &amp; Preconfirmations</h3>
+        </div>
+        <p>
+          Based rollup design, proposer commitments, pre-confirmation
+          protocols, and L1 sequencing for rollups.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">Based Rollups</span>
+          <span class="thread-tag">Preconfirmations</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-zk)"></span>
+          <h3>ZK Proofs &amp; SNARKs/STARKs</h3>
+        </div>
+        <p>
+          Zero-knowledge proof systems, PLONK, Groth16, recursive proofs,
+          verifiable computation, and on-chain verification.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">SNARKs</span>
+          <span class="thread-tag">STARKs</span>
+          <span class="thread-tag">PLONK</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-state)"></span>
+          <h3>State &amp; Execution Layer</h3>
+        </div>
+        <p>
+          Verkle trees, stateless clients, state expiry, witness protocols,
+          EVM improvements (EOF), and portal network.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">Verkle</span>
+          <span class="thread-tag">Stateless</span>
+          <span class="thread-tag">EVM</span>
+        </div>
+      </div>
+
+      <div class="thread-card">
+        <div class="thread-header">
+          <span class="thread-dot" style="background: var(--c-privacy)"></span>
+          <h3>Privacy &amp; Identity</h3>
+        </div>
+        <p>
+          MACI, stealth addresses, ring signatures, Semaphore, RLN,
+          ZK-based identity, and anonymous transaction schemes.
+        </p>
+        <div class="thread-tags">
+          <span class="thread-tag">MACI</span>
+          <span class="thread-tag">Stealth</span>
+          <span class="thread-tag">Privacy</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Eras ─────────────────────────────────────────────────────── -->
+<section id="eras">
+  <div class="container">
+    <h2>Eras</h2>
+    <p class="section-subtitle">
+      Nine years of research grouped into five distinct eras, each with
+      its own character and breakthrough themes.
+    </p>
+
+    <div class="timeline">
+      <div class="era">
+        <h3>Genesis</h3>
+        <div class="era-date">Sep 2017 &ndash; Dec 2017</div>
+        <p class="era-desc">
+          The forum launches. Early discussions lay groundwork for Casper
+          proof-of-stake, stateless client design, and initial sharding concepts.
+        </p>
+        <div class="fork-chips">
+          <span class="fork-chip">Byzantium</span>
+        </div>
+      </div>
+
+      <div class="era">
+        <h3>Scaling Wars</h3>
+        <div class="era-date">2018</div>
+        <p class="era-desc">
+          An explosion of competing scaling proposals: Plasma variants,
+          sharding execution models, VDFs, and fierce Casper FFG vs CBC
+          debates. The year of maximum research divergence.
+        </p>
+        <div class="fork-chips">
+          <span class="fork-chip">Constantinople</span>
+        </div>
+      </div>
+
+      <div class="era">
+        <h3>Eth2 Design</h3>
+        <div class="era-date">2019 &ndash; 2020</div>
+        <p class="era-desc">
+          Convergence on a concrete design. Phase 0 and Phase 1 specs
+          crystallize. The beacon chain launches. Rollups emerge as the
+          dominant scaling paradigm, reshaping the roadmap.
+        </p>
+        <div class="fork-chips">
+          <span class="fork-chip">Istanbul</span>
+          <span class="fork-chip">Phase 0</span>
+        </div>
+      </div>
+
+      <div class="era">
+        <h3>Post-Merge Build</h3>
+        <div class="era-date">2021 &ndash; 2022</div>
+        <p class="era-desc">
+          The PoW-to-PoS Merge executes. EIP-1559 goes live. PBS and MEV
+          awareness surge. Research shifts from "how to build PoS" to "how
+          to build on PoS."
+        </p>
+        <div class="fork-chips">
+          <span class="fork-chip">Berlin</span>
+          <span class="fork-chip">London</span>
+          <span class="fork-chip">Altair</span>
+          <span class="fork-chip">The Merge</span>
+        </div>
+      </div>
+
+      <div class="era">
+        <h3>Endgame Architecture</h3>
+        <div class="era-date">2023 &ndash; 2026</div>
+        <p class="era-desc">
+          Attention turns to the protocol's endgame: enshrined PBS,
+          single-slot finality, blob scaling with PeerDAS, based rollups,
+          and sustainable staking economics.
+        </p>
+        <div class="fork-chips">
+          <span class="fork-chip">Shapella</span>
+          <span class="fork-chip">Dencun</span>
+          <span class="fork-chip">Pectra</span>
+          <span class="fork-chip">Fusaka</span>
+          <span class="fork-chip">Glamsterdam</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Forks ────────────────────────────────────────────────────── -->
+<section id="forks">
+  <div class="container">
+    <h2>Protocol Forks</h2>
+    <p class="section-subtitle">
+      Every Ethereum hard fork from Byzantium to Glamsterdam, with the
+      key EIPs that shipped in each.
+    </p>
+
+    <div class="forks-table-wrapper">
+      <table class="forks-table">
+        <thead>
+          <tr>
+            <th>Fork</th>
+            <th>Date</th>
+            <th>Layer</th>
+            <th>Key EIPs</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="fork-name">Byzantium</td>
+            <td class="fork-date">Oct 2017</td>
+            <td>EL</td>
+            <td class="eip-list">EIP-100, 140, 196, 197, 198, 211, 214</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Constantinople</td>
+            <td class="fork-date">Feb 2019</td>
+            <td>EL</td>
+            <td class="eip-list">EIP-145, 1014, 1052, 1234, 1283</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Istanbul</td>
+            <td class="fork-date">Dec 2019</td>
+            <td>EL</td>
+            <td class="eip-list">EIP-152, 1108, 1344, 1884, 2028, 2200</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Phase 0</td>
+            <td class="fork-date">Dec 2020</td>
+            <td>CL</td>
+            <td class="eip-list">Beacon chain launch</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Berlin</td>
+            <td class="fork-date">Apr 2021</td>
+            <td>EL</td>
+            <td class="eip-list">EIP-2565, 2929, 2718, 2930</td>
+          </tr>
+          <tr>
+            <td class="fork-name">London</td>
+            <td class="fork-date">Aug 2021</td>
+            <td>EL</td>
+            <td class="eip-list">EIP-1559, 3198, 3529, 3541, 3554</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Altair</td>
+            <td class="fork-date">Oct 2021</td>
+            <td>CL</td>
+            <td class="eip-list">Sync committees, incentive adjustments</td>
+          </tr>
+          <tr>
+            <td class="fork-name">The Merge</td>
+            <td class="fork-date">Sep 2022</td>
+            <td>EL + CL</td>
+            <td class="eip-list">EIP-3675, 4399 &mdash; PoW &rarr; PoS</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Shapella</td>
+            <td class="fork-date">Apr 2023</td>
+            <td>EL + CL</td>
+            <td class="eip-list">EIP-3651, 3855, 3860, 4895, 6049</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Dencun</td>
+            <td class="fork-date">Mar 2024</td>
+            <td>EL + CL</td>
+            <td class="eip-list">EIP-1153, 4788, 4844, 5656, 6780, 7044, 7516</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Pectra</td>
+            <td class="fork-date">May 2025</td>
+            <td>EL + CL</td>
+            <td class="eip-list">EIP-2537, 6110, 7002, 7251, 7549, 7702</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Fusaka</td>
+            <td class="fork-date">Dec 2025</td>
+            <td>EL + CL</td>
+            <td class="eip-list">EIP-7594, 7823, 7883, 7917, 7934</td>
+          </tr>
+          <tr>
+            <td class="fork-name">Glamsterdam</td>
+            <td class="fork-date">TBD</td>
+            <td>EL + CL</td>
+            <td class="eip-list">EIP-7732, 7928</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── Methodology ─────────────────────────────────────────────── -->
+<section id="methodology">
+  <div class="container">
+    <h2>Methodology</h2>
+    <p class="section-subtitle">
+      How the map is built: scraping, analysis, and visualization.
+    </p>
+
+    <div class="method-grid">
+      <div class="method-card">
+        <span class="icon">1</span>
+        <h3>Data Collection</h3>
+        <p>
+          2,903 topics are scraped from ethresear.ch, capturing titles,
+          authors, dates, post content, tags, categories, view counts,
+          likes, and reply counts.
+        </p>
+      </div>
+
+      <div class="method-card">
+        <span class="icon">2</span>
+        <h3>Citation Graph</h3>
+        <p>
+          Cross-references between topics are extracted from post links,
+          building a directed citation graph. Internal links (outgoing)
+          and reflection links (incoming) are tracked.
+        </p>
+      </div>
+
+      <div class="method-card">
+        <span class="icon">3</span>
+        <h3>Thread Classification</h3>
+        <p>
+          Topics are assigned to research threads using title pattern
+          matching, tag analysis, author signals, and category hints.
+          Each thread represents a sustained line of inquiry.
+        </p>
+      </div>
+
+      <div class="method-card">
+        <span class="icon">4</span>
+        <h3>Influence Scoring</h3>
+        <p>
+          Each topic gets an influence score combining in-degree (30%),
+          likes (25%), log-views (20%), discussion depth (15%), and
+          author prolificness (10%).
+        </p>
+      </div>
+
+      <div class="method-card">
+        <span class="icon">5</span>
+        <h3>EIP Mapping</h3>
+        <p>
+          EIP references are extracted from topic titles and post text,
+          linking research discussions to concrete protocol proposals
+          and shipped fork upgrades.
+        </p>
+      </div>
+
+      <div class="method-card">
+        <span class="icon">6</span>
+        <h3>Visualization</h3>
+        <p>
+          The analysis feeds into an interactive D3.js visualization
+          with three views: timeline swim lanes, citation network,
+          and co-author network.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ──────────────────────────────────────────────────────── -->
+<section class="cta-section">
+  <div class="container">
+    <h2>Explore the Map</h2>
+    <p>
+      Navigate research threads, trace citation lineages, discover
+      milestone posts, and see how Ethereum&rsquo;s protocol was
+      shaped by its research community.
+    </p>
+    <div class="cta-row">
+      <a href="evolution-map.html" class="btn btn-primary">Open Interactive Map &rarr;</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <p>
+      Ethereum Research Evolution Map &middot;
+      Data sourced from <a href="https://ethresear.ch">ethresear.ch</a> &middot;
+      Built with D3.js
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
