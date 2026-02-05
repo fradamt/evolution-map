@@ -223,6 +223,11 @@ def generate_html(viz_json, data):
       <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
     </div>
     <div id="filter-breadcrumb" class="breadcrumb"></div>
+    <div class="inf-slider-wrap">
+      <label for="inf-slider" style="font-size:10px;color:#666;white-space:nowrap">Min influence</label>
+      <input type="range" id="inf-slider" min="0" max="100" value="0" step="1">
+      <span id="inf-slider-label" style="font-size:10px;color:#888;min-width:32px">0</span>
+    </div>
     <div class="controls">
       <button id="btn-timeline" class="active" onclick="showView('timeline')">Timeline</button>
       <button id="btn-network" onclick="showView('network')">Network</button>
@@ -330,6 +335,15 @@ header { grid-column: 1 / -1; padding: 12px 20px; background: #12121a;
 header h1 { font-size: 18px; font-weight: 600; color: #fff; white-space: nowrap; }
 header .stats { font-size: 12px; color: #888; display: flex; gap: 15px; }
 header .stats span { white-space: nowrap; }
+.inf-slider-wrap { display: flex; align-items: center; gap: 6px; }
+.inf-slider-wrap input[type=range] { width: 80px; height: 4px; -webkit-appearance: none; appearance: none;
+  background: #333; border-radius: 2px; outline: none; cursor: pointer; }
+.inf-slider-wrap input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+  width: 12px; height: 12px; border-radius: 50%; background: #667; cursor: pointer; }
+.inf-slider-wrap input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%;
+  background: #667; cursor: pointer; border: none; }
+.inf-slider-wrap input[type=range]::-webkit-slider-thumb:hover { background: #88a; }
+.bc-hint { font-size: 10px; color: #555; font-style: italic; }
 .controls { display: flex; gap: 8px; margin-left: auto; }
 .controls button { background: #1e1e2e; border: 1px solid #333; color: #ccc;
                    padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
@@ -571,6 +585,7 @@ let activeThread = null;
 let activeAuthor = null;
 let activeCategory = null;
 let activeTag = null;
+let minInfluence = 0;
 let simulation = null;
 let coAuthorSimulation = null;
 let hoveredTopicId = null;
@@ -664,11 +679,27 @@ Object.keys(authorMinorIndex).forEach(function(u) {
   authorMinorIndex[u].sort(function(a, b) { return (a.d || '').localeCompare(b.d || ''); });
 });
 
+// Influence slider setup
+const maxDataInf = d3.max(Object.values(DATA.topics), t => t.inf) || 1;
+function setupInfSlider() {
+  var slider = document.getElementById('inf-slider');
+  var label = document.getElementById('inf-slider-label');
+  slider.addEventListener('input', function() {
+    var pct = Number(this.value);
+    minInfluence = pct / 100 * maxDataInf;
+    var count = 0;
+    Object.values(DATA.topics).forEach(function(t) { if (t.inf >= minInfluence) count++; });
+    label.textContent = pct === 0 ? '0' : count;
+    applyFilters();
+  });
+}
+
 // === INIT ===
 document.addEventListener('DOMContentLoaded', () => {
   buildSidebar();
   buildTimeline();
   setupSearch();
+  setupInfSlider();
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       var helpEl = document.getElementById('help-overlay');
@@ -870,6 +901,11 @@ function clearFilters() {
   activeAuthor = null;
   activeCategory = null;
   activeTag = null;
+  minInfluence = 0;
+  var slider = document.getElementById('inf-slider');
+  if (slider) { slider.value = 0; }
+  var slLabel = document.getElementById('inf-slider-label');
+  if (slLabel) { slLabel.textContent = '0'; }
   lineageActive = false;
   lineageSet = new Set();
   lineageEdgeSet = new Set();
@@ -1654,6 +1690,7 @@ function onTimelineHover(ev, d, entering) {
 }
 
 function topicMatchesFilter(t) {
+  if (minInfluence > 0 && (t.inf || 0) < minInfluence) return false;
   if (activeThread && t.th !== activeThread) return false;
   if (activeAuthor && t.a !== activeAuthor && (t.coauth || []).indexOf(activeAuthor) < 0) return false;
   if (activeCategory && t.cat !== activeCategory) return false;
@@ -1776,7 +1813,7 @@ function restorePinnedHighlight() {
 
 function filterTimeline() {
   if (lineageActive) { applyLineageTimeline(); return; }
-  const hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
+  const hasFilter = activeThread || activeAuthor || activeCategory || activeTag || minInfluence > 0;
 
   // Compute target opacities upfront so labels/milestones can sync immediately
   var targetOp = {};
@@ -2023,7 +2060,7 @@ function buildNetwork() {
 
 function filterNetwork() {
   if (lineageActive) { applyLineageNetwork(); return; }
-  var hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
+  var hasFilter = activeThread || activeAuthor || activeCategory || activeTag || minInfluence > 0;
 
   d3.selectAll('.net-node circle').attr('opacity', function(d) {
     var t = DATA.topics[d.id];
@@ -3340,6 +3377,9 @@ function updateBreadcrumb() {
   if (activeTag) {
     parts.push('<span class="bc-tag">' + escHtml(activeTag) +
       '<span class="bc-close" onclick="event.stopPropagation();toggleTag(\'' + escHtml(activeTag) + '\')">&times;</span></span>');
+  }
+  if (parts.length === 0) {
+    parts.push('<span class="bc-hint">Click to filter \u00b7 Double-click for details \u00b7 <span style="cursor:pointer;color:#667" onclick="toggleHelp()">?</span> for shortcuts</span>');
   }
   bc.innerHTML = parts.join('');
 }
