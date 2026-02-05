@@ -9,6 +9,7 @@ Usage:
     python3 analyze.py
 """
 
+import html
 import json
 import math
 import os
@@ -16,6 +17,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime
+from itertools import combinations
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -28,6 +30,8 @@ INDEX_PATH = SCRAPE_DIR / "index.json"
 CATEGORIES_PATH = SCRAPE_DIR / "categories.json"
 FORK_HISTORY_PATH = SCRAPE_DIR.parent / "ethereum-knowledge" / "fork-history.md"
 OUTPUT_PATH = SCRIPT_DIR / "analysis.json"
+COAUTHOR_REPORT_PATH = SCRIPT_DIR / "coauthor-report.json"
+COAUTHOR_REPORT_MD_PATH = SCRIPT_DIR / "coauthor-report.md"
 
 # ---------------------------------------------------------------------------
 # Fork timeline (parsed from fork-history.md, with manual fallback)
@@ -270,6 +274,29 @@ THREAD_SEEDS = {
 EIP_RE = re.compile(r"EIP[- ]?(\d{1,5})", re.IGNORECASE)
 ETHRESEAR_URL_RE = re.compile(r"https?://ethresear\.ch/t/[^/]+/(\d+)")
 
+# Coauthor detection helpers
+COAUTHOR_ALIASES = {
+    # Add manual alias overrides here (normalized name -> username)
+    "vitalik": "vbuterin",
+    "vitalik buterin": "vbuterin",
+}
+
+_COAUTHOR_CUT_RE = re.compile(
+    r"\b(?:thanks|special thanks|feedback|based on|discussion|discussions|tl;?dr|abstract|introduction|update)\b",
+    re.IGNORECASE,
+)
+
+_COAUTHOR_PATTERNS = [
+    re.compile(r"\bco-?authored?\s+by\s+(.+)", re.IGNORECASE),
+    re.compile(r"\bco-?authored?\s+with\s+(.+)", re.IGNORECASE),
+    re.compile(r"\bpost\s+co-?authored\s+with\s+(.+)", re.IGNORECASE),
+    re.compile(r"\bauthors?:\s*(.+)", re.IGNORECASE),
+    re.compile(r"\bpost\s+by\s+(.+)", re.IGNORECASE),
+    re.compile(r"\bby\s+(.+)", re.IGNORECASE),
+]
+
+_COAUTHOR_SPLIT_RE = re.compile(r"\s*(?:,|&|/|\+|\band\b)\s*", re.IGNORECASE)
+
 # Boilerplate prefixes to strip from post excerpts
 _BOILERPLATE_RE = re.compile(
     r"^(?:introduction|abstract|summary|tl;?dr|background|motivation|overview|edit:|update:)\s*",
@@ -339,6 +366,160 @@ def _clean_excerpt(cooked_html):
         excerpt = excerpt[:cut].rstrip(".,;:!? ") + "..."
 
     return excerpt
+
+
+def _extract_intro_lines(cooked_html, max_lines=4, max_chars=400):
+    """Extract the first few human-readable lines from cooked HTML."""
+    if not cooked_html:
+        return []
+
+    text = cooked_html
+    # Preserve line breaks for common block elements
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</(p|div|h\d|li|blockquote|pre|ul|ol)>", "\n", text)
+    text = re.sub(r"(?i)<li[^>]*>", "\n", text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = text.replace("\r", "")
+
+    lines = [re.sub(r"\s+", " ", ln).strip() for ln in text.split("\n")]
+    lines = [ln for ln in lines if ln]
+
+    out = []
+    total = 0
+    for ln in lines:
+        if out and total + len(ln) > max_chars:
+            break
+        out.append(ln)
+        total += len(ln)
+        if len(out) >= max_lines:
+            break
+    return out
+
+
+def _normalize_alias(name):
+    if not name:
+        return ""
+    name = name.lower()
+    name = re.sub(r"[^a-z0-9\s]", " ", name)
+    name = re.sub(r"\s+", " ", name).strip()
+    return name
+
+
+def _is_headerish_line(line, idx):
+    if idx > 2 or len(line) > 200:
+        return False
+    low = line.lower()
+    if low.startswith(("by ", "authors:", "author:", "co-authored", "coauthored", "post by", "post co-authored")):
+        return True
+    if any(sep in line for sep in ["·", "|", "—", "–"]):
+        return True
+    return False
+
+
+def _trim_author_phrase(text):
+    for sep in ["·", "|", "—", "–"]:
+        if sep in text:
+            text = text.split(sep, 1)[0]
+    m = _COAUTHOR_CUT_RE.search(text)
+    if m:
+        text = text[: m.start()]
+    if "." in text:
+        text = text.split(".", 1)[0]
+    return text.strip()
+
+
+def _split_author_phrase(text):
+    text = _trim_author_phrase(text)
+    if not text:
+        return []
+    parts = _COAUTHOR_SPLIT_RE.split(text)
+    names = []
+    for part in parts:
+        if not part:
+            continue
+        # Extract @handles
+        handles = re.findall(r"@([A-Za-z0-9_\-]+)", part)
+        for h in handles:
+            if h:
+                names.append(h)
+        part = re.sub(r"@([A-Za-z0-9_\-]+)", "", part)
+        part = re.sub(r"\([^)]*\)", "", part).strip()
+        part = re.sub(r"^(by|with)\s+", "", part, flags=re.IGNORECASE).strip()
+        if not part:
+            continue
+        if _COAUTHOR_CUT_RE.search(part):
+            continue
+        names.append(part)
+    return [n for n in names if n]
+
+
+def extract_coauthor_names(lines):
+    """Extract coauthor name strings from intro lines."""
+    names = []
+    seen = set()
+    for idx, line in enumerate(lines):
+        low = line.lower()
+        if "thanks to" in low or "special thanks" in low:
+            continue
+        for pat in _COAUTHOR_PATTERNS:
+            if pat.pattern.startswith("\\bby") and not _is_headerish_line(line, idx):
+                continue
+            m = pat.search(line)
+            if not m:
+                continue
+            for name in _split_author_phrase(m.group(1)):
+                key = name.lower()
+                if key not in seen:
+                    names.append(name)
+                    seen.add(key)
+    return names
+
+
+def build_name_index(username_to_names, usernames):
+    alias_to_users = defaultdict(set)
+    first_to_users = defaultdict(set)
+    last_to_users = defaultdict(set)
+
+    for username in usernames:
+        alias_to_users[_normalize_alias(username)].add(username)
+
+    for username, names in username_to_names.items():
+        for name in names:
+            norm = _normalize_alias(name)
+            if not norm:
+                continue
+            alias_to_users[norm].add(username)
+            parts = norm.split()
+            if parts:
+                first_to_users[parts[0]].add(username)
+                last_to_users[parts[-1]].add(username)
+
+    return alias_to_users, first_to_users, last_to_users
+
+
+def resolve_coauthor_name(name, alias_to_users, first_to_users, last_to_users, username_lookup):
+    if not name:
+        return None
+    norm = _normalize_alias(name)
+    if not norm:
+        return None
+    if norm in COAUTHOR_ALIASES:
+        return COAUTHOR_ALIASES[norm]
+    if norm in username_lookup:
+        return username_lookup[norm]
+    users = alias_to_users.get(norm)
+    if users and len(users) == 1:
+        return next(iter(users))
+    parts = norm.split()
+    if parts:
+        users = first_to_users.get(parts[0])
+        if users and len(users) == 1:
+            return next(iter(users))
+        users = last_to_users.get(parts[-1])
+        if users and len(users) == 1:
+            return next(iter(users))
+    return None
 
 
 def parse_date(iso_str):
@@ -411,6 +592,8 @@ def main():
     topics = {}
     all_internal_links = {}  # topic_id -> set of target topic_ids
     all_reflection_links = {}  # topic_id -> set of source topic_ids
+    username_to_names = defaultdict(set)
+    all_usernames = set()
     load_errors = 0
 
     for tid_str, meta in index.items():
@@ -432,6 +615,11 @@ def main():
         author = created_by.get("username", "unknown")
         participants = topic_data.get("details", {}).get("participants", [])
 
+        if created_by.get("username"):
+            all_usernames.add(created_by["username"])
+            if created_by.get("name"):
+                username_to_names[created_by["username"]].add(created_by["name"])
+
         # Extract EIP mentions with provenance tracking
         # Title EIPs = strong signal the topic IS about that EIP
         # OP EIPs = moderate signal if mentioned substantively
@@ -442,7 +630,15 @@ def main():
         op_eip_counts = Counter()  # how many times each EIP appears in OP
         all_eip_mentions = set(title_eips)
         first_post_excerpt = ""
+        intro_lines = []
         for post in posts:
+            username = post.get("username")
+            if username:
+                all_usernames.add(username)
+                if post.get("name"):
+                    username_to_names[username].add(post.get("name"))
+                if post.get("display_username"):
+                    username_to_names[username].add(post.get("display_username"))
             cooked = post.get("cooked", "")
             post_eips = extract_eips_from_text(cooked)
             all_eip_mentions.update(post_eips)
@@ -452,6 +648,7 @@ def main():
                     op_eip_counts[int(e)] += 1
                 if cooked:
                     first_post_excerpt = _clean_excerpt(cooked)
+                    intro_lines = _extract_intro_lines(cooked)
 
         # Primary EIPs: what this topic is actually ABOUT
         # - Title EIPs: always primary (strongest signal)
@@ -491,11 +688,115 @@ def main():
             "participants": [{"username": p["username"], "post_count": p["post_count"]}
                              for p in participants],
             "first_post_excerpt": first_post_excerpt,
+            "intro_lines": intro_lines,
         }
 
     if load_errors:
         print(f"  Warning: {load_errors} topic files failed to load")
     print(f"  Loaded {len(topics)} topics")
+
+    # -----------------------------------------------------------------------
+    # Coauthor detection (from first post intro lines)
+    # -----------------------------------------------------------------------
+    print("Detecting coauthors...")
+    username_lookup = {u.lower(): u for u in all_usernames}
+    alias_to_users, first_to_users, last_to_users = build_name_index(username_to_names, all_usernames)
+    coauthor_topics = 0
+    unresolved_counter = Counter()
+    unresolved_examples = defaultdict(list)
+    resolved_counter = Counter()
+    resolved_examples = defaultdict(list)
+    resolved_to_user = defaultdict(Counter)
+
+    for t in topics.values():
+        names = extract_coauthor_names(t.get("intro_lines", []))
+        resolved = []
+        for name in names:
+            username = resolve_coauthor_name(
+                name,
+                alias_to_users,
+                first_to_users,
+                last_to_users,
+                username_lookup,
+            )
+            if username:
+                resolved.append(username)
+                resolved_counter[name] += 1
+                resolved_to_user[name][username] += 1
+                if len(resolved_examples[name]) < 5:
+                    resolved_examples[name].append(t["id"])
+            else:
+                unresolved_counter[name] += 1
+                if len(unresolved_examples[name]) < 5:
+                    unresolved_examples[name].append(t["id"])
+        coauthors = sorted({u for u in resolved if u and u != t["author"]})
+        t["coauthors"] = coauthors
+        t["authors"] = [t["author"]] + [u for u in coauthors if u != t["author"]]
+        if coauthors:
+            coauthor_topics += 1
+
+    print(f"  {coauthor_topics} topics with detected coauthors")
+
+    # Write coauthor resolution report
+    resolved_list = []
+    for name, count in resolved_counter.most_common():
+        users = resolved_to_user.get(name, {})
+        resolved_list.append({
+            "name": name,
+            "count": count,
+            "resolved_usernames": [u for u, _c in users.most_common()],
+            "topics": resolved_examples.get(name, []),
+        })
+
+    unresolved_list = []
+    for name, count in unresolved_counter.most_common():
+        unresolved_list.append({
+            "name": name,
+            "count": count,
+            "topics": unresolved_examples.get(name, []),
+        })
+
+    report_payload = {
+        "generated_at": datetime.now().isoformat()[:19],
+        "topics_with_coauthors": coauthor_topics,
+        "resolved_names": resolved_list,
+        "unresolved_names": unresolved_list,
+        "aliases": dict(COAUTHOR_ALIASES),
+    }
+
+    with open(COAUTHOR_REPORT_PATH, "w") as f:
+        json.dump(report_payload, f, indent=2, ensure_ascii=False)
+
+    # Write Markdown report for quick review
+    def _md_table(rows, include_usernames):
+        if include_usernames:
+            header = "| Name | Count | Resolved Usernames | Sample Topics |\n| --- | --- | --- | --- |\n"
+        else:
+            header = "| Name | Count | Sample Topics |\n| --- | --- | --- |\n"
+        lines = [header]
+        for row in rows:
+            topics_str = ", ".join(str(t) for t in row.get("topics", [])[:5])
+            if include_usernames:
+                users_str = ", ".join(row.get("resolved_usernames", []))
+                lines.append(f"| {row['name']} | {row['count']} | {users_str} | {topics_str} |\n")
+            else:
+                lines.append(f"| {row['name']} | {row['count']} | {topics_str} |\n")
+        return "".join(lines)
+
+    resolved_preview = resolved_list[:50]
+    unresolved_preview = unresolved_list[:50]
+    with open(COAUTHOR_REPORT_MD_PATH, "w") as f:
+        f.write("# Coauthor Resolution Report\n\n")
+        f.write(f"Generated at: {report_payload['generated_at']}\n\n")
+        f.write(f"Topics with detected coauthors: {coauthor_topics}\n\n")
+        f.write(f"Resolved unique names: {len(resolved_list)}\n\n")
+        f.write(f"Unresolved unique names: {len(unresolved_list)}\n\n")
+        f.write("## Resolved Names (Top 50)\n\n")
+        f.write(_md_table(resolved_preview, include_usernames=True))
+        f.write("\n## Unresolved Names (Top 50)\n\n")
+        f.write(_md_table(unresolved_preview, include_usernames=False))
+
+    print(f"  Wrote coauthor report to {COAUTHOR_REPORT_PATH} and {COAUTHOR_REPORT_MD_PATH}")
 
     # -----------------------------------------------------------------------
     # Build cross-reference graph (in-degree based on outgoing links)
@@ -1000,24 +1301,32 @@ def main():
     print("Building co-author graph...")
     coauthor_edges = defaultdict(int)
     for tid in included:
-        participants = [p["username"] for p in topics[tid]["participants"]]
-        for i, a in enumerate(participants):
-            for b in participants[i + 1:]:
-                pair = tuple(sorted([a, b]))
-                coauthor_edges[pair] += 1
+        authors = topics[tid].get("authors", [topics[tid]["author"]])
+        if len(authors) < 2:
+            continue
+        for a, b in combinations(sorted(set(authors)), 2):
+            coauthor_edges[(a, b)] += 1
+
+    coauthor_author_set = set()
+    for (a, b), weight in coauthor_edges.items():
+        if weight >= 1:
+            coauthor_author_set.add(a)
+            coauthor_author_set.add(b)
 
     coauthor_nodes = []
-    for username in top_authors:
+    for username in sorted(coauthor_author_set):
+        data = author_data.get(username)
+        topics_created = data["topics_created"] if data else 0
+        influence = author_scores.get(username, 0.0)
         coauthor_nodes.append({
             "id": username,
-            "topics": authors_output[username]["topics_created"],
-            "influence": authors_output[username]["influence_score"],
+            "topics": topics_created,
+            "influence": round(influence, 1),
         })
 
-    top_author_set = set(top_authors)
     coauthor_edge_list = []
     for (a, b), weight in coauthor_edges.items():
-        if a in top_author_set and b in top_author_set and weight >= 2:
+        if weight >= 1:
             coauthor_edge_list.append({"source": a, "target": b, "weight": weight})
 
     print(f"  {len(coauthor_nodes)} author nodes, {len(coauthor_edge_list)} edges")
@@ -1032,6 +1341,8 @@ def main():
             "id": tid,
             "title": t["title"],
             "author": t["author"],
+            "coauthors": t.get("coauthors", []),
+            "authors": t.get("authors", [t["author"]]),
             "date": t["date"],
             "category_name": t["category_name"],
             "tags": t["tags"],

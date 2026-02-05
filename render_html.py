@@ -91,7 +91,7 @@ def prepare_viz_data(data):
             "exc": t.get("first_post_excerpt", "")[:600],
             "out": t.get("outgoing_refs", []),
             "inc": t.get("incoming_refs", []),
-            "parts": [p["username"] for p in t.get("participants", [])[:3]],
+            "parts": t.get("authors", [t["author"]])[:3],
         }
 
     compact_authors = {}

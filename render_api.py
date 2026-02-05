@@ -50,6 +50,8 @@ def main():
             "id": t["id"],
             "title": t["title"],
             "author": t["author"],
+            "coauthors": t.get("coauthors", []),
+            "authors": t.get("authors", [t["author"]]),
             "date": t["date"],
             "thread": t.get("research_thread"),
             "era": t.get("era"),
