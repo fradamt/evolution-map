@@ -1510,7 +1510,7 @@ function onTimelineHover(ev, d, entering) {
 
 function topicMatchesFilter(t) {
   if (activeThread && t.th !== activeThread) return false;
-  if (activeAuthor && t.a !== activeAuthor) return false;
+  if (activeAuthor && t.a !== activeAuthor && (t.coauth || []).indexOf(activeAuthor) < 0) return false;
   if (activeCategory && t.cat !== activeCategory) return false;
   if (activeTag && !(t.tg || []).includes(activeTag)) return false;
   return true;

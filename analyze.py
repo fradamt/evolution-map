@@ -1177,17 +1177,18 @@ def main():
 
     for tid in included:
         t = topics[tid]
-        a = author_data[t["author"]]
-        a["topics_created"] += 1
-        a["total_likes"] += t["like_count"]
-        a["total_in_degree"] += t["in_degree"]
-        a["topic_ids"].append(tid)
-        if t["date"]:
-            a["years"].add(int(t["date"][:4]))
-        if t["category_name"]:
-            a["categories"][t["category_name"]] += 1
-        if t.get("research_thread"):
-            a["threads"][t["research_thread"]] += 1
+        for author_username in t.get("authors", [t["author"]]):
+            a = author_data[author_username]
+            a["topics_created"] += 1
+            a["total_likes"] += t["like_count"]
+            a["total_in_degree"] += t["in_degree"]
+            a["topic_ids"].append(tid)
+            if t["date"]:
+                a["years"].add(int(t["date"][:4]))
+            if t["category_name"]:
+                a["categories"][t["category_name"]] += 1
+            if t.get("research_thread"):
+                a["threads"][t["research_thread"]] += 1
 
     # Also count posts from participants
     for tid in included:
@@ -1275,7 +1276,8 @@ def main():
         # Key authors for this thread
         thread_authors = Counter()
         for tid in thread_topics:
-            thread_authors[topics[tid]["author"]] += 1
+            for auth in topics[tid].get("authors", [topics[tid]["author"]]):
+                thread_authors[auth] += 1
             for p in topics[tid]["participants"]:
                 thread_authors[p["username"]] += 0.5
 
