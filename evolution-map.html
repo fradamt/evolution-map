@@ -1181,7 +1181,8 @@ function buildTimeline() {
   const histH = 24; // histogram height
   const eipReservedH = 80; // height reserved for EIP swim lane at top
   const eipGap = 8; // gap between EIP lane and topic lanes
-  const margin = {top: 50, right: 40, bottom: 30 + histH, left: 180};
+  const forkLabelH = 18; // extra row for fork labels between histogram and x-axis dates
+  const margin = {top: 50, right: 40, bottom: 30 + histH + forkLabelH, left: 180};
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
   const swimH = plotH - histH - eipReservedH - eipGap; // swim lane area for topic threads
@@ -1493,10 +1494,10 @@ function buildTimeline() {
     })
     .on('mouseout', function() { hideTooltip(); });
 
-  // X axis (below histogram + swimlanes)
+  // X axis (below fork labels, which are below histogram)
   var xAxisG = root.append('g')
     .attr('class', 'x-axis')
-    .attr('transform', 'translate(0,' + (topicLaneY0 + swimH + histH) + ')');
+    .attr('transform', 'translate(0,' + (topicLaneY0 + swimH + histH + forkLabelH) + ')');
   var xAxisFn = d3.axisBottom(xScale).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y'));
   xAxisG.call(xAxisFn);
   xAxisG.selectAll('text').attr('fill', '#666').attr('font-size', 10);
