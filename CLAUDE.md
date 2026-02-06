@@ -162,6 +162,11 @@ All topics live in one unified dict. The influence slider controls visibility �
 
 **Timeline landmarks**: Fork lines at the bottom include Genesis (2015-07-30) through Osaka. An "ethresear.ch live" annotation (green dashed line) marks the forum creation date (2017-08-17). Fork labels and date axis are on separate rows to avoid overlap. Zoom is clamped: `scaleExtent([1, 8])` prevents zooming out past the initial view.
 
+**macOS trackpad swipe-back prevention**: Three-layer defense stops the browser from interpreting leftward two-finger trackpad swipes as "navigate back":
+1. **Document capture-phase handler** — `document.addEventListener('wheel', ..., {passive: false, capture: true})` on `#main-area` targets; fires at the top of the event dispatch chain before the compositor can act
+2. **JS-applied `overscroll-behavior: none`** on `html` and `body` (supplements CSS in case the compositor doesn't pick up stylesheet rules)
+3. **Element-level handlers** — non-passive `preventDefault()` on both the SVG node and the wrapper div, plus `touch-action: none` CSS on `.timeline-container` and its SVG
+
 ## Scraper Details
 
 - **Parameterized**: `scrape.py` accepts `--base-url`, `--index`, `--topics-dir` CLI args. Defaults match original ethresear.ch behavior.
