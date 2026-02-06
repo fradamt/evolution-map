@@ -1532,6 +1532,7 @@ let tlPlotW = 0; // plot width
 let tlMarginLeft = 0; // left margin
 const TL_MIN_ZOOM = 1;
 const TL_MAX_ZOOM = 8;
+const TL_EDGE_PAD = 72;
 
 function clampTimelineTransform(t) {
   var k = t && isFinite(t.k) ? t.k : 1;
@@ -1541,20 +1542,13 @@ function clampTimelineTransform(t) {
     return d3.zoomIdentity.translate(0, 0).scale(k);
   }
 
-  var minX = tlPlotW * (1 - k);
-  var maxX = 0;
+  var minX = tlPlotW * (1 - k) - TL_EDGE_PAD;
+  var maxX = TL_EDGE_PAD;
   var x = t && isFinite(t.x) ? t.x : 0;
   if (x < minX) x = minX;
   if (x > maxX) x = maxX;
 
   return d3.zoomIdentity.translate(x, 0).scale(k);
-}
-
-function timelineTransformChanged(a, b) {
-  if (!a || !b) return true;
-  return Math.abs(a.k - b.k) > 1e-9
-    || Math.abs(a.x - b.x) > 1e-6
-    || Math.abs((a.y || 0) - (b.y || 0)) > 1e-6;
 }
 
 function buildTimeline() {
@@ -1613,11 +1607,21 @@ function buildTimeline() {
     .attr('height', height);
 
   // Prevent browser history swipe-back/forward gestures while interacting
-  // with the timeline viewport.
+  // with the timeline viewport, and map plain wheel/trackpad deltas to
+  // horizontal timeline pan.
   wrapper.addEventListener('wheel', function(ev) {
     if (activeView !== 'timeline') return;
-    if (ev.ctrlKey || ev.metaKey) return;
+    if (ev.ctrlKey || ev.metaKey) return; // let D3 zoom handle pinch/ctrl+wheel
     ev.preventDefault();
+    ev.stopPropagation();
+
+    if (!zoom) return;
+    var cur = d3.zoomTransform(svg.node());
+    var dx = ev.deltaX !== 0 ? ev.deltaX : ev.deltaY;
+    var next = clampTimelineTransform(
+      d3.zoomIdentity.translate(cur.x - dx, 0).scale(cur.k)
+    );
+    svg.call(zoom.transform, next);
   }, {passive: false});
 
   // Clip path so zoomed content doesn't overflow into the label area
@@ -1905,9 +1909,12 @@ function buildTimeline() {
     .scaleExtent([TL_MIN_ZOOM, TL_MAX_ZOOM])
     .translateExtent([[0, 0], [plotW, height]])
     .extent([[0, 0], [plotW, height]])
+    .constrain(function(transform) {
+      return clampTimelineTransform(transform);
+    })
     .filter(function(ev) {
       // For wheel events: only let D3 zoom handle ctrl+wheel (pinch-to-zoom).
-      // Plain wheel / shift+wheel are handled by our custom handler below.
+      // Plain wheel / shift+wheel are handled by wrapper wheel handler above.
       if (ev.type === 'wheel') return ev.ctrlKey || ev.metaKey;
       // Block double-click (handled separately below)
       if (ev.type === 'dblclick') return false;
@@ -1920,35 +1927,14 @@ function buildTimeline() {
   tlSvg = svg;
   tlZoom = zoom;
 
-  // Custom wheel handler: translate scroll delta into horizontal pan.
-  // This runs for plain wheel events (no ctrl/meta) that D3 zoom ignores.
-  svg.on('wheel.pan', function(ev) {
-    if (ev.ctrlKey || ev.metaKey) return; // let D3 zoom handle pinch/ctrl+wheel
-    ev.preventDefault();
-    ev.stopPropagation();
-    // Use deltaX for horizontal scroll (trackpad swipe) and deltaY for vertical
-    // scroll wheel — both map to horizontal pan on the timeline.
-    var dx = ev.deltaX !== 0 ? ev.deltaX : ev.deltaY;
-    // Get current transform and shift it horizontally
-    var cur = d3.zoomTransform(svg.node());
-    var newT = d3.zoomIdentity.translate(cur.x - dx, 0).scale(cur.k);
-    svg.call(zoom.transform, clampTimelineTransform(newT));
-  }, {passive: false});
-
   // Double-click to reset zoom
   svg.on('dblclick.zoom', function() {
     svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
   });
 
   function onZoom(ev) {
-    // Clamp the transform so panning stays strictly within [Genesis, present].
-    var t = clampTimelineTransform(ev.transform);
-    if (timelineTransformChanged(t, ev.transform)) {
-      svg.call(zoom.transform, t);
-      return;
-    }
-
     // Rescale x only (horizontal pan/zoom; y stays fixed)
+    var t = ev.transform;
     var newX = t.rescaleX(tlXScaleOrig);
     tlXScale = newX;
 
