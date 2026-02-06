@@ -379,6 +379,10 @@ const AUTHOR_COLORS = {json.dumps(AUTHOR_COLORS)};
 def _build_css():
     return """
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+}
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
        background: #0a0a0f; color: #e0e0e0; overflow: hidden; height: 100vh; }
 #app { display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr 300px; height: 100vh; }
@@ -403,18 +407,18 @@ header .stats span { white-space: nowrap; }
 .controls button:hover { background: #2a2a3e; }
 .controls button.active { background: #333366; border-color: #5555aa; color: #fff; }
 
-#main-area { grid-column: 1; overflow: hidden; position: relative; }
+#main-area { grid-column: 1; overflow: hidden; position: relative; overscroll-behavior: none; }
 #sidebar { grid-column: 2; background: #12121a; border-left: 1px solid #2a2a3a; overflow-y: auto; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
 #timeline-view, #network-view, #coauthor-view { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
-#timeline-view { display: block; }
+#timeline-view { display: block; overscroll-behavior: none; }
 #network-view { display: none; }
 #coauthor-view { display: none; }
 
 /* Timeline */
-.timeline-container { width: 100%; height: 100%; overflow: hidden; }
+.timeline-container { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
 .fork-line { stroke: #555; stroke-width: 1.5; stroke-dasharray: 4,4; }
 .fork-label { fill: #999; font-size: 11px; font-weight: 600; }
 .era-bg { opacity: 0.03; }
@@ -1526,6 +1530,32 @@ let tlSvg = null; // timeline SVG element (for programmatic zoom)
 let tlZoom = null; // D3 zoom behavior (for programmatic transform)
 let tlPlotW = 0; // plot width
 let tlMarginLeft = 0; // left margin
+const TL_MIN_ZOOM = 1;
+const TL_MAX_ZOOM = 8;
+
+function clampTimelineTransform(t) {
+  var k = t && isFinite(t.k) ? t.k : 1;
+  k = Math.max(TL_MIN_ZOOM, Math.min(TL_MAX_ZOOM, k));
+
+  if (!tlPlotW || tlPlotW <= 0) {
+    return d3.zoomIdentity.translate(0, 0).scale(k);
+  }
+
+  var minX = tlPlotW * (1 - k);
+  var maxX = 0;
+  var x = t && isFinite(t.x) ? t.x : 0;
+  if (x < minX) x = minX;
+  if (x > maxX) x = maxX;
+
+  return d3.zoomIdentity.translate(x, 0).scale(k);
+}
+
+function timelineTransformChanged(a, b) {
+  if (!a || !b) return true;
+  return Math.abs(a.k - b.k) > 1e-9
+    || Math.abs(a.x - b.x) > 1e-6
+    || Math.abs((a.y || 0) - (b.y || 0)) > 1e-6;
+}
 
 function buildTimeline() {
   const container = document.getElementById('timeline-view');
@@ -1581,6 +1611,14 @@ function buildTimeline() {
   const svg = d3.select(wrapper).append('svg')
     .attr('width', width)
     .attr('height', height);
+
+  // Prevent browser history swipe-back/forward gestures while interacting
+  // with the timeline viewport.
+  wrapper.addEventListener('wheel', function(ev) {
+    if (activeView !== 'timeline') return;
+    if (ev.ctrlKey || ev.metaKey) return;
+    ev.preventDefault();
+  }, {passive: false});
 
   // Clip path so zoomed content doesn't overflow into the label area
   var tlDefs = svg.append('defs');
@@ -1864,7 +1902,7 @@ function buildTimeline() {
   tlMarginLeft = margin.left;
 
   var zoom = d3.zoom()
-    .scaleExtent([1, 8])
+    .scaleExtent([TL_MIN_ZOOM, TL_MAX_ZOOM])
     .translateExtent([[0, 0], [plotW, height]])
     .extent([[0, 0], [plotW, height]])
     .filter(function(ev) {
@@ -1887,13 +1925,14 @@ function buildTimeline() {
   svg.on('wheel.pan', function(ev) {
     if (ev.ctrlKey || ev.metaKey) return; // let D3 zoom handle pinch/ctrl+wheel
     ev.preventDefault();
+    ev.stopPropagation();
     // Use deltaX for horizontal scroll (trackpad swipe) and deltaY for vertical
     // scroll wheel — both map to horizontal pan on the timeline.
     var dx = ev.deltaX !== 0 ? ev.deltaX : ev.deltaY;
     // Get current transform and shift it horizontally
     var cur = d3.zoomTransform(svg.node());
-    var newT = cur.translate(-dx, 0);
-    svg.call(zoom.transform, newT);
+    var newT = d3.zoomIdentity.translate(cur.x - dx, 0).scale(cur.k);
+    svg.call(zoom.transform, clampTimelineTransform(newT));
   }, {passive: false});
 
   // Double-click to reset zoom
@@ -1902,8 +1941,14 @@ function buildTimeline() {
   });
 
   function onZoom(ev) {
+    // Clamp the transform so panning stays strictly within [Genesis, present].
+    var t = clampTimelineTransform(ev.transform);
+    if (timelineTransformChanged(t, ev.transform)) {
+      svg.call(zoom.transform, t);
+      return;
+    }
+
     // Rescale x only (horizontal pan/zoom; y stays fixed)
-    var t = ev.transform;
     var newX = t.rescaleX(tlXScaleOrig);
     tlXScale = newX;
 
@@ -2872,7 +2917,9 @@ function scrollToTopic(topicId) {
   // newTx = centerTarget - cur.k * origX
   var newTx = centerTarget - cur.k * origX;
 
-  var newTransform = d3.zoomIdentity.translate(newTx, 0).scale(cur.k);
+  var newTransform = clampTimelineTransform(
+    d3.zoomIdentity.translate(newTx, 0).scale(cur.k)
+  );
   tlSvg.transition().duration(400).call(tlZoom.transform, newTransform);
 }
 

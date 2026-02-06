@@ -9,7 +9,9 @@ An analysis pipeline over a scraped archive of **ethresear.ch** (Ethereum's Disc
 - **~2,903 topics** scraped via the Discourse API (stdlib-only Python) — scraped data lives in the parent directory (`../topics/`, `../index.json`)
 - **All 2,903 topics** in a unified dict — influence slider controls visibility (no separate "minor topics" toggle)
 - **550 influential topics** with **1,007 cross-references**, **2,353 lower-influence topics** (flagged `mn: true`)
-- **12 research threads** (PBS/MEV, Sharding/DA, Casper/PoS, Fee Markets, etc.) across **5 eras** (2017–2026)
+- **12 research threads** (PBS/MEV, Sharding/DA, Casper/PoS, Fee Markets, etc.) across **5 eras** (Early Research, PoS Transition, Rollup-centric, Danksharding, Endgame)
+- **18 forks** on timeline (Genesis through Osaka, including early pre-ethresearch forks)
+- **Cross-forum entities**: EIP catalog + first-class `magicians_topics` + explicit `cross_forum_edges` links for topic/EIP/Magicians traversal
 
 ## Repository Structure
 
@@ -61,23 +63,54 @@ python3 render_markdown.py
 
 **Idempotency**: `scrape.py` checks for existing files before fetching. Re-running only fetches missing topics. The analysis and render scripts always regenerate their outputs.
 
-**Cross-forum enrichment**: `analyze.py` loads `eip-metadata.json` (from `extract_eips.py`) and optionally scans `../magicians_topics/` to build cross-forum links between ethresear.ch topics, EIP specifications, and ethereum-magicians.org discussion threads.
+**Cross-forum enrichment**: `analyze.py` loads `eip-metadata.json` (from `extract_eips.py`) and optionally scans `../magicians_topics/` to build:
+- Per-topic `magicians_refs`
+- First-class `magicians_topics` entities
+- Explicit `cross_forum_edges` (`topic_eip`, `eip_magicians`, `eip_ethresearch`, `topic_magicians`)
 
 ## Key Design Decisions
 
-**Influence scoring** (in `analyze.py`): Topics are ranked by a weighted composite — 30% citation in-degree, 25% likes, 20% log(views), 15% post count, 10% prolific author bonus. Tier 1 topics have influence ≥ 0.25 or in-degree ≥ 3; Tier 2 are referenced by Tier 1 with influence ≥ 0.10.
+**Topic influence scoring** (in `analyze.py`): Topics are ranked by a weighted composite — 30% citation in-degree, 25% likes, 20% log(views), 15% post count, 10% prolific author bonus. Tier 1 topics have influence ≥ 0.25 or in-degree ≥ 3; Tier 2 are referenced by Tier 1 with influence ≥ 0.10. **Note**: EIPs and magicians threads do NOT currently feed back into topic influence — the formula is purely ethresearch-internal.
 
-**Research thread assignment**: Pattern-matching on title, tags, post excerpt, and author identity against seed definitions in `THREAD_SEEDS`. All 2,903 topics are scored; those with score ≥ 1.0 get a thread, the rest stay `null` ("Unassigned"). Era is likewise assigned to all topics based on date.
+**EIP influence scoring** (in `analyze.py`): Separate formula — 25% status weight (Final=1.0, Living=0.9, Draft=0.4, Moved=0.05, etc.), 30% magicians engagement (normalized likes+log(views)+sqrt(posts)), 20% ethresearch citation count, 15% fork bonus (0.3 if shipped), 10% requires depth. ~264 EIPs above 0.10, EIP-1559 tops at ~0.80. The 365 "Moved" EIPs (former ERCs) mostly fall below threshold.
+
+**Research thread assignment**: Pattern-matching on title, tags, post excerpt, and author identity against seed definitions in `THREAD_SEEDS`. A topic must pass both:
+- Thread seed score (`>= 1.0`)
+- Global protocol relevance guardrail (`is_protocol_relevant_topic`)
+The guardrail combines protocol anchors, non-protocol negatives, EIP signals, and category penalties to avoid assigning non-protocol topics to protocol threads. Era is assigned to all topics based on date.
+
+**Corpus exclusions (hard filter)**: `excluded_corpus_reason(...)` removes topics before influence scoring/thread assignment/graph build when:
+- Category is excluded (default includes `Protocol Calls`)
+- Title matches exclusion patterns (default includes ACD/Core Dev call/meeting/notes variants)
+Exclusion counts are reported in metadata: `excluded_topics`, `excluded_by_category`, `excluded_by_title`.
 
 **Primary vs. secondary EIPs**: Title EIPs are always primary. OP EIPs are primary only if mentioned ≥3 times (passing references don't count). All other mentions are secondary.
+
+**EIP author name normalization** (in `analyze.py`): EIP front-matter authors use inconsistent naming (e.g. "Francesco" vs "Francesco D'Amato" vs "Francesco D\`Amato"). A 5-step pipeline canonicalizes names:
+1. Punctuation fix (backticks/smart quotes → apostrophes)
+2. Case-insensitive dedup (lightclient/Lightclient → lightclient)
+3. Unicode diacritics dedup (Paweł/Pawel Bylica → Paweł Bylica)
+4. Short→full prefix merge, case-insensitive (mike → Mike Neuder, Francesco → Francesco D'Amato)
+5. Same-last-name merge with ≥2-char first-name prefix match (Mike/Michael Neuder)
+
+All EIP authors are treated equally — no distinction between first-author and co-author. ~30 names merged across 885 EIP authors.
 
 **No topic→fork "shipped in" mapping**: The code intentionally leaves `shipped_in` empty. Counting EIP mentions is a poor proxy for "this research led to that protocol change" — that would need semantic analysis.
 
 ## Data Shapes
 
-**analysis.json**: `{ metadata, eras[], forks[], eip_catalog{}, topics{}, minor_topics{}, authors{}, research_threads{}, graph{ nodes[], edges[] }, co_author_graph{ nodes[], edges[] } }`
+**analysis.json**: `{ metadata, eras[], forks[], eip_catalog{}, magicians_topics{}, cross_forum_edges[], eip_authors{}, eip_graph{ nodes[], edges[] }, topics{}, minor_topics{}, authors{}, research_threads{}, graph{ nodes[], edges[] }, co_author_graph{ nodes[], edges[] } }`
 
-**eip_catalog{}** (~885 entries, keyed by EIP number string): `title, status, type, category, created, fork, authors[], requires[], magicians_topic_id, ethresearch_topic_id`. Top-level (not duplicated per-topic).
+**metadata**: Includes corpus/accounting fields and cross-forum counters:
+- `total_topics`, `scraped_topics`, `excluded_topics`, `excluded_by_category`, `excluded_by_title`, `included`
+- `total_edges`, `included_edges`, `eip_catalog_size`, `eip_nodes`, `eip_edges`
+- `magicians_topics`, `cross_forum_edges`, `generated_at`
+
+**eip_catalog{}** (~885 entries, keyed by EIP number string): `title, status, type, category, created, fork, authors[], requires[], magicians_topic_id, ethresearch_topic_id, influence_score, research_thread, ethresearch_citation_count, magicians_views, magicians_likes, magicians_posts, magicians_participants, magicians_score_sum, magicians_participants_list[]`. Top-level (not duplicated per-topic).
+
+**eip_authors{}** (~40 entries, keyed by canonical name): `name, eips[], eip_count, influence_sum, statuses{}, forks_contributed[], active_years, score`. All authored EIPs in a single `eips` list (no first-author/co-author distinction).
+
+**eip_graph{}**: `nodes[]` (~490 EIPs with influence ≥ 0.05), `edges[]` (~734 edges of 3 types: `eip_topic`, `eip_requires`, `eip_fork`).
 
 **topics{}** (included, ~550): Full detail — `id, title, author, coauthors, authors, date, category_name, views, like_count, posts_count, influence_score, research_thread, era, first_post_excerpt, tags, eip_mentions, primary_eips, in_degree, out_degree, shipped_in, magicians_refs, participants, outgoing_refs, incoming_refs`.
 
@@ -85,7 +118,20 @@ python3 render_markdown.py
 
 **magicians_refs** (per-topic): List of ethereum-magicians.org topic IDs related to this ethresear.ch topic via shared EIP mentions. Computed by: (1) topic mentions EIP → EIP's `discussions-to` → magicians topic ID, (2) magicians topics that link back to this ethresear.ch topic URL, (3) EIPs whose `discussions-to` points to this ethresear.ch topic.
 
+**magicians_topics{}** (keyed by magicians topic ID): `id, title, slug, date, category_name, author, views, like_count, posts_count, tags, eips, ethresearch_refs`.
+
+**cross_forum_edges[]**: Explicit directional links across entities:
+- `topic -> eip` (`type = topic_eip`)
+- `eip -> magicians_topic` (`type = eip_magicians`)
+- `eip -> topic` (`type = eip_ethresearch`)
+- `topic -> magicians_topic` (`type = topic_magicians`)
+
 **HTML compact format**: All 2,903 topics live in a single `DATA.topics` dict. Field names are abbreviated: `t` = title, `a` = author, `d` = date, `inf` = influence_score, `th` = research_thread, `vw` = views, `lk` = like_count, `pc` = posts_count, `ind` = in_degree, `outd` = out_degree, `eips` = eip_mentions, `peips` = primary_eips, `exc` = first_post_excerpt, `tg` = tags, `cat` = category_name, `out` = outgoing_refs, `inc` = incoming_refs, `coauth` = coauthors, `mn` = true (lower-influence topic flag — `out`/`inc` are `[]`). `DATA.minorTopics` is `{}` (kept for backward compat, always empty).
+
+EIP-related compact data:
+- `DATA.eipCatalog{}`: keyed by EIP number, adds `inf` (influence), `th` (thread), `mv`/`ml`/`mp`/`mpc` (magicians views/likes/posts/participants), `erc` (ethresearch citation count)
+- `DATA.eipAuthors[]`: `n` = name, `eips` = EIP numbers list, `inf` = influence_sum, `sc` = score, `fk` = forks_contributed
+- `DATA.eipGraph{}`: `nodes[]` and `edges[]` for EIP citation/dependency network
 
 **Scraped data** (parent directory):
 - `index.json`: `{ "topic_id_str": { id, title, category_id, category_name, posts_count, created_at, last_posted_at, views, like_count } }`
@@ -95,10 +141,26 @@ python3 render_markdown.py
 
 Self-contained single HTML file using D3.js v7 from CDN. Three views:
 - **Timeline**: swim-lane layout by research thread, X-axis is time, circle size = influence
-- **Network**: force-directed citation graph with fork diamonds
+- **Network**: force-directed citation graph with fork diamonds and EIP squares
 - **Co-Author**: force-directed collaboration network
 
 All topics live in one unified dict. The influence slider controls visibility — default threshold hides lower-influence topics so the initial view matches the original ~550. Slide to 0 to see all 2,903. Lower-influence topics are drawn with dashed circles and show a "Minor Topic" badge in the detail panel. Network view only shows topics with citation edges (no change). Search, author detail, and filtering work across the full spectrum.
+
+**Content toggles**: Two independent toggle chips — `[● Posts ✓] [■ EIPs]`. Default: Posts on, EIPs off (preserves original behavior). When both are on, cross-reference edges (dashed lines) appear between EIP squares and related topic circles.
+
+**EIP swim lane**: Dedicated 80px-tall lane at the top of the timeline (above research thread lanes). EIP nodes are rounded squares, colored by status (Final=green, Living=teal, Review=yellow, Draft=blue, Stagnant/Withdrawn=gray). Layout uses `topicLaneY0 = eipReservedH + eipGap` to offset all topic lanes below. EIP zoom updates are integrated into the main `onZoom` handler (not a separate patch function).
+
+**EIP display modes**:
+- `EIPs` toggle adds EIP nodes/squares to timeline and network.
+- `Linked EIPs` (default mode when EIPs are shown) displays only EIPs with an `eip_topic` edge to ethresear.ch topics.
+- `All EIPs` includes disconnected EIP nodes as well.
+- URL hash supports this mode via `eipmode=all`.
+
+**EIP detail panel**: Full right-side panel showing status badge, type/category, fork tag, influence score, magicians engagement stats, ethresearch citation count, authors, requires/required-by (clickable), external links, and related ethresearch topics (top 10 by influence).
+
+**EIP author sidebar**: Toggle in author sidebar header — `[ethresearch] [EIP Authors]`. Shows top 25 EIP authors sorted by influence, click for detail with EIP list as clickable tags.
+
+**Timeline landmarks**: Fork lines at the bottom include Genesis (2015-07-30) through Osaka. An "ethresear.ch live" annotation (green dashed line) marks the forum creation date (2017-08-17). Fork labels and date axis are on separate rows to avoid overlap. Zoom is clamped: `scaleExtent([1, 8])` prevents zooming out past the initial view.
 
 ## Scraper Details
 
