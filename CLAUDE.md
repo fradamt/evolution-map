@@ -14,8 +14,10 @@ An analysis pipeline over a scraped archive of **ethresear.ch** (Ethereum's Disc
 ## Repository Structure
 
 ```
-analyze.py           # Processes scraped data → analysis.json
-analysis.json        # Structured analysis output (~3.5 MB, the central artifact)
+extract_eips.py      # Parses EIP front-matter → eip-metadata.json (stdlib-only)
+eip-metadata.json    # EIP catalog: number → title, status, fork, authors, links
+analyze.py           # Processes scraped data + EIP catalog → analysis.json
+analysis.json        # Structured analysis output (~4 MB, the central artifact)
 render_html.py       # analysis.json → self-contained D3.js HTML visualization
 render_markdown.py   # analysis.json → ~10,000 word narrative Markdown document
 evolution-map.html   # Generated: interactive timeline/network/co-author viz
@@ -24,31 +26,42 @@ evolution-map.md     # Generated: narrative document with appendices
 
 Scraped data (not in this repo, lives in parent `ethresear.ch/`):
 ```
-../scrape.py         # Discourse API scraper (stdlib-only, no dependencies)
-../index.json        # Topic ID → metadata map (all 2,903 topics)
+../scrape.py         # Discourse API scraper (stdlib-only, parameterized via CLI)
+../index.json        # Topic ID → metadata map (all 2,903 ethresear.ch topics)
 ../categories.json   # Forum category definitions
 ../topics/           # 2,903 individual topic JSON files (topics/{id}.json)
+../magicians_index.json   # (optional) ethereum-magicians.org topic index
+../magicians_topics/      # (optional) magicians topic JSON files
 ```
 
 ## Pipeline
 
-The three scripts form a linear pipeline. All use stdlib-only Python (no pip install needed). Run from this directory:
+All scripts are stdlib-only Python (no pip install needed). Run from this directory:
 
 ```bash
-# Step 1: Scrape ethresear.ch (idempotent — skips already-downloaded files)
+# Step 1a: Scrape ethresear.ch (idempotent — skips already-downloaded files)
 python3 ../scrape.py
 
-# Step 2: Analyze scraped data → analysis.json
+# Step 1b: (Optional) Scrape ethereum-magicians.org for cross-forum links
+python3 ../scrape.py --base-url https://ethereum-magicians.org \
+  --index magicians_index.json --topics-dir magicians_topics
+
+# Step 2: Extract EIP metadata from the EIPs repo
+python3 extract_eips.py
+
+# Step 3: Analyze scraped data + EIP catalog → analysis.json
 python3 analyze.py
 
-# Step 3a: Generate interactive HTML visualization
+# Step 4a: Generate interactive HTML visualization
 python3 render_html.py
 
-# Step 3b: Generate narrative Markdown document
+# Step 4b: Generate narrative Markdown document
 python3 render_markdown.py
 ```
 
 **Idempotency**: `scrape.py` checks for existing files before fetching. Re-running only fetches missing topics. The analysis and render scripts always regenerate their outputs.
+
+**Cross-forum enrichment**: `analyze.py` loads `eip-metadata.json` (from `extract_eips.py`) and optionally scans `../magicians_topics/` to build cross-forum links between ethresear.ch topics, EIP specifications, and ethereum-magicians.org discussion threads.
 
 ## Key Design Decisions
 
@@ -62,11 +75,15 @@ python3 render_markdown.py
 
 ## Data Shapes
 
-**analysis.json**: `{ metadata, eras[], forks[], topics{}, minor_topics{}, authors{}, research_threads{}, graph{ nodes[], edges[] }, co_author_graph{ nodes[], edges[] } }`
+**analysis.json**: `{ metadata, eras[], forks[], eip_catalog{}, topics{}, minor_topics{}, authors{}, research_threads{}, graph{ nodes[], edges[] }, co_author_graph{ nodes[], edges[] } }`
 
-**topics{}** (included, ~550): Full detail — `id, title, author, coauthors, authors, date, category_name, views, like_count, posts_count, influence_score, research_thread, era, first_post_excerpt, tags, eip_mentions, primary_eips, in_degree, out_degree, shipped_in, participants, outgoing_refs, incoming_refs`.
+**eip_catalog{}** (~885 entries, keyed by EIP number string): `title, status, type, category, created, fork, authors[], requires[], magicians_topic_id, ethresearch_topic_id`. Top-level (not duplicated per-topic).
 
-**minor_topics{}** (~2,353): Below influence threshold — same fields as topics except no `outgoing_refs`, `incoming_refs`, `participants`, `shipped_in`.
+**topics{}** (included, ~550): Full detail — `id, title, author, coauthors, authors, date, category_name, views, like_count, posts_count, influence_score, research_thread, era, first_post_excerpt, tags, eip_mentions, primary_eips, in_degree, out_degree, shipped_in, magicians_refs, participants, outgoing_refs, incoming_refs`.
+
+**minor_topics{}** (~2,353): Below influence threshold — same fields as topics except no `outgoing_refs`, `incoming_refs`, `participants`, `shipped_in`. Includes `magicians_refs`.
+
+**magicians_refs** (per-topic): List of ethereum-magicians.org topic IDs related to this ethresear.ch topic via shared EIP mentions. Computed by: (1) topic mentions EIP → EIP's `discussions-to` → magicians topic ID, (2) magicians topics that link back to this ethresear.ch topic URL, (3) EIPs whose `discussions-to` points to this ethresear.ch topic.
 
 **HTML compact format**: All 2,903 topics live in a single `DATA.topics` dict. Field names are abbreviated: `t` = title, `a` = author, `d` = date, `inf` = influence_score, `th` = research_thread, `vw` = views, `lk` = like_count, `pc` = posts_count, `ind` = in_degree, `outd` = out_degree, `eips` = eip_mentions, `peips` = primary_eips, `exc` = first_post_excerpt, `tg` = tags, `cat` = category_name, `out` = outgoing_refs, `inc` = incoming_refs, `coauth` = coauthors, `mn` = true (lower-influence topic flag — `out`/`inc` are `[]`). `DATA.minorTopics` is `{}` (kept for backward compat, always empty).
 
@@ -85,7 +102,18 @@ All topics live in one unified dict. The influence slider controls visibility �
 
 ## Scraper Details
 
+- **Parameterized**: `scrape.py` accepts `--base-url`, `--index`, `--topics-dir` CLI args. Defaults match original ethresear.ch behavior.
 - Rate-limited: 0.3s between requests, exponential backoff on 429/5xx
 - Handles post pagination (fetches missing post IDs in chunks of 20)
 - SSL context manually configured for macOS Python cert issues
 - Two-phase: first collects all topic IDs by paginating categories + `/latest`, then fetches full topic content
+- Works with any Discourse forum (ethereum-magicians.org, ethresear.ch, etc.)
+
+## EIP Metadata Extractor
+
+`extract_eips.py` parses front-matter from `~/EF/EIPs/EIPS/eip-*.md` files. Stdlib-only (no YAML library).
+
+- Extracts: eip number, title, authors (with `@handle` stripped), status, type, category, created date, requires list, discussions-to URL
+- Derives: `magicians_topic_id` and `ethresearch_topic_id` from `discussions-to` URL patterns
+- Assigns fork from `FORKS_EIP_MAP` (same mapping as `FORKS_MANUAL` in analyze.py)
+- ~885 EIPs, ~423 with magicians links, ~7 with ethresearch links, ~66 with fork assignments

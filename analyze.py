@@ -32,6 +32,9 @@ FORK_HISTORY_PATH = SCRAPE_DIR.parent / "ethereum-knowledge" / "fork-history.md"
 OUTPUT_PATH = SCRIPT_DIR / "analysis.json"
 COAUTHOR_REPORT_PATH = SCRIPT_DIR / "coauthor-report.json"
 COAUTHOR_REPORT_MD_PATH = SCRIPT_DIR / "coauthor-report.md"
+EIP_METADATA_PATH = SCRIPT_DIR / "eip-metadata.json"
+MAGICIANS_INDEX_PATH = SCRAPE_DIR / "magicians_index.json"
+MAGICIANS_TOPICS_DIR = SCRAPE_DIR / "magicians_topics"
 
 # ---------------------------------------------------------------------------
 # Fork timeline (parsed from fork-history.md, with manual fallback)
@@ -693,6 +696,57 @@ def main():
     categories = {}
     for cat in cat_data.get("category_list", {}).get("categories", []):
         categories[cat["id"]] = cat["name"]
+
+    # -----------------------------------------------------------------------
+    # Load EIP metadata catalog (from extract_eips.py output)
+    # -----------------------------------------------------------------------
+    eip_catalog = {}
+    if EIP_METADATA_PATH.exists():
+        print("Loading EIP metadata...")
+        with open(EIP_METADATA_PATH) as f:
+            eip_catalog = json.load(f)
+        print(f"  {len(eip_catalog)} EIPs loaded")
+    else:
+        print(f"  Warning: {EIP_METADATA_PATH} not found — run extract_eips.py first")
+        print("  Continuing without EIP catalog")
+
+    # Build reverse lookups from EIP catalog
+    # magicians_topic_id → list of EIP numbers that point to it
+    magicians_to_eips = defaultdict(list)
+    # ethresearch_topic_id → list of EIP numbers that point to it
+    ethresearch_to_eips = defaultdict(list)
+    for eip_str, eip_meta in eip_catalog.items():
+        mtid = eip_meta.get("magicians_topic_id")
+        if mtid:
+            magicians_to_eips[mtid].append(int(eip_str))
+        etid = eip_meta.get("ethresearch_topic_id")
+        if etid:
+            ethresearch_to_eips[etid].append(int(eip_str))
+
+    # -----------------------------------------------------------------------
+    # Load magicians topics (for cross-forum reverse links)
+    # -----------------------------------------------------------------------
+    magicians_ethresearch_refs = defaultdict(set)  # magicians_topic_id → set of ethresear.ch topic_ids
+    if MAGICIANS_TOPICS_DIR.exists():
+        magicians_files = list(MAGICIANS_TOPICS_DIR.glob("*.json"))
+        if magicians_files:
+            print(f"Scanning {len(magicians_files)} magicians topics for ethresear.ch links...")
+            ethresearch_url_re = re.compile(r"https?://ethresear\.ch/t/[^/]+/(\d+)")
+            scanned = 0
+            for mf in magicians_files:
+                try:
+                    with open(mf) as f:
+                        mdata = json.load(f)
+                    mtid = mdata.get("id")
+                    for post in mdata.get("post_stream", {}).get("posts", []):
+                        cooked = post.get("cooked", "")
+                        for m in ethresearch_url_re.finditer(cooked):
+                            magicians_ethresearch_refs[mtid].add(int(m.group(1)))
+                    scanned += 1
+                except (json.JSONDecodeError, IOError):
+                    continue
+            total_refs = sum(len(v) for v in magicians_ethresearch_refs.values())
+            print(f"  Scanned {scanned} magicians topics, found {total_refs} ethresear.ch references")
 
     # -----------------------------------------------------------------------
     # Pass 1: Load all topics, extract metadata and links
@@ -1454,6 +1508,35 @@ def main():
     print(f"  {len(coauthor_nodes)} author nodes, {len(coauthor_edge_list)} edges")
 
     # -----------------------------------------------------------------------
+    # Cross-forum references (ethresear.ch ↔ EIP ↔ magicians)
+    # -----------------------------------------------------------------------
+    print("Building cross-forum references...")
+    # For each topic, find magicians topic IDs linked via shared EIPs
+    topic_magicians_refs = {}  # ethresearch topic_id → set of magicians topic_ids
+    for tid in tids:
+        t = topics[tid]
+        mrefs = set()
+        for eip_num in t.get("eip_mentions", []):
+            eip_str = str(eip_num)
+            eip_meta = eip_catalog.get(eip_str)
+            if eip_meta and eip_meta.get("magicians_topic_id"):
+                mrefs.add(eip_meta["magicians_topic_id"])
+        # Also add reverse refs: magicians topics that link to this ethresear.ch topic
+        for mtid, er_tids in magicians_ethresearch_refs.items():
+            if tid in er_tids:
+                mrefs.add(mtid)
+        # Also check if this topic is directly referenced by an EIP's discussions-to
+        if tid in ethresearch_to_eips:
+            for eip_num in ethresearch_to_eips[tid]:
+                eip_meta = eip_catalog.get(str(eip_num))
+                if eip_meta and eip_meta.get("magicians_topic_id"):
+                    mrefs.add(eip_meta["magicians_topic_id"])
+        topic_magicians_refs[tid] = sorted(mrefs)
+
+    total_with_mrefs = sum(1 for v in topic_magicians_refs.values() if v)
+    print(f"  {total_with_mrefs} topics with magicians cross-references")
+
+    # -----------------------------------------------------------------------
     # Build included topics output (only included ones, slimmed down)
     # -----------------------------------------------------------------------
     topics_output = {}
@@ -1481,6 +1564,7 @@ def main():
             "shipped_in": t.get("shipped_in", []),
             "first_post_excerpt": t.get("first_post_excerpt", "")[:600],
             "participants": t["participants"][:5],
+            "magicians_refs": topic_magicians_refs.get(tid, []),
             "outgoing_refs": sorted(all_internal_links.get(tid, set()) & included),
             "incoming_refs": [e["source"] for e in graph_edges if e["target"] == tid],
         }
@@ -1514,12 +1598,31 @@ def main():
             "primary_eips": t.get("primary_eips", []),
             "in_degree": t.get("in_degree", 0),
             "out_degree": t.get("out_degree", 0),
+            "magicians_refs": topic_magicians_refs.get(tid, []),
         }
     print(f"  {len(minor_topics_output)} minor topics")
 
     # -----------------------------------------------------------------------
     # Assemble output
     # -----------------------------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Build EIP catalog for output (slim version — no raw discussions_to URL)
+    # -----------------------------------------------------------------------
+    eip_catalog_output = {}
+    for eip_str, eip_meta in eip_catalog.items():
+        eip_catalog_output[eip_str] = {
+            "title": eip_meta.get("title"),
+            "status": eip_meta.get("status"),
+            "type": eip_meta.get("type"),
+            "category": eip_meta.get("category"),
+            "created": eip_meta.get("created"),
+            "fork": eip_meta.get("fork"),
+            "authors": eip_meta.get("authors", []),
+            "requires": eip_meta.get("requires", []),
+            "magicians_topic_id": eip_meta.get("magicians_topic_id"),
+            "ethresearch_topic_id": eip_meta.get("ethresearch_topic_id"),
+        }
+
     print("Writing analysis.json...")
     output = {
         "metadata": {
@@ -1527,10 +1630,12 @@ def main():
             "included": len(included),
             "total_edges": total_edges,
             "included_edges": len(graph_edges),
+            "eip_catalog_size": len(eip_catalog_output),
             "generated_at": datetime.now().isoformat()[:19],
         },
         "eras": ERAS,
         "forks": forks_output,
+        "eip_catalog": eip_catalog_output,
         "topics": topics_output,
         "minor_topics": minor_topics_output,
         "authors": authors_output,
