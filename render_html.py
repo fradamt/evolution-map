@@ -831,8 +831,8 @@ def generate_html(viz_json, data):
       <div class="help-key">Shift+Click</div><div class="help-desc">Find citation path from pinned to clicked topic</div>
       <div class="help-key">&larr; &rarr;</div><div class="help-desc">Navigate between connected topics</div>
       <div class="help-key">Hover ref link</div><div class="help-desc">Highlight referenced topic in view</div>
-      <div class="help-key">Scroll / Trackpad</div><div class="help-desc">Pan timeline horizontally</div>
-      <div class="help-key">Ctrl+Scroll / Pinch</div><div class="help-desc">Zoom timeline</div>
+      <div class="help-key">Scroll / Trackpad</div><div class="help-desc">Zoom timeline</div>
+      <div class="help-key">Drag timeline</div><div class="help-desc">Pan horizontally</div>
       <div class="help-key">Double-click</div><div class="help-desc">Reset zoom</div>
       <div class="help-key">Esc</div><div class="help-desc">Clear all filters &amp; close panels</div>
       <div class="help-key">?</div><div class="help-desc">Toggle this help overlay</div>
@@ -1218,7 +1218,6 @@ document.documentElement.style.overscrollBehavior = 'none';
 document.body.style.overscrollBehavior = 'none';
 document.addEventListener('wheel', function(ev) {
   if (activeView !== 'timeline') return;
-  if (ev.ctrlKey || ev.metaKey) return;
   // Only intercept events targeting the main visualization area
   if (ev.target.closest && ev.target.closest('#main-area')) {
     ev.preventDefault();
@@ -2829,24 +2828,7 @@ function buildTimeline() {
   var svgNode = svg.node();
   svgNode.addEventListener('wheel', function(ev) {
     if (activeView !== 'timeline') return;
-    if (!ev.ctrlKey && !ev.metaKey) {
-      ev.preventDefault();
-    }
-  }, {passive: false});
-
-  // Map plain wheel/trackpad deltas to horizontal timeline pan.
-  wrapper.addEventListener('wheel', function(ev) {
-    if (activeView !== 'timeline') return;
-    if (ev.ctrlKey || ev.metaKey) return; // let D3 zoom handle pinch/ctrl+wheel
     ev.preventDefault();
-
-    if (!zoom) return;
-    var cur = d3.zoomTransform(svgNode);
-    var dx = ev.deltaX !== 0 ? ev.deltaX : ev.deltaY;
-    var next = clampTimelineTransform(
-      d3.zoomIdentity.translate(cur.x - dx, 0).scale(cur.k)
-    );
-    svg.call(zoom.transform, next);
   }, {passive: false});
 
   // Clip path so zoomed content doesn't overflow into the label area
@@ -3114,8 +3096,8 @@ function buildTimeline() {
   xAxisG.selectAll('.domain, .tick line').attr('stroke', '#333');
 
   // === D3 ZOOM (horizontal only) ===
-  // Strategy: ctrl+wheel / pinch = zoom, plain wheel / trackpad = horizontal pan,
-  // drag = pan, double-click = reset.
+  // Strategy: wheel/trackpad (and pinch) = zoom, drag = horizontal pan,
+  // double-click = reset.
   tlPlotW = plotW;
   tlMarginLeft = margin.left;
 
@@ -3127,9 +3109,8 @@ function buildTimeline() {
       return clampTimelineTransform(transform);
     })
     .filter(function(ev) {
-      // For wheel events: only let D3 zoom handle ctrl+wheel (pinch-to-zoom).
-      // Plain wheel / shift+wheel are handled by wrapper wheel handler above.
-      if (ev.type === 'wheel') return ev.ctrlKey || ev.metaKey;
+      // Allow wheel/trackpad and pinch zoom gestures directly.
+      if (ev.type === 'wheel') return true;
       // Block double-click (handled separately below)
       if (ev.type === 'dblclick') return false;
       // Allow drag (button 0) and touch events
