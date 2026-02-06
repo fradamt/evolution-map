@@ -4339,8 +4339,9 @@ function buildNetwork() {
   // Events
   node.on('click', function(ev, d) {
     if (d.isFork) {
+      ev.stopPropagation();
       var fork = findForkByName(d.fork || d.title);
-      if (fork) showForkPopover(ev, fork);
+      if (fork) showForkDetail(fork);
       else showToast('No fork metadata found for ' + (d.title || d.fork || 'this fork'));
       return;
     }
@@ -6067,6 +6068,41 @@ function openForkByName(name, ev) {
     return;
   }
   showForkPopover({clientX: window.innerWidth * 0.55, clientY: 120, stopPropagation: function() {}}, f);
+}
+
+function showForkDetail(f) {
+  if (!f) return;
+  hideTooltip();
+  closeEipPopover();
+  var panel = document.getElementById('detail-panel');
+  var content = document.getElementById('detail-content');
+  var name = f.cn || f.n || 'Fork';
+  var eips = (f.eips || []).slice();
+  var related = (f.rt || []).map(function(tid) { return DATA.topics[tid]; }).filter(Boolean)
+    .sort(function(a, b) { return (b.inf || 0) - (a.inf || 0); });
+  var eipsHtml = eips.map(function(e) {
+    return '<span class="eip-tag primary" onclick="showEipDetailByNum(' + e + ')">EIP-' + e + '</span>';
+  }).join(' ');
+  var relatedHtml = related.slice(0, 16).map(function(rt) {
+    return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + rt.id + '])" ' +
+      'onmouseenter="highlightTopicInView(' + rt.id + ')" ' +
+      'onmouseleave="restorePinnedHighlight()">' + escHtml(rt.t) + '</a>' +
+      ' <span style="color:#666;font-size:10px">(' + (rt.inf || 0).toFixed(2) + ')</span></div>';
+  }).join('');
+
+  content.innerHTML =
+    '<h2>' + escHtml(name) + '</h2>' +
+    '<div class="meta">Fork milestone' + (f.d ? ' \u00b7 ' + escHtml(f.d) : '') + '</div>' +
+    (f.el || f.cl ? '<div class="detail-stat"><span class="label">Clients</span><span class="value">' +
+      (f.el ? ('EL: ' + escHtml(f.el)) : '') +
+      (f.el && f.cl ? ' \u00b7 ' : '') +
+      (f.cl ? ('CL: ' + escHtml(f.cl)) : '') +
+      '</span></div>' : '') +
+    '<div class="detail-stat"><span class="label">EIPs</span><span class="value">' + eips.length + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Related topics</span><span class="value">' + related.length + '</span></div>' +
+    (eipsHtml ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Included EIPs</strong> ' + eipsHtml + '</div>' : '') +
+    (relatedHtml ? '<div class="detail-refs"><h4>Top Related Topics</h4>' + relatedHtml + '</div>' : '');
+  panel.classList.add('open');
 }
 
 function showForkPopover(ev, f) {
