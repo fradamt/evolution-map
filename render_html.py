@@ -4589,7 +4589,10 @@ function showAuthorDetail(username) {
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
   var a = DATA.authors[username];
-  if (!a) return;
+  if (!a) {
+    openAuthor(username);
+    return;
+  }
 
   var color = authorColorMap[username] || '#667';
   var linkedEips = linkedEipAuthors(username);
