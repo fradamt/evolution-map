@@ -714,6 +714,22 @@ let showEips = false;
 let eipVisibilityMode = 'connected'; // 'connected' | 'all'
 let eipAuthorTab = false; // false = ethresearch, true = EIP authors
 
+// --- Prevent macOS trackpad swipe-back/forward ---
+// On macOS, the browser compositor may detect navigation gestures from
+// trackpad two-finger swipes BEFORE element-level handlers fire.
+// A document capture-phase non-passive handler is the earliest JS hook.
+// Also force overscroll-behavior via JS in case CSS isn't picked up.
+document.documentElement.style.overscrollBehavior = 'none';
+document.body.style.overscrollBehavior = 'none';
+document.addEventListener('wheel', function(ev) {
+  if (activeView !== 'timeline') return;
+  if (ev.ctrlKey || ev.metaKey) return;
+  // Only intercept events targeting the main visualization area
+  if (ev.target.closest && ev.target.closest('#main-area')) {
+    ev.preventDefault();
+  }
+}, {passive: false, capture: true});
+
 // Build milestone index: topic_id -> {threadId, threadName, note, human}
 const MILESTONE_LABELS = {
   earliest: 'Earliest topic',
