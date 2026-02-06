@@ -1173,6 +1173,102 @@ function linkedMagAuthorsFromEip(eipAuthorName) {
   return EIP_TO_MAG_AUTHORS[eipAuthorName] || [];
 }
 
+const COAUTHOR_ALIAS_OVERRIDES = {
+  caspar: {kind: 'eth', target: 'casparschwa'},
+  francesco: {kind: 'eip', target: "Francesco D'Amato"},
+  carl: {kind: 'eip', target: 'Carl Beekhuizen'},
+  barnabe: {kind: 'eth', target: 'barnabe'},
+  danny: {kind: 'eth', target: 'Danny'}
+};
+
+const COAUTHOR_ETH_USERNAMES = (function() {
+  var out = new Set(Object.keys(DATA.authors || {}));
+  Object.values(DATA.topics || {}).forEach(function(t) {
+    if (t.a) out.add(t.a);
+    (t.coauth || []).forEach(function(u) { if (u) out.add(u); });
+    (t.parts || []).forEach(function(u) { if (u) out.add(u); });
+  });
+  return Array.from(out);
+})();
+
+const COAUTHOR_EIP_AUTHOR_NAMES = Object.keys(DATA.eipAuthors || {});
+
+function normalizeIdentityToken(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function normalizeAlphaToken(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z]/g, '');
+}
+
+function pickBestIdentityCandidate(scored, minScore, minMargin) {
+  var sorted = scored.filter(function(row) { return row.score > 0; })
+    .sort(function(a, b) { return b.score - a.score; });
+  if (sorted.length === 0) return null;
+  var best = sorted[0];
+  if (best.score < minScore) return null;
+  var second = sorted.length > 1 ? sorted[1] : null;
+  if (second && (best.score - second.score) < minMargin) return null;
+  return best;
+}
+
+function resolveBylineCoauthorIdentity(rawName) {
+  var raw = String(rawName || '').trim();
+  var norm = normalizeIdentityToken(raw);
+  if (!norm) return {kind: 'raw', label: raw, key: 'raw:' + raw.toLowerCase()};
+
+  var override = COAUTHOR_ALIAS_OVERRIDES[norm];
+  if (override) {
+    if (override.kind === 'eth' && COAUTHOR_ETH_USERNAMES.indexOf(override.target) >= 0) {
+      return {kind: 'eth', target: override.target, label: override.target, key: 'eth:' + normalizeIdentityToken(override.target)};
+    }
+    if (override.kind === 'eip' && COAUTHOR_EIP_AUTHOR_NAMES.indexOf(override.target) >= 0) {
+      return {kind: 'eip', target: override.target, label: override.target, key: 'eip:' + normalizeIdentityToken(override.target)};
+    }
+  }
+
+  var bestEth = pickBestIdentityCandidate(COAUTHOR_ETH_USERNAMES.map(function(username) {
+    var uNorm = normalizeIdentityToken(username);
+    var score = 0;
+    if (uNorm === norm) score = 320;
+    else if (norm.length >= 4 && uNorm.indexOf(norm) === 0) score = 250;
+    else if (norm.length >= 5 && uNorm.indexOf(norm) >= 0) score = 185;
+    return {kind: 'eth', target: username, label: username, key: 'eth:' + uNorm, score: score};
+  }), 230, 35);
+
+  var bestEip = pickBestIdentityCandidate(COAUTHOR_EIP_AUTHOR_NAMES.map(function(name) {
+    var full = normalizeIdentityToken(name);
+    var parts = String(name || '').split(/\s+/).map(normalizeAlphaToken).filter(Boolean);
+    var first = parts[0] || '';
+    var last = parts.length > 0 ? parts[parts.length - 1] : '';
+    var score = 0;
+    if (full === norm) score = 340;
+    else if (norm.length >= 4 && first === norm) score = 275;
+    else if (norm.length >= 4 && last === norm) score = 285;
+    else if (norm.length >= 4 && (first.indexOf(norm) === 0 || last.indexOf(norm) === 0)) score = 230;
+    else if (norm.length >= 6 && full.indexOf(norm) >= 0) score = 180;
+    return {kind: 'eip', target: name, label: name, key: 'eip:' + full, score: score};
+  }), 230, 35);
+
+  if (bestEth && bestEip) {
+    if (Math.abs(bestEth.score - bestEip.score) < 15) {
+      return {kind: 'raw', label: raw, key: 'raw:' + norm};
+    }
+    return bestEth.score > bestEip.score ? bestEth : bestEip;
+  }
+  if (bestEth) return bestEth;
+  if (bestEip) return bestEip;
+  return {kind: 'raw', label: raw, key: 'raw:' + norm};
+}
+
 function getActiveEthAuthorSet() {
   var out = new Set();
   if (activeAuthor) out.add(activeAuthor);
@@ -4604,26 +4700,30 @@ function showDetail(t) {
   var traversalHtml = buildCrossForumTraversalHtml(t);
   var coauthorEntries = [];
   var seenCoauthors = new Set();
-  function coauthorKey(value) {
-    return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  }
-  function addCoauthor(label, clickable) {
-    var clean = String(label || '').trim();
-    if (!clean) return;
-    var key = coauthorKey(clean);
+  var mainAuthorNorm = normalizeIdentityToken(t.a);
+  function addResolvedCoauthor(entry) {
+    if (!entry) return;
+    var key = entry.key || (entry.kind + ':' + normalizeIdentityToken(entry.target || entry.label));
     if (!key || seenCoauthors.has(key)) return;
-    var authorKey = coauthorKey(t.a);
-    if (authorKey && (authorKey.indexOf(key) >= 0 || key.indexOf(authorKey) >= 0)) return;
+    if (entry.kind === 'eth' && normalizeIdentityToken(entry.target || entry.label) === mainAuthorNorm) return;
+    if (entry.kind === 'eip' && (linkedEipAuthors(t.a) || []).indexOf(entry.target) >= 0) return;
     seenCoauthors.add(key);
-    coauthorEntries.push({label: clean, clickable: clickable});
+    coauthorEntries.push(entry);
   }
-  (t.coauth || []).forEach(function(u) { addCoauthor(u, true); });
-  inferredCoauthorNamesFromExcerpt(t).forEach(function(name) { addCoauthor(name, false); });
+  (t.coauth || []).forEach(function(u) {
+    addResolvedCoauthor({kind: 'eth', target: u, label: u, key: 'eth:' + normalizeIdentityToken(u)});
+  });
+  inferredCoauthorNamesFromExcerpt(t).forEach(function(name) {
+    addResolvedCoauthor(resolveBylineCoauthorIdentity(name));
+  });
   function renderCoauthorEntry(entry) {
-    if (entry.clickable) {
-      return '<span onclick="openAuthor(' + jsQuote(entry.label) + ')" style="cursor:pointer;color:#7788cc">' + escHtml(entry.label) + '</span>';
+    if (entry.kind === 'eth') {
+      return '<span onclick="openAuthor(' + jsQuote(entry.target) + ')" style="cursor:pointer;color:#7788cc">' + escHtml(entry.label || entry.target) + '</span>';
     }
-    return '<span style="color:#9aa5d4">' + escHtml(entry.label) + '</span>';
+    if (entry.kind === 'eip') {
+      return '<span onclick="openEipAuthor(' + jsQuote(entry.target) + ')" style="cursor:pointer;color:#88aacc">' + escHtml(entry.label || entry.target) + '</span>';
+    }
+    return '<span style="color:#9aa5d4">' + escHtml(entry.label || '') + '</span>';
   }
   var coauthorInline = '';
   if (coauthorEntries.length > 0) {
