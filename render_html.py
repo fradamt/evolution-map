@@ -1148,6 +1148,7 @@ header .stats span { white-space: nowrap; }
 /* Cross-reference edges (EIP ↔ topic) */
 .cross-ref-edge { stroke-dasharray: 4 3; pointer-events: none; }
 .magicians-ref-edge { pointer-events: none; }
+.cross-ref-edge, .magicians-ref-edge, .focus-eip-topic-edge { stroke-linecap: round; pointer-events: none; }
 
 /* EIP status colors */
 .eip-color-final { fill: #4caf50; stroke: #4caf50; }
@@ -3199,6 +3200,9 @@ function buildTimeline() {
     d3.selectAll('.cross-ref-edge')
       .attr('x1', function(d) { return d && d.eipDate ? newX(d.eipDate) : 0; })
       .attr('x2', function(d) { return d && d.topicDate ? newX(d.topicDate) : 0; });
+    d3.selectAll('.focus-eip-topic-edge')
+      .attr('x1', function(d) { return d && d.eipDate ? newX(d.eipDate) : 0; })
+      .attr('x2', function(d) { return d && d.topicDate ? newX(d.topicDate) : 0; });
 
     // Update Magicians triangles + labels + cross-ref edges
     d3.selectAll('.magicians-triangle').attr('d', function(d) {
@@ -3276,11 +3280,13 @@ function buildEntityFocusContext(kind, node) {
   var linkedMagicians = new Set();
   var entityNodeId = null;
   var entityMagId = null;
+  var entityEipNum = null;
 
   if (kind === 'eip') {
     entityNodeId = eipNodeId(node);
     var eipNum = eipNumFromNode(node);
     if (eipNum === null || isNaN(eipNum)) return null;
+    entityEipNum = Number(eipNum);
     (eipToTopicIds[String(eipNum)] || []).forEach(function(tid) { linkedTopics.add(Number(tid)); });
     (eipToMagiciansRefs[String(eipNum)] || new Set()).forEach(function(mid) { linkedMagicians.add(Number(mid)); });
     var eipMeta = (DATA.eipCatalog || {})[String(eipNum)];
@@ -3305,6 +3311,7 @@ function buildEntityFocusContext(kind, node) {
     kind: kind,
     entityNodeId: entityNodeId,
     entityMagId: entityMagId,
+    entityEipNum: entityEipNum,
     linkedTopics: linkedTopics,
     linkedEips: linkedEips,
     linkedMagicians: linkedMagicians,
@@ -3321,19 +3328,29 @@ function applyEntityFocusTimeline(context) {
     if (hasFilter && !topicMatchesFilter(t)) { topicOp[t.id] = 0.03; return; }
     topicOp[t.id] = 0.08;
   });
-  d3.selectAll('.topic-circle').attr('opacity', function(t) { return topicOp[t.id]; });
+  d3.selectAll('.topic-circle')
+    .attr('opacity', function(t) { return topicOp[t.id]; })
+    .attr('stroke-width', function(t) {
+      var base = t.mn ? 1 : 0.5;
+      return context.linkedTopics.has(t.id) ? Math.max(1.4, base) : base;
+    });
   syncLabelsFromMap(topicOp);
 
   d3.selectAll('.edge-line')
     .attr('stroke-opacity', function(e) {
-      if (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) return 0.22;
+      if (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) return 0.62;
       return 0.02;
     })
+    .attr('stroke-width', function(e) {
+      return (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) ? 1.9 : 0.9;
+    })
     .attr('stroke', function(e) {
-      if (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) return '#88aaff';
+      if (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) return '#9fc0ff';
       return '#556';
     })
-    .attr('marker-end', 'url(#arrow-default)');
+    .attr('marker-end', function(e) {
+      return (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) ? 'url(#arrow-highlight)' : 'url(#arrow-default)';
+    });
 
   d3.selectAll('.eip-square').attr('opacity', function(e) {
     if (!showEips || !eipMatchesFilter(e)) return 0.05;
@@ -3351,28 +3368,111 @@ function applyEntityFocusTimeline(context) {
     return 0.15;
   });
 
-  d3.selectAll('.cross-ref-edge').attr('stroke-opacity', function(ed) {
-    if (!showPosts || !showEips) return 0.01;
-    if (context.kind === 'eip') {
-      return (ed && String(ed.eipNodeId) === String(context.entityNodeId)) ? 0.55 : 0.02;
-    }
-    if (!ed) return 0.02;
-    return (context.linkedTopics.has(ed.topicId) && context.linkedEips.has(String(ed.eipNodeId))) ? 0.20 : 0.02;
+  d3.selectAll('.cross-ref-edge')
+    .attr('stroke', '#8fb4ff')
+    .attr('stroke-opacity', function(ed) {
+      if (!showPosts || !showEips) return 0.01;
+      if (context.kind === 'eip') {
+        return (ed && String(ed.eipNodeId) === String(context.entityNodeId)) ? 0.92 : 0.02;
+      }
+      if (!ed) return 0.02;
+      return (context.linkedTopics.has(ed.topicId) && context.linkedEips.has(String(ed.eipNodeId))) ? 0.70 : 0.02;
+    })
+    .attr('stroke-width', function(ed) {
+      if (!showPosts || !showEips) return 0.4;
+      if (context.kind === 'eip') {
+        return (ed && String(ed.eipNodeId) === String(context.entityNodeId)) ? 1.9 : 0.6;
+      }
+      if (!ed) return 0.6;
+      return (context.linkedTopics.has(ed.topicId) && context.linkedEips.has(String(ed.eipNodeId))) ? 1.5 : 0.6;
+    });
+
+  d3.selectAll('.magicians-ref-edge')
+    .attr('stroke', '#bf93df')
+    .attr('stroke-opacity', function(ed) {
+      if (!showPosts || !showMagicians) return 0.01;
+      if (context.kind === 'magicians') {
+        if (!ed || !ed.magTopic) return 0.02;
+        return Number(magiciansTopicId(ed.magTopic)) === Number(context.entityMagId) ? 0.90 : 0.02;
+      }
+      if (!ed || !ed.magTopic) return 0.02;
+      return context.linkedMagicians.has(magiciansTopicId(ed.magTopic)) ? 0.68 : 0.02;
+    })
+    .attr('stroke-width', function(ed) {
+      if (!showPosts || !showMagicians) return 0.4;
+      if (context.kind === 'magicians') {
+        if (!ed || !ed.magTopic) return 0.6;
+        return Number(magiciansTopicId(ed.magTopic)) === Number(context.entityMagId) ? 1.7 : 0.6;
+      }
+      if (!ed || !ed.magTopic) return 0.6;
+      return context.linkedMagicians.has(magiciansTopicId(ed.magTopic)) ? 1.4 : 0.6;
+    });
+
+  updateFocusedTimelineExtraEdges(context, hasFilter);
+}
+
+function clearFocusedTimelineExtraEdges() {
+  d3.selectAll('.focus-eip-topic-edge').remove();
+}
+
+function updateFocusedTimelineExtraEdges(context, hasFilter) {
+  var zoomG = d3.select('#timeline-view svg g g[clip-path] g');
+  if (zoomG.empty()) return;
+  var layer = zoomG.select('.entity-focus-link-layer');
+  if (layer.empty()) layer = zoomG.append('g').attr('class', 'entity-focus-link-layer');
+
+  if (!context || context.kind !== 'eip' || context.entityEipNum === null || context.entityEipNum === undefined) {
+    layer.selectAll('.focus-eip-topic-edge').remove();
+    return;
+  }
+
+  var eipMeta = (DATA.eipCatalog || {})[String(context.entityEipNum)];
+  if (!eipMeta || !eipMeta._eipDate || eipMeta._eipYPos === undefined) {
+    layer.selectAll('.focus-eip-topic-edge').remove();
+    return;
+  }
+
+  var rows = [];
+  context.linkedTopics.forEach(function(tid) {
+    var t = DATA.topics[tid];
+    if (!t || !t._date || t._yPos === undefined) return;
+    if (hasFilter && !topicMatchesFilter(t)) return;
+    rows.push({
+      key: String(context.entityEipNum) + ':' + String(tid),
+      eipDate: eipMeta._eipDate,
+      eipY: eipMeta._eipYPos,
+      topicDate: t._date,
+      topicY: t._yPos,
+    });
   });
 
-  d3.selectAll('.magicians-ref-edge').attr('stroke-opacity', function(ed) {
-    if (!showPosts || !showMagicians) return 0.01;
-    if (context.kind === 'magicians') {
-      if (!ed || !ed.magTopic) return 0.02;
-      return Number(magiciansTopicId(ed.magTopic)) === Number(context.entityMagId) ? 0.58 : 0.02;
-    }
-    if (!ed || !ed.magTopic) return 0.02;
-    return context.linkedMagicians.has(magiciansTopicId(ed.magTopic)) ? 0.22 : 0.02;
-  });
+  if (rows.length > 220) {
+    rows.sort(function(a, b) {
+      return Math.abs(a.topicY - a.eipY) - Math.abs(b.topicY - b.eipY);
+    });
+    rows = rows.slice(0, 220);
+  }
+
+  var sel = layer.selectAll('.focus-eip-topic-edge')
+    .data(rows, function(d) { return d.key; });
+  sel.exit().remove();
+  sel.enter().append('line')
+    .attr('class', 'focus-eip-topic-edge')
+    .attr('stroke', '#a8c4ff')
+    .attr('stroke-opacity', 0.56)
+    .attr('stroke-width', 1.2)
+    .attr('stroke-dasharray', '4 2')
+    .merge(sel)
+    .attr('x1', function(d) { return tlXScale(d.eipDate); })
+    .attr('y1', function(d) { return d.eipY; })
+    .attr('x2', function(d) { return tlXScale(d.topicDate); })
+    .attr('y2', function(d) { return d.topicY; })
+    .style('display', (showPosts && showEips) ? null : 'none');
 }
 
 function applyFocusedEntityHighlightTimeline() {
   if (pinnedTopicId !== null) {
+    clearFocusedTimelineExtraEdges();
     applyPinnedHighlightTimeline();
     return;
   }
@@ -3397,7 +3497,9 @@ function applyFocusedEntityHighlightTimeline() {
       var ctxMag = buildEntityFocusContext('magicians', mt);
       applyEntityFocusTimeline(ctxMag);
     }
+    return;
   }
+  clearFocusedTimelineExtraEdges();
 }
 
 function focusedNetworkNodeId() {
@@ -3436,7 +3538,15 @@ function applyFocusedEntityHighlightNetwork() {
   d3.selectAll('.net-link').attr('stroke-opacity', function(l) {
     var sid = typeof l.source === 'object' ? l.source.id : l.source;
     var tid = typeof l.target === 'object' ? l.target.id : l.target;
-    return (sid === focusId || tid === focusId) ? 0.6 : 0.02;
+    return (sid === focusId || tid === focusId) ? 0.92 : 0.02;
+  }).attr('stroke-width', function(l) {
+    var sid = typeof l.source === 'object' ? l.source.id : l.source;
+    var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    return (sid === focusId || tid === focusId) ? 2.2 : 0.9;
+  }).attr('stroke', function(l) {
+    var sid = typeof l.source === 'object' ? l.source.id : l.source;
+    var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    return (sid === focusId || tid === focusId) ? '#a7c8ff' : '#334';
   }).attr('marker-end', function(l) {
     var sid = typeof l.source === 'object' ? l.source.id : l.source;
     var tid = typeof l.target === 'object' ? l.target.id : l.target;
@@ -3474,11 +3584,14 @@ function onTimelineHover(ev, d, entering) {
 
     d3.selectAll('.edge-line')
       .attr('stroke-opacity', function(e) {
-        if (e.source === d.id || e.target === d.id) return 0.5;
+        if (e.source === d.id || e.target === d.id) return 0.85;
         return 0.02;
       })
+      .attr('stroke-width', function(e) {
+        return (e.source === d.id || e.target === d.id) ? 2.0 : 0.9;
+      })
       .attr('stroke', function(e) {
-        if (e.source === d.id || e.target === d.id) return '#88aaff';
+        if (e.source === d.id || e.target === d.id) return '#9fc0ff';
         return '#556';
       })
       .attr('marker-end', function(e) {
@@ -3574,11 +3687,14 @@ function applyPinnedHighlightTimeline() {
     });
   d3.selectAll('.edge-line')
     .attr('stroke-opacity', function(e) {
-      if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 0.5;
+      if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 0.88;
       return 0.02;
     })
+    .attr('stroke-width', function(e) {
+      return (e.source === pinnedTopicId || e.target === pinnedTopicId) ? 2.0 : 0.9;
+    })
     .attr('stroke', function(e) {
-      if (e.source === pinnedTopicId || e.target === pinnedTopicId) return '#88aaff';
+      if (e.source === pinnedTopicId || e.target === pinnedTopicId) return '#9fc0ff';
       return '#556';
     })
     .attr('marker-end', function(e) {
@@ -3600,7 +3716,15 @@ function applyPinnedHighlightNetwork() {
   d3.selectAll('.net-link').attr('stroke-opacity', function(l) {
     var sid = typeof l.source === 'object' ? l.source.id : l.source;
     var tid = typeof l.target === 'object' ? l.target.id : l.target;
-    return (sid === pinnedTopicId || tid === pinnedTopicId) ? 0.6 : 0.02;
+    return (sid === pinnedTopicId || tid === pinnedTopicId) ? 0.92 : 0.02;
+  }).attr('stroke-width', function(l) {
+    var sid = typeof l.source === 'object' ? l.source.id : l.source;
+    var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    return (sid === pinnedTopicId || tid === pinnedTopicId) ? 2.2 : 0.9;
+  }).attr('stroke', function(l) {
+    var sid = typeof l.source === 'object' ? l.source.id : l.source;
+    var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    return (sid === pinnedTopicId || tid === pinnedTopicId) ? '#a7c8ff' : '#334';
   }).attr('marker-end', function(l) {
     var sid = typeof l.source === 'object' ? l.source.id : l.source;
     var tid = typeof l.target === 'object' ? l.target.id : l.target;
@@ -3623,13 +3747,18 @@ function highlightTopicInView(topicId) {
       .attr('stroke-width', function(t) { return t.id === topicId ? 2.5 : 0.5; });
     d3.selectAll('.edge-line')
       .attr('stroke-opacity', function(e) {
-        if (e.source === topicId || e.target === topicId) return 0.5;
-        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 0.25;
+        if (e.source === topicId || e.target === topicId) return 0.88;
+        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 0.48;
         return 0.02;
       })
+      .attr('stroke-width', function(e) {
+        if (e.source === topicId || e.target === topicId) return 2.1;
+        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 1.4;
+        return 0.9;
+      })
       .attr('stroke', function(e) {
-        if (e.source === topicId || e.target === topicId) return '#ffaa44';
-        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return '#88aaff';
+        if (e.source === topicId || e.target === topicId) return '#ffc26a';
+        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return '#9fc0ff';
         return '#556';
       })
       .attr('marker-end', function(e) {
@@ -3648,7 +3777,15 @@ function highlightTopicInView(topicId) {
     d3.selectAll('.net-link').attr('stroke-opacity', function(l) {
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
-      return (sid === topicId || tid === topicId) ? 0.6 : 0.02;
+      return (sid === topicId || tid === topicId) ? 0.92 : 0.02;
+    }).attr('stroke-width', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (sid === topicId || tid === topicId) ? 2.2 : 0.9;
+    }).attr('stroke', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (sid === topicId || tid === topicId) ? '#ffc26a' : '#334';
     }).attr('marker-end', function(l) {
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
@@ -3720,7 +3857,13 @@ function filterTimeline() {
         if (!d) return 0.02;
         var t = DATA.topics[d.topicId];
         if (!t) return 0.02;
-        return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.08;
+        return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.14;
+      })
+      .attr('stroke-width', function(d) {
+        if (!d) return 0.6;
+        var t = DATA.topics[d.topicId];
+        if (!t) return 0.6;
+        return hasFilter && !topicMatchesFilter(t) ? 0.6 : 0.8;
       });
   }
 
@@ -3745,11 +3888,18 @@ function filterTimeline() {
         if (!d) return 0.02;
         var t = DATA.topics[d.topicId];
         if (!t) return 0.02;
-        return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.10;
+        return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.14;
+      })
+      .attr('stroke-width', function(d) {
+        if (!d) return 0.7;
+        var t = DATA.topics[d.topicId];
+        if (!t) return 0.7;
+        return hasFilter && !topicMatchesFilter(t) ? 0.7 : 0.9;
       });
   }
 
   if (hasFocusedEntity()) applyFocusedEntityHighlightTimeline();
+  else clearFocusedTimelineExtraEdges();
 }
 
 // Sync topic labels and milestones to match circle opacity.
@@ -4058,7 +4208,15 @@ function buildNetwork() {
     link.attr('stroke-opacity', function(l) {
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
-      return (connected.has(sid) && connected.has(tid)) ? 0.6 : 0.02;
+      return (connected.has(sid) && connected.has(tid)) ? 0.92 : 0.02;
+    }).attr('stroke-width', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (connected.has(sid) && connected.has(tid)) ? 2.1 : 0.9;
+    }).attr('stroke', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (connected.has(sid) && connected.has(tid)) ? '#a7c8ff' : '#334';
     }).attr('marker-end', function(l) {
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
@@ -5956,7 +6114,7 @@ function drawEipTimeline() {
       .attr('class', 'cross-ref-edge')
       .attr('x1', tlXScale(eip._eipDate)).attr('y1', eip._eipYPos)
       .attr('x2', tlXScale(topic._date)).attr('y2', topic._yPos)
-      .attr('stroke', '#5566aa').attr('stroke-opacity', 0.08).attr('stroke-width', 0.5)
+      .attr('stroke', '#6f94f2').attr('stroke-opacity', 0.14).attr('stroke-width', 0.8)
       .datum({
         eipDate: eip._eipDate,
         topicDate: topic._date,
@@ -6048,7 +6206,7 @@ function drawMagiciansTimeline() {
         .attr('class', 'magicians-ref-edge')
         .attr('x1', tlXScale(mt._magDate)).attr('y1', mt._magYPos)
         .attr('x2', tlXScale(topic._date)).attr('y2', topic._yPos)
-        .attr('stroke', '#7a5c96').attr('stroke-opacity', 0.10).attr('stroke-width', 0.6)
+        .attr('stroke', '#9b72c2').attr('stroke-opacity', 0.14).attr('stroke-width', 0.9)
         .attr('stroke-dasharray', '3 3')
         .datum({
           magDate: mt._magDate,
