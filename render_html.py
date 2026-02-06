@@ -1197,6 +1197,7 @@ let coAuthorSimulation = null;
 let hoveredTopicId = null;
 let pinnedTopicId = null;
 let activeMagiciansId = null;
+let activeEipNum = null;
 let lineageActive = false;
 let lineageSet = new Set();
 let lineageEdgeSet = new Set(); // "src-tgt" strings for fast edge lookup
@@ -2022,7 +2023,7 @@ function toggleSidebarWidth() {
   try { localStorage.setItem('evmap.sidebarWide', sidebarWide ? '1' : '0'); } catch (e) {}
   refreshAuthorSidebarList();
   applyFilters();
-  if (pinnedTopicId) applyPinnedHighlight();
+  if (hasFocusedEntity()) applyFocusedEntityHighlight();
 }
 
 // === INIT ===
@@ -2255,6 +2256,7 @@ function clearFilters() {
   activeCategory = null;
   activeTag = null;
   activeMagiciansId = null;
+  activeEipNum = null;
   minInfluence = defaultInfluenceThreshold;
   var slider = document.getElementById('inf-slider');
   if (slider) { slider.value = defaultSliderPct; }
@@ -3228,11 +3230,232 @@ function buildTimeline() {
   }
 }
 
+function hasFocusedEntity() {
+  return pinnedTopicId !== null || activeEipNum !== null || activeMagiciansId !== null;
+}
+
+function focusedEntityDescriptor() {
+  if (pinnedTopicId !== null) {
+    var tid = Number(pinnedTopicId);
+    return {kind: 'topic', key: isNaN(tid) ? pinnedTopicId : tid};
+  }
+  if (activeEipNum !== null) {
+    return {kind: 'eip', key: 'eip_' + String(activeEipNum)};
+  }
+  if (activeMagiciansId !== null) {
+    var mid = Number(activeMagiciansId);
+    return {kind: 'magicians', key: isNaN(mid) ? activeMagiciansId : mid};
+  }
+  return null;
+}
+
+function isHoverBlockedByFocusedEntity(kind, node) {
+  var focus = focusedEntityDescriptor();
+  if (!focus) return false;
+  if (kind === 'topic') {
+    var topicId = node && node.id !== undefined ? Number(node.id) : NaN;
+    if (focus.kind === 'topic' && !isNaN(topicId) && topicId === Number(focus.key)) return false;
+    return true;
+  }
+  if (kind === 'eip') {
+    var eid = eipNodeId(node);
+    if (focus.kind === 'eip' && String(eid) === String(focus.key)) return false;
+    return true;
+  }
+  if (kind === 'magicians') {
+    var mid = magiciansTopicId(node);
+    if (focus.kind === 'magicians' && Number(mid) === Number(focus.key)) return false;
+    return true;
+  }
+  return true;
+}
+
+function buildEntityFocusContext(kind, node) {
+  var linkedTopics = new Set();
+  var linkedEips = new Set();
+  var linkedMagicians = new Set();
+  var entityNodeId = null;
+  var entityMagId = null;
+
+  if (kind === 'eip') {
+    entityNodeId = eipNodeId(node);
+    var eipNum = eipNumFromNode(node);
+    if (eipNum === null || isNaN(eipNum)) return null;
+    (eipToTopicIds[String(eipNum)] || []).forEach(function(tid) { linkedTopics.add(Number(tid)); });
+    (eipToMagiciansRefs[String(eipNum)] || new Set()).forEach(function(mid) { linkedMagicians.add(Number(mid)); });
+    var eipMeta = (DATA.eipCatalog || {})[String(eipNum)];
+    if (eipMeta && eipMeta.mt) linkedMagicians.add(Number(eipMeta.mt));
+    ((DATA.eipGraph || {}).edges || []).forEach(function(edge) {
+      if (!edge || edge.type !== 'eip_requires') return;
+      if (edge.source === entityNodeId && edge.target) linkedEips.add(String(edge.target));
+      if (edge.target === entityNodeId && edge.source) linkedEips.add(String(edge.source));
+    });
+  } else if (kind === 'magicians') {
+    entityMagId = magiciansTopicId(node);
+    if (entityMagId === null || isNaN(entityMagId)) return null;
+    linkedMagicians.add(Number(entityMagId));
+    var mt = (DATA.magiciansTopics || {})[String(entityMagId)] || node;
+    (mt.er || []).forEach(function(tid) { linkedTopics.add(Number(tid)); });
+    (magiciansLinkedEips(mt) || []).forEach(function(eipNum) { linkedEips.add('eip_' + String(eipNum)); });
+  } else {
+    return null;
+  }
+
+  return {
+    kind: kind,
+    entityNodeId: entityNodeId,
+    entityMagId: entityMagId,
+    linkedTopics: linkedTopics,
+    linkedEips: linkedEips,
+    linkedMagicians: linkedMagicians,
+  };
+}
+
+function applyEntityFocusTimeline(context) {
+  if (!context) return;
+  var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
+
+  var topicOp = {};
+  d3.selectAll('.topic-circle').each(function(t) {
+    if (context.linkedTopics.has(t.id) && (!hasFilter || topicMatchesFilter(t))) { topicOp[t.id] = 0.88; return; }
+    if (hasFilter && !topicMatchesFilter(t)) { topicOp[t.id] = 0.03; return; }
+    topicOp[t.id] = 0.08;
+  });
+  d3.selectAll('.topic-circle').attr('opacity', function(t) { return topicOp[t.id]; });
+  syncLabelsFromMap(topicOp);
+
+  d3.selectAll('.edge-line')
+    .attr('stroke-opacity', function(e) {
+      if (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) return 0.22;
+      return 0.02;
+    })
+    .attr('stroke', function(e) {
+      if (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) return '#88aaff';
+      return '#556';
+    })
+    .attr('marker-end', 'url(#arrow-default)');
+
+  d3.selectAll('.eip-square').attr('opacity', function(e) {
+    if (!showEips || !eipMatchesFilter(e)) return 0.05;
+    var eid = eipNodeId(e);
+    if (context.kind === 'eip' && context.entityNodeId && String(eid) === String(context.entityNodeId)) return 1;
+    if (context.linkedEips.has(String(eid))) return 0.92;
+    return 0.15;
+  });
+
+  d3.selectAll('.magicians-triangle').attr('opacity', function(mt) {
+    if (!showMagicians || !magiciansMatchesFilter(mt)) return 0.05;
+    var mid = magiciansTopicId(mt);
+    if (context.kind === 'magicians' && context.entityMagId !== null && Number(mid) === Number(context.entityMagId)) return 1;
+    if (context.linkedMagicians.has(mid)) return 0.92;
+    return 0.15;
+  });
+
+  d3.selectAll('.cross-ref-edge').attr('stroke-opacity', function(ed) {
+    if (!showPosts || !showEips) return 0.01;
+    if (context.kind === 'eip') {
+      return (ed && String(ed.eipNodeId) === String(context.entityNodeId)) ? 0.55 : 0.02;
+    }
+    if (!ed) return 0.02;
+    return (context.linkedTopics.has(ed.topicId) && context.linkedEips.has(String(ed.eipNodeId))) ? 0.20 : 0.02;
+  });
+
+  d3.selectAll('.magicians-ref-edge').attr('stroke-opacity', function(ed) {
+    if (!showPosts || !showMagicians) return 0.01;
+    if (context.kind === 'magicians') {
+      if (!ed || !ed.magTopic) return 0.02;
+      return Number(magiciansTopicId(ed.magTopic)) === Number(context.entityMagId) ? 0.58 : 0.02;
+    }
+    if (!ed || !ed.magTopic) return 0.02;
+    return context.linkedMagicians.has(magiciansTopicId(ed.magTopic)) ? 0.22 : 0.02;
+  });
+}
+
+function applyFocusedEntityHighlightTimeline() {
+  if (pinnedTopicId !== null) {
+    applyPinnedHighlightTimeline();
+    return;
+  }
+  if (activeEipNum !== null) {
+    var eipNum = Number(activeEipNum);
+    if (!isNaN(eipNum)) {
+      var eipMeta = (DATA.eipCatalog || {})[String(eipNum)] || {};
+      var ctxEip = buildEntityFocusContext('eip', {
+        id: 'eip_' + String(eipNum),
+        _eipNum: eipNum,
+        inf: eipMeta.inf || 0,
+        s: eipMeta.s || null,
+      });
+      applyEntityFocusTimeline(ctxEip);
+    }
+    return;
+  }
+  if (activeMagiciansId !== null) {
+    var mid = Number(activeMagiciansId);
+    if (!isNaN(mid)) {
+      var mt = (DATA.magiciansTopics || {})[String(mid)] || {id: mid};
+      var ctxMag = buildEntityFocusContext('magicians', mt);
+      applyEntityFocusTimeline(ctxMag);
+    }
+  }
+}
+
+function focusedNetworkNodeId() {
+  if (pinnedTopicId !== null) return Number(pinnedTopicId);
+  if (activeEipNum !== null) return 'eip_' + String(activeEipNum);
+  if (activeMagiciansId !== null) return magiciansNodeId(activeMagiciansId);
+  return null;
+}
+
+function applyFocusedEntityHighlightNetwork() {
+  if (pinnedTopicId !== null) {
+    applyPinnedHighlightNetwork();
+    return;
+  }
+  var focusId = focusedNetworkNodeId();
+  if (focusId === null || focusId === undefined) return;
+
+  var focusExists = false;
+  d3.selectAll('.net-node').each(function(n) {
+    if (n && n.id === focusId) focusExists = true;
+  });
+  if (!focusExists) return;
+
+  var connected = new Set([focusId]);
+  d3.selectAll('.net-link').each(function(l) {
+    var sid = typeof l.source === 'object' ? l.source.id : l.source;
+    var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    if (sid === focusId) connected.add(tid);
+    if (tid === focusId) connected.add(sid);
+  });
+
+  d3.selectAll('.net-node .net-shape').attr('opacity', function(n) {
+    return connected.has(n.id) ? 1 : 0.08;
+  });
+
+  d3.selectAll('.net-link').attr('stroke-opacity', function(l) {
+    var sid = typeof l.source === 'object' ? l.source.id : l.source;
+    var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    return (sid === focusId || tid === focusId) ? 0.6 : 0.02;
+  }).attr('marker-end', function(l) {
+    var sid = typeof l.source === 'object' ? l.source.id : l.source;
+    var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    return (sid === focusId || tid === focusId) ? 'url(#net-arrow-highlight)' : 'url(#net-arrow-default)';
+  });
+}
+
+function applyFocusedEntityHighlight() {
+  if (!hasFocusedEntity()) return;
+  if (activeView === 'timeline') applyFocusedEntityHighlightTimeline();
+  else if (activeView === 'network') applyFocusedEntityHighlightNetwork();
+}
+
 function onTimelineHover(ev, d, entering) {
   var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag;
   if (entering) {
     hoveredTopicId = d.id;
     showTooltip(ev, d);
+    if (hasFocusedEntity() && isHoverBlockedByFocusedEntity('topic', d)) return;
 
     // If a filter is active and this node doesn't match, only show tooltip
     if (hasFilter && !topicMatchesFilter(d)) return;
@@ -3266,6 +3489,10 @@ function onTimelineHover(ev, d, entering) {
   } else {
     hoveredTopicId = null;
     hideTooltip();
+    if (hasFocusedEntity()) {
+      applyFocusedEntityHighlightTimeline();
+      return;
+    }
     // If we didn't change opacities (dimmed node hover), nothing to restore
     if (hasFilter && !topicMatchesFilter(d)) return;
     if (pinnedTopicId) {
@@ -3277,106 +3504,33 @@ function onTimelineHover(ev, d, entering) {
 }
 
 function onTimelineEntityHover(ev, node, kind, entering) {
-  var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
   if (entering) {
-    var linkedTopics = new Set();
-    var linkedEips = new Set();
-    var linkedMagicians = new Set();
-    var hoveredEntityId = null;
-
     if (kind === 'eip') {
-      hoveredEntityId = eipNodeId(node);
-      var eipNum = eipNumFromNode(node);
-      if (eipNum !== null && !isNaN(eipNum)) {
-        (eipToTopicIds[String(eipNum)] || []).forEach(function(tid) { linkedTopics.add(Number(tid)); });
-        (eipToMagiciansRefs[String(eipNum)] || new Set()).forEach(function(mid) { linkedMagicians.add(Number(mid)); });
-      }
-      ((DATA.eipGraph || {}).edges || []).forEach(function(edge) {
-        if (!edge || edge.type !== 'eip_requires') return;
-        if (edge.source === hoveredEntityId && edge.target) linkedEips.add(String(edge.target));
-        if (edge.target === hoveredEntityId && edge.source) linkedEips.add(String(edge.source));
-      });
       showEipTooltip(ev, node);
     } else if (kind === 'magicians') {
       var magId = magiciansTopicId(node);
-      hoveredEntityId = magId === null || isNaN(magId) ? null : Number(magId);
-      if (hoveredEntityId !== null) {
-        linkedMagicians.add(hoveredEntityId);
-        var mt = (DATA.magiciansTopics || {})[String(hoveredEntityId)] || node;
-        (mt.er || []).forEach(function(tid) { linkedTopics.add(Number(tid)); });
-        (magiciansLinkedEips(mt) || []).forEach(function(eipNum) { linkedEips.add('eip_' + String(eipNum)); });
+      if (magId !== null && !isNaN(magId)) {
+        var mt = (DATA.magiciansTopics || {})[String(magId)] || node;
         showMagiciansTooltip(ev, mt);
-      } else {
-        showMagiciansTooltip(ev, node);
-      }
+      } else showMagiciansTooltip(ev, node);
     } else {
       return;
     }
 
+    if (hasFocusedEntity() && isHoverBlockedByFocusedEntity(kind, node)) return;
+
+    var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
     // If a filter is active and this node doesn't match, only show tooltip.
     if (hasFilter) {
       if (kind === 'eip' && !eipMatchesFilter(node)) return;
       if (kind === 'magicians' && !magiciansMatchesFilter(node)) return;
     }
-
-    var topicOp = {};
-    d3.selectAll('.topic-circle').each(function(t) {
-      if (linkedTopics.has(t.id) && (!hasFilter || topicMatchesFilter(t))) { topicOp[t.id] = 0.88; return; }
-      if (hasFilter && !topicMatchesFilter(t)) { topicOp[t.id] = 0.03; return; }
-      topicOp[t.id] = 0.08;
-    });
-    d3.selectAll('.topic-circle').attr('opacity', function(t) { return topicOp[t.id]; });
-    syncLabelsFromMap(topicOp);
-
-    d3.selectAll('.edge-line')
-      .attr('stroke-opacity', function(e) {
-        if (linkedTopics.has(e.source) && linkedTopics.has(e.target)) return 0.22;
-        return 0.02;
-      })
-      .attr('stroke', function(e) {
-        if (linkedTopics.has(e.source) && linkedTopics.has(e.target)) return '#88aaff';
-        return '#556';
-      })
-      .attr('marker-end', 'url(#arrow-default)');
-
-    d3.selectAll('.eip-square').attr('opacity', function(e) {
-      if (!showEips || !eipMatchesFilter(e)) return 0.05;
-      var eid = eipNodeId(e);
-      if (hoveredEntityId && eid === hoveredEntityId) return 1;
-      if (linkedEips.has(String(eid))) return 0.92;
-      return 0.15;
-    });
-
-    d3.selectAll('.magicians-triangle').attr('opacity', function(mt) {
-      if (!showMagicians || !magiciansMatchesFilter(mt)) return 0.05;
-      var mid = magiciansTopicId(mt);
-      if (kind === 'magicians' && hoveredEntityId !== null && mid === hoveredEntityId) return 1;
-      if (linkedMagicians.has(mid)) return 0.92;
-      return 0.15;
-    });
-
-    d3.selectAll('.cross-ref-edge').attr('stroke-opacity', function(ed) {
-      if (!showPosts || !showEips) return 0.01;
-      if (kind === 'eip') {
-        return (ed && ed.eipNodeId === hoveredEntityId) ? 0.55 : 0.02;
-      }
-      if (!ed) return 0.02;
-      return (linkedTopics.has(ed.topicId) && linkedEips.has(String(ed.eipNodeId))) ? 0.20 : 0.02;
-    });
-
-    d3.selectAll('.magicians-ref-edge').attr('stroke-opacity', function(ed) {
-      if (!showPosts || !showMagicians) return 0.01;
-      if (kind === 'magicians') {
-        if (!ed || !ed.magTopic) return 0.02;
-        return magiciansTopicId(ed.magTopic) === hoveredEntityId ? 0.58 : 0.02;
-      }
-      if (!ed || !ed.magTopic) return 0.02;
-      return linkedMagicians.has(magiciansTopicId(ed.magTopic)) ? 0.22 : 0.02;
-    });
+    var context = buildEntityFocusContext(kind, node);
+    applyEntityFocusTimeline(context);
   } else {
     hideTooltip();
-    if (pinnedTopicId) {
-      applyPinnedHighlightTimeline();
+    if (hasFocusedEntity()) {
+      applyFocusedEntityHighlightTimeline();
     } else {
       filterTimeline();
     }
@@ -3594,6 +3748,8 @@ function filterTimeline() {
         return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.10;
       });
   }
+
+  if (hasFocusedEntity()) applyFocusedEntityHighlightTimeline();
 }
 
 // Sync topic labels and milestones to match circle opacity.
@@ -3877,6 +4033,9 @@ function buildNetwork() {
       showTooltip(ev, t);
     }
 
+    var nodeKind = d.isEip ? 'eip' : (d.isMagicians ? 'magicians' : 'topic');
+    if (hasFocusedEntity() && isHoverBlockedByFocusedEntity(nodeKind, d)) return;
+
     // If a filter is active and this node doesn't match, only show tooltip
     var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
     if (hasFilter && !networkNodeMatchesFilter(d)) return;
@@ -3909,6 +4068,10 @@ function buildNetwork() {
 
   node.on('mouseout', function(ev, d) {
     hideTooltip();
+    if (hasFocusedEntity()) {
+      applyFocusedEntityHighlightNetwork();
+      return;
+    }
     // If we didn't change opacities (dimmed node hover), nothing to restore
     var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
     if (hasFilter && !networkNodeMatchesFilter(d)) return;
@@ -3927,7 +4090,7 @@ function buildNetwork() {
     node.attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
   });
 
-  if (pinnedTopicId) applyPinnedHighlightNetwork();
+  if (hasFocusedEntity()) applyFocusedEntityHighlightNetwork();
   else filterNetwork();
 }
 
@@ -3963,6 +4126,8 @@ function filterNetwork() {
       return hasFilter ? 0.16 : 0.12;
     })
     .attr('marker-end', 'url(#net-arrow-default)');
+
+  if (hasFocusedEntity()) applyFocusedEntityHighlightNetwork();
 }
 
 // === CO-AUTHOR NETWORK ===
@@ -5026,6 +5191,7 @@ function buildCrossForumTraversalHtmlForEip(num, eip, relTopics) {
 function showDetail(t) {
   var wasAlreadyPinned = pinnedTopicId !== null;
   pinnedTopicId = t.id;
+  activeEipNum = null;
   activeMagiciansId = null;
   applyPinnedHighlight();
   // Auto-scroll timeline when navigating between topics (not on first click)
@@ -5203,6 +5369,7 @@ function showDetail(t) {
 function closeDetail() {
   document.getElementById('detail-panel').classList.remove('open');
   pinnedTopicId = null;
+  activeEipNum = null;
   activeMagiciansId = null;
   if (similarActive) clearSimilar();
   applyFilters();
@@ -5273,6 +5440,7 @@ function showMagiciansTopicDetailById(id) {
 function showMagiciansTopicDetail(mt) {
   if (!mt) return;
   pinnedTopicId = null;
+  activeEipNum = null;
   activeMagiciansId = mt.id;
   if (similarActive) clearSimilar();
   applyFilters();
@@ -5512,6 +5680,7 @@ function buildHash() {
   if (activeAuthor) parts.push('author=' + encodeURIComponent(activeAuthor));
   if (activeEipAuthor) parts.push('eip_author=' + encodeURIComponent(activeEipAuthor));
   if (pinnedTopicId) parts.push('topic=' + pinnedTopicId);
+  if (activeEipNum !== null && activeEipNum !== undefined) parts.push('eip=' + activeEipNum);
   if (activeMagiciansId) parts.push('mag=' + activeMagiciansId);
   if (showEips) {
     parts.push('eips=1');
@@ -5958,7 +6127,10 @@ function showEipDetailByNum(num) {
 }
 
 function showEipDetail(eip, num) {
+  pinnedTopicId = null;
+  activeEipNum = Number(num);
   activeMagiciansId = null;
+  applyFilters();
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
   var color = eipColor(eip);
