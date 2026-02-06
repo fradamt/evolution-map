@@ -307,6 +307,175 @@ def _build_author_links(data):
     }
 
 
+def _to_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_unified_node_id(node_id):
+    if isinstance(node_id, int):
+        return node_id
+    if isinstance(node_id, str):
+        if node_id.startswith(("eip_", "mag_", "fork_")):
+            return node_id
+        coerced = _to_int(node_id)
+        if coerced is not None:
+            return coerced
+    return node_id
+
+
+def _cross_forum_node_id(source_type, source):
+    if source_type == "topic":
+        return _to_int(source)
+    if source_type == "eip":
+        eip_num = _to_int(source)
+        return f"eip_{eip_num}" if eip_num is not None else None
+    if source_type == "magicians_topic":
+        mtid = _to_int(source)
+        return f"mag_{mtid}" if mtid is not None else None
+    if source_type == "fork":
+        return f"fork_{source}" if source else None
+    return None
+
+
+def _add_unified_edge(edges, edge_keys, source, target, edge_type):
+    source = _normalize_unified_node_id(source)
+    target = _normalize_unified_node_id(target)
+    if source is None or target is None:
+        return
+    key = (str(source), str(target), str(edge_type or ""))
+    if key in edge_keys:
+        return
+    edge_keys.add(key)
+    edges.append({
+        "source": source,
+        "target": target,
+        "type": edge_type,
+    })
+
+
+def _build_unified_graph(graph, forks, eip_graph, magicians_topics, cross_forum_edges):
+    nodes = []
+    edges = []
+    node_keys = set()
+    edge_keys = set()
+
+    def add_node(node):
+        node_id = _normalize_unified_node_id(node.get("id"))
+        if node_id is None:
+            return
+        key = str(node_id)
+        if key in node_keys:
+            return
+        node_keys.add(key)
+        node["id"] = node_id
+        nodes.append(node)
+
+    # Ethresear.ch topic nodes + citation edges.
+    for n in graph.get("nodes", []):
+        node_id = _normalize_unified_node_id(n.get("id"))
+        add_node({
+            "id": node_id,
+            "sourceType": "topic",
+            "title": n.get("title"),
+            "author": n.get("author"),
+            "date": n.get("date"),
+            "influence": n.get("influence", 0),
+            "thread": n.get("thread"),
+            "era": n.get("era"),
+            "primaryEips": n.get("primary_eips", []),
+        })
+    for e in graph.get("edges", []):
+        _add_unified_edge(
+            edges,
+            edge_keys,
+            e.get("source"),
+            e.get("target"),
+            "topic_citation",
+        )
+
+    # Fork nodes + fork -> related topic edges.
+    for f in forks:
+        fork_name = f.get("n")
+        if not fork_name:
+            continue
+        fork_id = f"fork_{fork_name}"
+        add_node({
+            "id": fork_id,
+            "sourceType": "fork",
+            "title": f.get("cn") or f.get("n"),
+            "date": f.get("d"),
+            "fork": fork_name,
+        })
+        for tid in f.get("rt", []):
+            _add_unified_edge(edges, edge_keys, fork_id, tid, "fork_topic")
+
+    # EIP nodes + native EIP graph edges.
+    for en in eip_graph.get("nodes", []):
+        eip_id = en.get("id")
+        eip_num = _to_int(en.get("eip_num"))
+        if not eip_id and eip_num is not None:
+            eip_id = f"eip_{eip_num}"
+        add_node({
+            "id": eip_id,
+            "sourceType": "eip",
+            "eipNum": eip_num,
+            "title": en.get("title"),
+            "date": en.get("date"),
+            "influence": en.get("influence", 0),
+            "status": en.get("status"),
+            "thread": en.get("thread"),
+            "fork": en.get("fork"),
+        })
+    for edge in eip_graph.get("edges", []):
+        _add_unified_edge(
+            edges,
+            edge_keys,
+            edge.get("source"),
+            edge.get("target"),
+            edge.get("type"),
+        )
+
+    # Magicians topic nodes.
+    for mtid, mt in magicians_topics.items():
+        mtid_int = _to_int(mtid)
+        node_id = f"mag_{mtid_int}" if mtid_int is not None else f"mag_{mtid}"
+        add_node({
+            "id": node_id,
+            "sourceType": "magicians",
+            "magiciansId": mtid_int,
+            "title": mt.get("t"),
+            "date": mt.get("d"),
+            "author": mt.get("a"),
+            "category": mt.get("cat"),
+            "views": mt.get("vw", 0),
+            "likes": mt.get("lk", 0),
+            "posts": mt.get("pc", 0),
+            "eips": mt.get("eips", []),
+            "er": mt.get("er", []),
+        })
+
+    # Cross-forum edges.
+    for edge in cross_forum_edges:
+        source = _cross_forum_node_id(edge.get("sT"), edge.get("s"))
+        target = _cross_forum_node_id(edge.get("tT"), edge.get("t"))
+        _add_unified_edge(edges, edge_keys, source, target, edge.get("ty"))
+
+    # Keep only edges whose endpoints exist in the node set.
+    node_keys = {str(n["id"]) for n in nodes}
+    edges = [
+        e for e in edges
+        if str(e.get("source")) in node_keys and str(e.get("target")) in node_keys
+    ]
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
 def main():
     with open(ANALYSIS_PATH) as f:
         data = json.load(f)
@@ -504,6 +673,13 @@ def prepare_viz_data(data):
         })
 
     author_links = _build_author_links(data)
+    unified_graph = _build_unified_graph(
+        graph,
+        compact_forks,
+        eip_graph,
+        compact_magicians,
+        compact_cross_edges,
+    )
 
     return {
         "meta": data["metadata"],
@@ -518,6 +694,7 @@ def prepare_viz_data(data):
         "eipGraph": eip_graph,
         "magiciansTopics": compact_magicians,
         "crossForumEdges": compact_cross_edges,
+        "unifiedGraph": unified_graph,
         "authorLinks": author_links,
         "graph": {
             "nodes": graph["nodes"],
@@ -3399,108 +3576,88 @@ function buildNetwork() {
     g.attr('transform', ev.transform);
   }));
 
-  // Prepare data
-  const nodes = DATA.graph.nodes.map(function(n) {
-    return Object.assign({sourceType: 'topic'}, n);
-  });
+  // Prepare data from canonical unified graph payload.
+  const unifiedGraph = DATA.unifiedGraph || {nodes: [], edges: []};
+  const sourceNodes = Array.isArray(unifiedGraph.nodes) ? unifiedGraph.nodes : [];
+  const sourceEdges = Array.isArray(unifiedGraph.edges) ? unifiedGraph.edges : [];
+  const includeConnectedOnly = showEips && eipVisibilityMode === 'connected';
+
+  const nodes = [];
   const nodeMap = {};
-  nodes.forEach(function(n) { nodeMap[n.id] = n; });
 
-  const links = DATA.graph.edges
-    .filter(function(e) { return nodeMap[e.source] && nodeMap[e.target]; })
-    .map(function(e) { return {source: e.source, target: e.target}; });
+  sourceNodes.forEach(function(rawNode) {
+    if (!rawNode || rawNode.id === undefined || rawNode.id === null) return;
+    var n = Object.assign({}, rawNode);
+    var sourceType = networkNodeSourceType(n);
 
-  // Add fork nodes as diamonds
-  DATA.forks.forEach(function(f) {
-    if (!f.d) return;
-    var forkNode = {
-      id: 'fork_' + f.n,
-      title: f.cn || f.n,
-      isFork: true,
-      sourceType: 'fork',
-      date: f.d
-    };
-    nodes.push(forkNode);
-    nodeMap[forkNode.id] = forkNode;
-    (f.rt || []).forEach(function(tid) {
-      if (nodeMap[tid]) links.push({source: forkNode.id, target: tid});
-    });
+    if (sourceType === 'eip') {
+      if (!showEips) return;
+      if (includeConnectedOnly && !connectedEipNodeIds.has(String(n.id))) return;
+      n.isEip = true;
+      var eipNum = eipNumFromNode(n);
+      if (eipNum !== null && !isNaN(eipNum)) n.eipNum = eipNum;
+      var eipMeta = n.eipNum !== undefined ? (DATA.eipCatalog || {})[String(n.eipNum)] : null;
+      if ((!n.title || !String(n.title).trim()) && eipMeta) {
+        n.title = 'EIP-' + String(n.eipNum) + ': ' + (eipMeta.t || '');
+      }
+      if ((n.influence === undefined || n.influence === null) && eipMeta) n.influence = eipMeta.inf || 0;
+      if ((n.thread === undefined || n.thread === null) && eipMeta) n.thread = eipMeta.th || null;
+      if ((n.status === undefined || n.status === null) && eipMeta) n.status = eipMeta.s || null;
+    } else if (sourceType === 'magicians') {
+      if (!showMagicians) return;
+      var magId = magiciansTopicId(n);
+      if (magId === null || isNaN(magId)) {
+        if (typeof n.id === 'string' && n.id.indexOf('mag_') === 0) {
+          magId = Number(n.id.slice(4));
+        }
+      }
+      if (magId !== null && !isNaN(magId)) n.magiciansId = Number(magId);
+      if (showEips && isEipDiscussionMagiciansTopic(n)) return;
+      n.isMagicians = true;
+      var mt = (n.magiciansId !== undefined) ? (DATA.magiciansTopics || {})[String(n.magiciansId)] : null;
+      if ((!n.title || !String(n.title).trim()) && mt) n.title = magiciansDisplayTitle(mt);
+      if ((!n.title || !String(n.title).trim())) n.title = magiciansDisplayTitle(n);
+      if ((n.influence === undefined || n.influence === null)) {
+        n.influence = mt ? magiciansInfluenceScore(mt) : magiciansInfluenceScore(n);
+      }
+      if (n.thread === undefined || n.thread === null) {
+        n.thread = mt ? magiciansThreadFromTopic(mt) : magiciansThreadFromTopic(n);
+      }
+      if ((n.category === undefined || n.category === null) && mt) n.category = mt.cat || null;
+      if ((n.author === undefined || n.author === null) && mt) n.author = mt.a || null;
+      if ((n.date === undefined || n.date === null) && mt) n.date = mt.d || null;
+    } else if (sourceType === 'fork') {
+      n.isFork = true;
+      if (n.influence === undefined || n.influence === null) n.influence = 0;
+    } else {
+      n.sourceType = 'topic';
+      var t = DATA.topics[n.id];
+      if ((n.influence === undefined || n.influence === null) && t) n.influence = t.inf || 0;
+      if ((n.thread === undefined || n.thread === null) && t) n.thread = t.th || null;
+    }
+
+    n.sourceType = sourceType || n.sourceType || 'topic';
+    nodes.push(n);
+    nodeMap[n.id] = n;
   });
 
-  // Add EIP nodes when toggle is on
-  if (showEips) {
-    var includeConnectedOnly = eipVisibilityMode === 'connected';
-    var eipGraphNodes = (DATA.eipGraph || {}).nodes || [];
-    var eipGraphEdges = (DATA.eipGraph || {}).edges || [];
-    eipGraphNodes.forEach(function(en) {
-      if (nodeMap[en.id]) return; // skip duplicates
-      if (includeConnectedOnly && !connectedEipNodeIds.has(en.id)) return;
-      var eipNum = en.eip_num;
-      var eip = DATA.eipCatalog[String(eipNum)];
-      nodes.push({
-        id: en.id,
-        title: 'EIP-' + eipNum + ': ' + en.title,
-        isEip: true,
-        sourceType: 'eip',
-        eipNum: eipNum,
-        influence: en.influence,
-        thread: en.thread,
-        status: en.status
-      });
-      nodeMap[en.id] = nodes[nodes.length - 1];
+  const links = [];
+  const linkSet = new Set();
+  sourceEdges.forEach(function(rawEdge) {
+    if (!rawEdge) return;
+    var src = rawEdge.source;
+    var tgt = rawEdge.target;
+    if (!nodeMap[src] || !nodeMap[tgt]) return;
+    var edgeType = rawEdge.type || null;
+    var key = String(src) + '->' + String(tgt) + '|' + String(edgeType || '');
+    if (linkSet.has(key)) return;
+    linkSet.add(key);
+    links.push({
+      source: src,
+      target: tgt,
+      edgeType: edgeType
     });
-    eipGraphEdges.forEach(function(edge) {
-      var src = nodeMap[edge.source];
-      var tgt = nodeMap[typeof edge.target === 'number' ? edge.target : edge.target];
-      if (src && tgt) {
-        links.push({source: edge.source, target: edge.target, isEipEdge: true,
-                     eipEdgeType: edge.type});
-      }
-    });
-  }
-
-  // Add Magicians topic nodes and cross-forum edges when toggle is on
-  if (showMagicians) {
-    Object.entries(DATA.magiciansTopics || {}).forEach(function(entry) {
-      var mtid = entry[0];
-      var mt = entry[1] || {};
-      if (showEips && isEipDiscussionMagiciansTopic(mt)) return;
-      var nodeId = magiciansNodeId(mtid);
-      if (nodeMap[nodeId]) return;
-      nodes.push({
-        id: nodeId,
-        title: magiciansDisplayTitle(mt),
-        isMagicians: true,
-        sourceType: 'magicians',
-        magiciansId: Number(mtid),
-        influence: magiciansInfluenceScore(mt),
-        thread: magiciansThreadFromTopic(mt),
-        category: mt.cat || null,
-        date: mt.d || null,
-        author: mt.a || null
-      });
-      nodeMap[nodeId] = nodes[nodes.length - 1];
-    });
-
-    var crossSet = new Set();
-    (DATA.crossForumEdges || []).forEach(function(edge) {
-      if (!edge) return;
-      if (edge.sT !== 'magicians_topic' && edge.tT !== 'magicians_topic') return;
-      var srcId = crossForumNodeId(edge.sT, edge.s);
-      var tgtId = crossForumNodeId(edge.tT, edge.t);
-      if (!srcId || !tgtId) return;
-      if (!nodeMap[srcId] || !nodeMap[tgtId]) return;
-      var key = String(srcId) + '->' + String(tgtId) + '|' + (edge.ty || '');
-      if (crossSet.has(key)) return;
-      crossSet.add(key);
-      links.push({
-        source: srcId,
-        target: tgtId,
-        isCrossForum: true,
-        crossType: edge.ty || null
-      });
-    });
-  }
+  });
 
   const maxInf = d3.max(nodes, function(n) { return n.influence || 0; }) || 1;
   const rScale = d3.scaleSqrt().domain([0, maxInf]).range([3, 16]);
@@ -3518,8 +3675,9 @@ function buildNetwork() {
     .attr('class', 'net-link')
     .attr('stroke-opacity', 0.12)
     .attr('stroke-dasharray', function(d) {
-      if (d.eipEdgeType === 'eip_requires') return '4 3';
-      if (d.isCrossForum) return d.crossType === 'topic_magicians' ? '2 3' : '5 3';
+      if (d.edgeType === 'eip_requires') return '4 3';
+      if (d.edgeType === 'topic_magicians') return '2 3';
+      if (d.edgeType === 'eip_magicians' || d.edgeType === 'topic_eip' || d.edgeType === 'eip_ethresearch') return '5 3';
       return null;
     })
     .attr('marker-end', 'url(#net-arrow-default)');
@@ -3546,8 +3704,8 @@ function buildNetwork() {
     .attr('transform', 'rotate(45)')
     .attr('x', -6).attr('y', -6);
 
-  // Topic circles (not EIP nodes)
-  node.filter(function(d) { return !d.isFork && !d.isEip; }).append('circle')
+  // Topic circles
+  node.filter(function(d) { return !d.isFork && !d.isEip && !d.isMagicians; }).append('circle')
     .attr('class', 'net-shape net-topic-shape')
     .attr('r', function(d) { return rScale(d.influence || 0); })
     .attr('fill', function(d) { return THREAD_COLORS[d.thread] || '#555'; })
