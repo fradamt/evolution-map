@@ -4449,7 +4449,14 @@ function buildCoAuthorNetwork() {
   var coauthorClickTimer = null;
   node.on('click', function(ev, d) {
     if (coauthorClickTimer) { clearTimeout(coauthorClickTimer); coauthorClickTimer = null; return; }
-    coauthorClickTimer = setTimeout(function() { coauthorClickTimer = null; toggleAuthor(d.id); }, 250);
+    coauthorClickTimer = setTimeout(function() {
+      coauthorClickTimer = null;
+      if (!DATA.authors[d.id]) {
+        openAuthor(d.id);
+        return;
+      }
+      toggleAuthor(d.id);
+    }, 250);
   });
   node.on('dblclick', function(ev, d) {
     selectAuthor(d.id);
