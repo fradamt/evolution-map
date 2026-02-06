@@ -708,10 +708,11 @@ header .stats span { white-space: nowrap; }
 #sidebar { grid-column: 2; background: #12121a; border-left: 1px solid #2a2a3a; overflow-y: auto; position: relative; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-.sidebar-width-toggle { position: absolute; left: -14px; top: 14px; width: 14px; height: 30px; border: 1px solid #2a2a3a;
-                        border-right: none; border-radius: 4px 0 0 4px; background: #12121a; color: #7788cc;
+.sidebar-width-toggle { position: absolute; right: 8px; top: 8px; width: 18px; height: 18px; border: 1px solid #2a2a3a;
+                        border-radius: 3px; background: #12121a; color: #7788cc;
                         font-size: 10px; cursor: pointer; z-index: 20; line-height: 1; padding: 0; }
 .sidebar-width-toggle:hover { background: #1a1a2e; color: #aab6ff; }
+#sidebar .sidebar-section:first-child { padding-top: 32px; }
 
 #timeline-view, #network-view, #coauthor-view { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
 #timeline-view { display: block; overscroll-behavior: none; }
@@ -4497,6 +4498,18 @@ function buildCrossForumTraversalHtml(t) {
     '</div>';
 }
 
+function inferredCoauthorNamesFromExcerpt(t) {
+  if (!t || !t.exc) return [];
+  var m = String(t.exc).match(/co-?authored by\s+([^\.]+)/i);
+  if (!m || !m[1]) return [];
+  var phrase = String(m[1]).replace(/\s+/g, ' ').trim();
+  if (!phrase) return [];
+  phrase = phrase.replace(/\s+(and|&)\s+/gi, ', ');
+  return phrase.split(',').map(function(name) {
+    return String(name).replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '').trim();
+  }).filter(Boolean).slice(0, 8);
+}
+
 function buildCrossForumTraversalHtmlForEip(num, eip, relTopics) {
   var magSet = new Set();
   if (eip && eip.mt) magSet.add(Number(eip.mt));
@@ -4612,21 +4625,39 @@ function showDetail(t) {
     magiciansHtml += '</div>';
   }
   var traversalHtml = buildCrossForumTraversalHtml(t);
-  var coauthorList = t.coauth || [];
+  var coauthorEntries = [];
+  var seenCoauthors = new Set();
+  function coauthorKey(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+  function addCoauthor(label, clickable) {
+    var clean = String(label || '').trim();
+    if (!clean) return;
+    var key = coauthorKey(clean);
+    if (!key || seenCoauthors.has(key)) return;
+    var authorKey = coauthorKey(t.a);
+    if (authorKey && (authorKey.indexOf(key) >= 0 || key.indexOf(authorKey) >= 0)) return;
+    seenCoauthors.add(key);
+    coauthorEntries.push({label: clean, clickable: clickable});
+  }
+  (t.coauth || []).forEach(function(u) { addCoauthor(u, true); });
+  inferredCoauthorNamesFromExcerpt(t).forEach(function(name) { addCoauthor(name, false); });
+  function renderCoauthorEntry(entry) {
+    if (entry.clickable) {
+      return '<span onclick="openAuthor(' + jsQuote(entry.label) + ')" style="cursor:pointer;color:#7788cc">' + escHtml(entry.label) + '</span>';
+    }
+    return '<span style="color:#9aa5d4">' + escHtml(entry.label) + '</span>';
+  }
   var coauthorInline = '';
-  if (coauthorList.length > 0) {
-    var inlineLinks = coauthorList.slice(0, 3).map(function(u) {
-      return '<span onclick="openAuthor(' + jsQuote(u) + ')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>';
-    }).join(', ');
-    if (coauthorList.length > 3) {
-      inlineLinks += ' <span style="color:#666">+' + (coauthorList.length - 3) + '</span>';
+  if (coauthorEntries.length > 0) {
+    var inlineLinks = coauthorEntries.slice(0, 3).map(renderCoauthorEntry).join(', ');
+    if (coauthorEntries.length > 3) {
+      inlineLinks += ' <span style="color:#666">+' + (coauthorEntries.length - 3) + '</span>';
     }
     coauthorInline = ' \u00b7 with ' + inlineLinks;
   }
-  var coauthorRow = coauthorList.length > 3
-    ? '<div class="detail-stat"><span class="label">Coauthors</span><span class="value">' + coauthorList.map(function(u) {
-        return '<span onclick="openAuthor(' + jsQuote(u) + ')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>';
-      }).join(', ') + '</span></div>'
+  var coauthorRow = coauthorEntries.length > 3
+    ? '<div class="detail-stat"><span class="label">Coauthors</span><span class="value">' + coauthorEntries.map(renderCoauthorEntry).join(', ') + '</span></div>'
     : '';
 
   content.innerHTML =
