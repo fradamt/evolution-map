@@ -1823,43 +1823,122 @@ def main():
     # -----------------------------------------------------------------------
     print("Building EIP author profiles...")
 
-    # Normalize EIP author names: fix punctuation variants, merge short→full
-    def normalize_eip_author(name):
-        # Normalize backtick/smart-quote variants to standard apostrophe
+    # Normalize EIP author names across multiple dimensions:
+    # 1. Punctuation (backtick/smart-quotes → apostrophe)
+    # 2. Case-insensitive dedup (lightclient → Lightclient, potuz → Potuz)
+    # 3. Unicode diacritics (Paweł → Pawel for matching)
+    # 4. Short name → full name prefix (Francesco → Francesco D'Amato)
+    # 5. Same-last-name variants (Mike Neuder → Michael Neuder)
+    import unicodedata
+
+    def _fix_punctuation(name):
         return name.replace("\u2018", "'").replace("\u2019", "'").replace("`", "'")
 
-    # Collect all normalized names and their frequencies
+    def _strip_diacritics(s):
+        """Remove diacritics for fuzzy comparison (Paweł → Pawel)."""
+        return "".join(
+            c for c in unicodedata.normalize("NFD", s)
+            if unicodedata.category(c) != "Mn"
+        )
+
+    # Collect all punctuation-normalized names and frequencies
     eip_name_freq = Counter()
     for em in eip_catalog.values():
         for a in em.get("authors", []):
-            eip_name_freq[normalize_eip_author(a)] += 1
+            eip_name_freq[_fix_punctuation(a)] += 1
 
-    # Build short→full name map: single-word names that prefix exactly one
-    # frequent full name get merged (e.g. "Francesco" → "Francesco D'Amato",
-    # "Vitalik" → "Vitalik Buterin"). Ambiguous prefixes are left as-is.
+    # Step 1: Case-insensitive dedup — group by lowercase, pick most-frequent
+    case_canon = {}  # lowercased → canonical casing
+    lower_groups = defaultdict(list)
+    for n in eip_name_freq:
+        lower_groups[n.lower()].append(n)
+    for low, variants in lower_groups.items():
+        canon = max(variants, key=lambda v: eip_name_freq[v])
+        for v in variants:
+            if v != canon:
+                case_canon[v] = canon
+
+    # Step 2: Unicode diacritics dedup — strip diacritics and compare
+    ascii_groups = defaultdict(list)
+    canon_names = set(eip_name_freq.keys()) - set(case_canon.keys())
+    for n in canon_names:
+        ascii_groups[_strip_diacritics(n).lower()].append(n)
+    diacritics_canon = {}
+    for asc, variants in ascii_groups.items():
+        if len(variants) > 1:
+            canon = max(variants, key=lambda v: eip_name_freq[v])
+            for v in variants:
+                if v != canon:
+                    diacritics_canon[v] = canon
+
+    # Step 3: Apply case + diacritics canonicalization to build working freq map
+    def _step1_canon(name):
+        n = _fix_punctuation(name)
+        n = case_canon.get(n, n)
+        n = diacritics_canon.get(n, n)
+        return n
+
+    working_freq = Counter()
+    for n, c in eip_name_freq.items():
+        working_freq[_step1_canon(n)] += c
+
+    # Step 4: Short name → full name prefix (case-insensitive)
     short_to_full = {}
-    all_names = list(eip_name_freq.keys())
+    all_names = list(working_freq.keys())
     for short in all_names:
         if " " in short or len(short) < 3:
             continue
+        short_low = short.lower()
         matches = [full for full in all_names
-                   if full != short and full.startswith(short + " ")]
+                   if full != short and full.lower().startswith(short_low + " ")]
         if len(matches) == 1:
             short_to_full[short] = matches[0]
         elif len(matches) > 1:
-            # Ambiguous — pick the most frequent if it dominates (5x+)
-            matches.sort(key=lambda n: -eip_name_freq[n])
-            if eip_name_freq[matches[0]] >= 5 * max(eip_name_freq[m] for m in matches[1:]):
+            matches.sort(key=lambda n: -working_freq[n])
+            if working_freq[matches[0]] >= 5 * max(working_freq[m] for m in matches[1:]):
                 short_to_full[short] = matches[0]
 
+    # Step 5: Same-last-name dedup for rare last names
+    # (Mike Neuder → Michael Neuder when "Neuder" only appears for these two)
+    last_name_groups = defaultdict(list)
+    remaining = set(all_names) - set(short_to_full.keys())
+    for n in remaining:
+        parts = n.split()
+        if len(parts) >= 2:
+            last_name_groups[parts[-1].lower()].append(n)
+    same_last_canon = {}
+    for last, variants in last_name_groups.items():
+        if len(variants) == 2:
+            a, b = variants
+            # Only merge if first names share a 2+ char prefix (Mike/Michael)
+            fa, fb = a.split()[0].lower(), b.split()[0].lower()
+            common = 0
+            for ca, cb in zip(fa, fb):
+                if ca == cb:
+                    common += 1
+                else:
+                    break
+            if common >= 2:
+                canon = max(variants, key=lambda v: working_freq[v])
+                other = a if canon == b else b
+                same_last_canon[other] = canon
+
     def canonical_eip_author(name):
-        n = normalize_eip_author(name)
-        return short_to_full.get(n, n)
+        n = _step1_canon(name)
+        n = short_to_full.get(n, n)
+        n = same_last_canon.get(n, n)
+        return n
 
     merged_count = 0
-    for short, full in short_to_full.items():
-        merged_count += eip_name_freq[short]
-        print(f"  Merged EIP author: {short!r} ({eip_name_freq[short]}) → {full!r}")
+    all_merges = {}
+    all_merges.update(case_canon)
+    all_merges.update(diacritics_canon)
+    all_merges.update(short_to_full)
+    all_merges.update(same_last_canon)
+    for orig, canon in sorted(all_merges.items(), key=lambda x: -eip_name_freq.get(x[0], 0)):
+        cnt = eip_name_freq.get(orig, 0)
+        merged_count += cnt
+        print(f"  Merged EIP author: {orig!r} ({cnt}) → {canon!r}")
 
     eip_author_data = defaultdict(lambda: {
         "eips": [], "statuses": Counter(), "forks_contributed": set(),

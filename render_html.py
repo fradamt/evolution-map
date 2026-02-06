@@ -1444,6 +1444,7 @@ function buildTimeline() {
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
   const swimH = plotH - histH - eipReservedH - eipGap; // swim lane area for topic threads
+  const topicLaneY0 = eipReservedH + eipGap; // Y offset where topic lanes begin
 
   // Group topics by thread for swim lanes
   const threadTopics = {};
@@ -1571,7 +1572,6 @@ function buildTimeline() {
   });
 
   // EIP lane label + separator (at top of plot area)
-  const topicLaneY0 = eipReservedH + eipGap; // Y offset where topic lanes begin
   fixedG.append('text').attr('x', -10).attr('y', eipReservedH / 2)
     .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
     .attr('fill', '#88aacc').attr('font-size', 11).attr('font-weight', 500)
