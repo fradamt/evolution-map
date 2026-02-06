@@ -44,8 +44,8 @@ header .stats span { white-space: nowrap; }
 
 /* Timeline */
 .timeline-container { width: 100%; height: 100%; overflow: hidden; }
-.fork-line { stroke: #444; stroke-width: 1; stroke-dasharray: 4,4; }
-.fork-label { fill: #666; font-size: 10px; font-weight: 500; }
+.fork-line { stroke: #555; stroke-width: 1.5; stroke-dasharray: 4,4; }
+.fork-label { fill: #999; font-size: 11px; font-weight: 600; }
 .era-bg { opacity: 0.03; }
 .histogram-bar { fill: rgba(255,255,255,0.13); }
 .histogram-bar:hover { fill: rgba(255,255,255,0.25); }
@@ -168,6 +168,7 @@ header .stats span { white-space: nowrap; }
 .eip-status-living { background: #1a3a3a; color: #88cccc; }
 .magicians-link { color: #bb88cc; text-decoration: none; font-size: 11px; }
 .magicians-link:hover { text-decoration: underline; }
+.search-item-eip { border-left: 2px solid #88aacc; }
 .fork-tag { display: inline-block; font-size: 10px; padding: 1px 5px; background: #3a3a1a;
             border: 1px solid #5a5a2a; border-radius: 3px; margin: 1px; color: #cccc88; }
 
@@ -914,6 +915,25 @@ function populateDropdown(q) {
         '<div class="si-meta">' + a.tc + ' topics \u00b7 inf: ' + a.inf.toFixed(2) + '</div></div>';
     }).join('');
 
+    // Match EIPs from catalog by number or title
+    var eipResults = [];
+    Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
+      var num = entry[0], eip = entry[1];
+      var numMatch = num.startsWith(q.replace(/^eip-?/i, '')) || ('eip-' + num).includes(q);
+      var titleMatch = eip.t && eip.t.toLowerCase().includes(q);
+      if (numMatch || titleMatch) {
+        eipResults.push({num: num, eip: eip, exact: num === q.replace(/^eip-?/i, '')});
+      }
+    });
+    eipResults.sort(function(a, b) { return (b.exact ? 1 : 0) - (a.exact ? 1 : 0); });
+    var eipSlice = eipResults.slice(0, 3);
+    var eipHtml = eipSlice.map(function(r) {
+      var meta = [r.eip.s, r.eip.ty, r.eip.c, r.eip.fk].filter(Boolean).join(' \u00b7 ');
+      return '<div class="search-item search-item-eip" data-eip="' + r.num + '">' +
+        '<div class="si-title"><span class="eip-tag primary" style="margin-right:4px">EIP-' + r.num + '</span>' + escHtml(r.eip.t || '') + '</div>' +
+        '<div class="si-meta">' + escHtml(meta) + '</div></div>';
+    }).join('');
+
     var topicResults = [];
     Object.values(DATA.topics).forEach(function(t) {
       var score = 0;
@@ -926,7 +946,7 @@ function populateDropdown(q) {
       if (score > 0) topicResults.push({topic: t, score: score});
     });
     topicResults.sort(function(a, b) { return b.score - a.score || b.topic.inf - a.topic.inf; });
-    var maxTopics = 8 - Math.min(authorResults.length, 3);
+    var maxTopics = 8 - Math.min(authorResults.length, 3) - eipSlice.length;
     var topicHtml = topicResults.slice(0, maxTopics).map(function(r) {
       var t = r.topic;
       var thColor = t.th ? (THREAD_COLORS[t.th] || '#555') : '#555';
@@ -935,8 +955,9 @@ function populateDropdown(q) {
         '<div class="si-meta">' + escHtml(t.a) + ' \u00b7 ' + t.d.slice(0,7) + ' \u00b7 inf: ' + t.inf.toFixed(2) + '</div></div>';
     }).join('');
 
-    dropdown.innerHTML = authorHtml + topicHtml;
-    results = authorResults.slice(0, 3).map(function(a) { return {type:'author'}; })
+    dropdown.innerHTML = eipHtml + authorHtml + topicHtml;
+    results = eipSlice.map(function() { return {type:'eip'}; })
+      .concat(authorResults.slice(0, 3).map(function(a) { return {type:'author'}; }))
       .concat(topicResults.slice(0, maxTopics).map(function(r) { return {type:'topic'}; }));
   }
 
@@ -945,10 +966,13 @@ function populateDropdown(q) {
 
   // Attach click handlers
   dropdown.querySelectorAll('.search-item').forEach(function(el) {
-    el.addEventListener('click', function() {
+    el.addEventListener('click', function(ev) {
       var topicId = el.dataset.topicId;
       var authorId = el.dataset.author;
-      if (topicId) {
+      var eipId = el.dataset.eip;
+      if (eipId) {
+        showEipPopover(Number(eipId), ev);
+      } else if (topicId) {
         var t = DATA.topics[Number(topicId)];
         if (t) showDetail(t);
       } else if (authorId) {
@@ -1152,6 +1176,7 @@ function buildTimeline() {
       zoomG.append('text').attr('class', 'fork-label')
         .attr('x', x).attr('y', swimH + histH + 15).attr('text-anchor', 'middle')
         .text(f.cn || f.n)
+        .attr('paint-order', 'stroke').attr('stroke', '#0a0a0f').attr('stroke-width', 3)
         .datum(fd)
     );
     // Invisible wide hover area for fork interaction
@@ -1159,7 +1184,8 @@ function buildTimeline() {
       .attr('x1', x).attr('x2', x).attr('y1', -5).attr('y2', swimH + histH)
       .datum({date: fd, fork: f})
       .on('mouseover', function(ev, d) { showForkTooltip(ev, d.fork); })
-      .on('mouseout', function() { hideTooltip(); });
+      .on('mouseout', function() { hideTooltip(); })
+      .on('click', function(ev, d) { ev.stopPropagation(); showForkPopover(ev, d.fork); });
     forkHoverLines.push(hoverLine);
   });
 
@@ -3015,6 +3041,41 @@ function positionPopover(pop, ev) {
 
 function closeEipPopover() {
   document.getElementById('eip-popover').style.display = 'none';
+}
+
+function showForkPopover(ev, f) {
+  var pop = document.getElementById('eip-popover');
+  var html = '<h3>' + escHtml(f.cn || f.n) + '</h3>';
+  if (f.d) html += '<div style="color:#888;font-size:11px">' + escHtml(f.d) + '</div>';
+  if (f.el || f.cl) {
+    html += '<div style="color:#aaa;font-size:11px;margin-top:4px">';
+    if (f.el) html += 'EL: ' + escHtml(f.el);
+    if (f.el && f.cl) html += ' &middot; ';
+    if (f.cl) html += 'CL: ' + escHtml(f.cl);
+    html += '</div>';
+  }
+  if (f.eips && f.eips.length > 0) {
+    html += '<div style="margin-top:8px"><div style="font-size:10px;color:#666;margin-bottom:4px">EIPs (' + f.eips.length + ')</div>';
+    html += f.eips.map(function(e) {
+      return '<span class="eip-tag primary" onclick="showEipPopover(' + e + ', event)">EIP-' + e + '</span>';
+    }).join(' ');
+    html += '</div>';
+  }
+  if (f.rt && f.rt.length > 0) {
+    var sorted = f.rt.map(function(tid) { return DATA.topics[tid]; }).filter(Boolean)
+      .sort(function(a, b) { return (b.inf || 0) - (a.inf || 0); }).slice(0, 5);
+    if (sorted.length > 0) {
+      html += '<div style="margin-top:8px;border-top:1px solid #333;padding-top:6px">' +
+        '<div style="font-size:10px;color:#666;margin-bottom:4px">Related topics (' + f.rt.length + ')</div>';
+      sorted.forEach(function(rt) {
+        html += '<div style="font-size:11px;padding:2px 0"><a onclick="closeEipPopover();showDetail(DATA.topics[' + rt.id + '])" ' +
+          'style="color:#7788cc;cursor:pointer;text-decoration:none">' + escHtml(rt.t) + '</a></div>';
+      });
+      html += '</div>';
+    }
+  }
+  pop.innerHTML = html;
+  positionPopover(pop, ev);
 }
 
 // === URL HASH ROUTING ===
