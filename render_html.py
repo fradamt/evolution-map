@@ -5351,7 +5351,7 @@ function showDetail(t) {
   pinnedTopicId = t.id;
   activeEipNum = null;
   activeMagiciansId = null;
-  applyPinnedHighlight();
+  applyFilters();
   // Auto-scroll timeline when navigating between topics (not on first click)
   if (wasAlreadyPinned) scrollToTopic(t.id);
 
