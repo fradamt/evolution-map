@@ -735,7 +735,6 @@ def generate_html(viz_json, data):
   <header>
     <h1>Ethereum Evolution</h1>
     <div class="stats">
-      <span class="stats-citations">{meta['included_edges']} citations</span>
       <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
     </div>
     <div class="content-toggles">
