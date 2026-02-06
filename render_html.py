@@ -1154,28 +1154,143 @@ const ETH_TO_MAG_AUTHORS = AUTHOR_LINKS.ethToMag || {};
 const MAG_TO_EIP_AUTHORS = AUTHOR_LINKS.magToEip || {};
 const EIP_TO_MAG_AUTHORS = AUTHOR_LINKS.eipToMag || {};
 
+function identityNode(kind, name) {
+  return String(kind) + ':' + String(name);
+}
+
+function parseIdentityNode(node) {
+  var idx = String(node).indexOf(':');
+  if (idx < 0) return {kind: '', name: String(node)};
+  return {kind: String(node).slice(0, idx), name: String(node).slice(idx + 1)};
+}
+
+function sortedSetValues(setObj) {
+  return Array.from(setObj || []).sort(function(a, b) { return String(a).localeCompare(String(b)); });
+}
+
+const IDENTITY_GRAPH = new Map();
+const IDENTITY_COMPONENT_BY_NODE = new Map();
+const IDENTITY_MEMBERS_BY_COMPONENT = new Map();
+
+function ensureIdentityNode(kind, name) {
+  if (!name) return;
+  var node = identityNode(kind, name);
+  if (!IDENTITY_GRAPH.has(node)) IDENTITY_GRAPH.set(node, new Set());
+}
+
+function connectIdentityNodes(aKind, aName, bKind, bName) {
+  if (!aName || !bName) return;
+  var a = identityNode(aKind, aName);
+  var b = identityNode(bKind, bName);
+  ensureIdentityNode(aKind, aName);
+  ensureIdentityNode(bKind, bName);
+  if (a === b) return;
+  IDENTITY_GRAPH.get(a).add(b);
+  IDENTITY_GRAPH.get(b).add(a);
+}
+
+(function buildIdentityGraph() {
+  Object.keys(DATA.authors || {}).forEach(function(username) {
+    ensureIdentityNode('eth', username);
+  });
+  Object.keys(DATA.eipAuthors || {}).forEach(function(name) {
+    ensureIdentityNode('eip', name);
+  });
+  Object.values(DATA.magiciansTopics || {}).forEach(function(mt) {
+    if (mt && mt.a) ensureIdentityNode('mag', mt.a);
+  });
+
+  Object.entries(ETH_TO_EIP_AUTHORS).forEach(function(entry) {
+    var username = entry[0];
+    (entry[1] || []).forEach(function(name) {
+      connectIdentityNodes('eth', username, 'eip', name);
+    });
+  });
+  Object.entries(MAG_TO_ETH_AUTHORS).forEach(function(entry) {
+    var handle = entry[0];
+    (entry[1] || []).forEach(function(username) {
+      connectIdentityNodes('mag', handle, 'eth', username);
+    });
+  });
+  Object.entries(MAG_TO_EIP_AUTHORS).forEach(function(entry) {
+    var handle = entry[0];
+    (entry[1] || []).forEach(function(name) {
+      connectIdentityNodes('mag', handle, 'eip', name);
+    });
+  });
+})();
+
+(function buildIdentityComponents() {
+  var compIndex = 0;
+  IDENTITY_GRAPH.forEach(function(_edges, startNode) {
+    if (IDENTITY_COMPONENT_BY_NODE.has(startNode)) return;
+    compIndex += 1;
+    var compId = 'idc' + String(compIndex);
+    var members = {eth: new Set(), eip: new Set(), mag: new Set()};
+    var stack = [startNode];
+    IDENTITY_COMPONENT_BY_NODE.set(startNode, compId);
+    while (stack.length > 0) {
+      var node = stack.pop();
+      var parsed = parseIdentityNode(node);
+      if (members[parsed.kind]) members[parsed.kind].add(parsed.name);
+      var neighbors = IDENTITY_GRAPH.get(node) || new Set();
+      neighbors.forEach(function(nextNode) {
+        if (!IDENTITY_COMPONENT_BY_NODE.has(nextNode)) {
+          IDENTITY_COMPONENT_BY_NODE.set(nextNode, compId);
+          stack.push(nextNode);
+        }
+      });
+    }
+    IDENTITY_MEMBERS_BY_COMPONENT.set(compId, members);
+  });
+})();
+
+function identityMembers(kind, name) {
+  var empty = {eth: [], eip: [], mag: []};
+  if (!name) return empty;
+  var node = identityNode(kind, name);
+  if (!IDENTITY_GRAPH.has(node)) {
+    var fallback = {eth: [], eip: [], mag: []};
+    if (fallback[kind]) fallback[kind] = [String(name)];
+    return fallback;
+  }
+  var compId = IDENTITY_COMPONENT_BY_NODE.get(node);
+  if (!compId) {
+    var lonely = {eth: [], eip: [], mag: []};
+    if (lonely[kind]) lonely[kind] = [String(name)];
+    return lonely;
+  }
+  var members = IDENTITY_MEMBERS_BY_COMPONENT.get(compId);
+  if (!members) return empty;
+  return {
+    eth: sortedSetValues(members.eth),
+    eip: sortedSetValues(members.eip),
+    mag: sortedSetValues(members.mag)
+  };
+}
+
 function linkedEipAuthors(username) {
-  return ETH_TO_EIP_AUTHORS[username] || [];
+  return identityMembers('eth', username).eip;
 }
 
 function linkedEthAuthors(eipAuthorName) {
-  return EIP_TO_ETH_AUTHORS[eipAuthorName] || [];
+  return identityMembers('eip', eipAuthorName).eth;
 }
 
 function linkedEthAuthorsFromMag(magAuthor) {
-  return MAG_TO_ETH_AUTHORS[magAuthor] || [];
+  return identityMembers('mag', magAuthor).eth;
 }
 
 function linkedEipAuthorsFromMag(magAuthor) {
-  return MAG_TO_EIP_AUTHORS[magAuthor] || [];
+  return identityMembers('mag', magAuthor).eip;
 }
 
 function linkedMagAuthorsFromEth(username) {
-  return ETH_TO_MAG_AUTHORS[username] || [];
+  return identityMembers('eth', username).mag;
 }
 
 function linkedMagAuthorsFromEip(eipAuthorName) {
-  return EIP_TO_MAG_AUTHORS[eipAuthorName] || [];
+  return identityMembers('eip', eipAuthorName).mag;
 }
 
 const COAUTHOR_ALIAS_OVERRIDES = {
@@ -1233,10 +1348,10 @@ function resolveBylineCoauthorIdentity(rawName) {
   var override = COAUTHOR_ALIAS_OVERRIDES[norm];
   if (override) {
     if (override.kind === 'eth' && COAUTHOR_ETH_USERNAMES.indexOf(override.target) >= 0) {
-      return {kind: 'eth', target: override.target, label: raw || override.target, key: 'eth:' + normalizeIdentityToken(override.target)};
+      return {kind: 'eth', target: override.target, label: override.target, key: 'eth:' + normalizeIdentityToken(override.target)};
     }
     if (override.kind === 'eip' && COAUTHOR_EIP_AUTHOR_NAMES.indexOf(override.target) >= 0) {
-      return {kind: 'eip', target: override.target, label: raw || override.target, key: 'eip:' + normalizeIdentityToken(override.target)};
+      return {kind: 'eip', target: override.target, label: override.target, key: 'eip:' + normalizeIdentityToken(override.target)};
     }
   }
 
@@ -1267,18 +1382,10 @@ function resolveBylineCoauthorIdentity(rawName) {
     if (Math.abs(bestEth.score - bestEip.score) < 15) {
       return {kind: 'raw', label: raw, key: 'raw:' + norm};
     }
-    var winner = bestEth.score > bestEip.score ? bestEth : bestEip;
-    winner.label = raw || winner.label;
-    return winner;
+    return bestEth.score > bestEip.score ? bestEth : bestEip;
   }
-  if (bestEth) {
-    bestEth.label = raw || bestEth.label;
-    return bestEth;
-  }
-  if (bestEip) {
-    bestEip.label = raw || bestEip.label;
-    return bestEip;
-  }
+  if (bestEth) return bestEth;
+  if (bestEip) return bestEip;
   return {kind: 'raw', label: raw, key: 'raw:' + norm};
 }
 
