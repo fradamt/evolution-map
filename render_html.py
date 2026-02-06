@@ -733,11 +733,9 @@ def generate_html(viz_json, data):
 <body>
 <div id="app">
   <header>
-    <h1><span class="title-long">Ethereum Research Evolution Map</span><span class="title-short">Ethereum Evolution</span></h1>
+    <h1>Ethereum Evolution</h1>
     <div class="stats">
-      <span class="stats-topics">{meta['total_topics']} topics</span>
       <span class="stats-citations">{meta['included_edges']} citations</span>
-      <span class="stats-range">2017\u20132026</span>
       <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
     </div>
     <div class="content-toggles">
@@ -6033,19 +6031,6 @@ function updateBreadcrumb() {
   if (activeTag) {
     parts.push('<span class="bc-tag">' + escHtml(activeTag) +
       '<span class="bc-close" onclick="event.stopPropagation();toggleTag(\'' + escHtml(activeTag) + '\')">&times;</span></span>');
-  }
-  if (!showPosts) {
-    parts.push('<span class="bc-tag">EthResearch off' +
-      '<span class="bc-close" onclick="event.stopPropagation();toggleContent(\'posts\')">&times;</span></span>');
-  }
-  if (showEips) {
-    var modeLabel = eipVisibilityMode === 'all' ? 'all' : 'linked';
-    parts.push('<span class="bc-tag" style="border-color:#4a6a4a;color:#88cc88">EIPs ' + modeLabel +
-      '<span class="bc-close" onclick="event.stopPropagation();toggleContent(\'eips\', \'off\')">&times;</span></span>');
-  }
-  if (showMagicians) {
-    parts.push('<span class="bc-tag" style="border-color:#6a4a85;color:#c8b5db">Magicians on' +
-      '<span class="bc-close" onclick="event.stopPropagation();toggleContent(\'magicians\')">&times;</span></span>');
   }
   if (parts.length === 0) {
     parts.push('<span class="bc-hint">Click to filter \u00b7 Double-click for details \u00b7 <span style="cursor:pointer;color:#667" onclick="toggleHelp()">?</span> for shortcuts</span>');
