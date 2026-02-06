@@ -4483,9 +4483,22 @@ function buildCoAuthorNetwork() {
   var g = svg.append('g');
 
   // Zoom
-  svg.call(d3.zoom().scaleExtent([0.3, 5]).on('zoom', function(ev) {
-    g.attr('transform', ev.transform);
-  }));
+  var coZoom = d3.zoom()
+    .scaleExtent([0.3, 5])
+    .extent([[0, 0], [width, height]])
+    .translateExtent([[-width * 0.8, -height * 0.8], [width * 1.8, height * 1.8]])
+    .on('start', function() {
+      hideTooltip();
+      filterCoAuthorNetwork();
+    })
+    .on('zoom', function(ev) {
+      g.attr('transform', ev.transform);
+    });
+  svg.call(coZoom);
+  svg.on('mouseleave', function() {
+    hideTooltip();
+    filterCoAuthorNetwork();
+  });
 
   // Prepare co-author data
   var coNodes = (DATA.coGraph.nodes || []).map(function(n) {
@@ -4528,12 +4541,12 @@ function buildCoAuthorNetwork() {
   // Force simulation
   coAuthorSimulation = d3.forceSimulation(coNodes)
     .force('link', d3.forceLink(coLinks).id(function(d) { return d.id; })
-      .distance(function(d) { return Math.max(40, 150 - d.weight * 10); })
-      .strength(function(d) { return 0.1 + (d.weight / maxWeight) * 0.3; }))
-    .force('charge', d3.forceManyBody().strength(-200))
+      .distance(function(d) { return Math.max(32, 110 - d.weight * 8); })
+      .strength(function(d) { return 0.14 + (d.weight / maxWeight) * 0.26; }))
+    .force('charge', d3.forceManyBody().strength(-140))
     .force('center', d3.forceCenter(width / 2, height / 2))
     .force('collision', d3.forceCollide().radius(function(d) {
-      return rScale(d.inf || 0) + 4;
+      return rScale(d.inf || 0) + 3;
     }));
 
   // Draw links
@@ -4550,9 +4563,15 @@ function buildCoAuthorNetwork() {
     .call(d3.drag()
       .on('start', function(ev, d) {
         if (!ev.active) coAuthorSimulation.alphaTarget(0.3).restart();
+        d._dragMoved = false;
         d.fx = d.x; d.fy = d.y;
+        hideTooltip();
+        filterCoAuthorNetwork();
       })
-      .on('drag', function(ev, d) { d.fx = ev.x; d.fy = ev.y; })
+      .on('drag', function(ev, d) {
+        d._dragMoved = true;
+        d.fx = ev.x; d.fy = ev.y;
+      })
       .on('end', function(ev, d) {
         if (!ev.active) coAuthorSimulation.alphaTarget(0);
         d.fx = null; d.fy = null;
@@ -4582,18 +4601,29 @@ function buildCoAuthorNetwork() {
     .attr('opacity', 0)
     .text(function(d) { return d.id; });
 
-  // Click -> select author and open detail sidebar
+  // Click opens detail. Shift+click toggles author filter.
   var coauthorClickTimer = null;
   node.on('click', function(ev, d) {
     if (coauthorClickTimer) { clearTimeout(coauthorClickTimer); coauthorClickTimer = null; return; }
+    var shiftHeld = !!ev.shiftKey;
     coauthorClickTimer = setTimeout(function() {
       coauthorClickTimer = null;
-      selectAuthor(d.id);
+      if (d._dragMoved) {
+        d._dragMoved = false;
+        return;
+      }
+      if (shiftHeld) {
+        toggleAuthor(d.id);
+        return;
+      }
       showAuthorDetail(d.id);
-    }, 250);
+    }, 220);
   });
   node.on('dblclick', function(ev, d) {
-    selectAuthor(d.id);
+    if (d._dragMoved) {
+      d._dragMoved = false;
+      return;
+    }
     showAuthorDetail(d.id);
   });
 
