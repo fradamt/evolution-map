@@ -58,6 +58,7 @@ EIP_TO_ETH_AUTHOR_OVERRIDES = {
     "Francesco D'Amato": ["fradamt"],
     "Danny Ryan": ["djrtwo"],
     "Toni Wahrstätter": ["Nero_eth"],
+    "Carl Beekhuizen": ["CarlBeek"],
 }
 
 # Manual aliases for Magicians handles that should map to ethresear.ch usernames.
@@ -205,7 +206,7 @@ def _build_author_links(data):
     for eip_name in eip_names:
         mapped = []
         for override in EIP_TO_ETH_AUTHOR_OVERRIDES.get(eip_name, []):
-            if override in usernames and override not in mapped:
+            if override and override not in mapped:
                 mapped.append(override)
 
         scored = sorted(
@@ -235,7 +236,7 @@ def _build_author_links(data):
     for mag_user in mag_usernames:
         mapped = []
         for override in MAG_TO_ETH_AUTHOR_OVERRIDES.get(mag_user, []):
-            if override in usernames and override not in mapped:
+            if override and override not in mapped:
                 mapped.append(override)
 
         scored = sorted(
@@ -2151,8 +2152,14 @@ function selectEipAuthor(name) {
 }
 
 function openAuthor(username) {
-  if (DATA.authors[username]) showAuthorDetail(username);
-  else selectAuthor(username);
+  if (DATA.authors[username]) {
+    showAuthorDetail(username);
+    return;
+  }
+  selectAuthor(username);
+  var profileUrl = 'https://ethresear.ch/u/' + encodeURIComponent(username);
+  window.open(profileUrl, '_blank');
+  showToast('Opened ethresearch profile for ' + username);
 }
 
 function openEipAuthor(name) {
