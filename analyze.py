@@ -1819,12 +1819,50 @@ def main():
     print(f"  {len(eip_graph_nodes)} EIP nodes, {len(eip_graph_edges)} EIP edges")
 
     # -----------------------------------------------------------------------
-    # Build EIP author profiles
+    # Build EIP author profiles (with name normalization)
     # -----------------------------------------------------------------------
     print("Building EIP author profiles...")
+
+    # Normalize EIP author names: fix punctuation variants, merge short→full
+    def normalize_eip_author(name):
+        # Normalize backtick/smart-quote variants to standard apostrophe
+        return name.replace("\u2018", "'").replace("\u2019", "'").replace("`", "'")
+
+    # Collect all normalized names and their frequencies
+    eip_name_freq = Counter()
+    for em in eip_catalog.values():
+        for a in em.get("authors", []):
+            eip_name_freq[normalize_eip_author(a)] += 1
+
+    # Build short→full name map: single-word names that prefix exactly one
+    # frequent full name get merged (e.g. "Francesco" → "Francesco D'Amato",
+    # "Vitalik" → "Vitalik Buterin"). Ambiguous prefixes are left as-is.
+    short_to_full = {}
+    all_names = list(eip_name_freq.keys())
+    for short in all_names:
+        if " " in short or len(short) < 3:
+            continue
+        matches = [full for full in all_names
+                   if full != short and full.startswith(short + " ")]
+        if len(matches) == 1:
+            short_to_full[short] = matches[0]
+        elif len(matches) > 1:
+            # Ambiguous — pick the most frequent if it dominates (5x+)
+            matches.sort(key=lambda n: -eip_name_freq[n])
+            if eip_name_freq[matches[0]] >= 5 * max(eip_name_freq[m] for m in matches[1:]):
+                short_to_full[short] = matches[0]
+
+    def canonical_eip_author(name):
+        n = normalize_eip_author(name)
+        return short_to_full.get(n, n)
+
+    merged_count = 0
+    for short, full in short_to_full.items():
+        merged_count += eip_name_freq[short]
+        print(f"  Merged EIP author: {short!r} ({eip_name_freq[short]}) → {full!r}")
+
     eip_author_data = defaultdict(lambda: {
-        "eips_authored": [], "eips_coauthored": [],
-        "statuses": Counter(), "forks_contributed": set(),
+        "eips": [], "statuses": Counter(), "forks_contributed": set(),
         "influence_sum": 0.0, "active_years": set(),
     })
 
@@ -1838,12 +1876,12 @@ def main():
         created = em.get("created", "")
         year = created[:4] if created and len(created) >= 4 else None
 
-        for i, author_name in enumerate(eip_authors_list):
-            ad = eip_author_data[author_name]
-            if i == 0:
-                ad["eips_authored"].append(int(eip_str))
-            else:
-                ad["eips_coauthored"].append(int(eip_str))
+        for author_name in eip_authors_list:
+            canon = canonical_eip_author(author_name)
+            ad = eip_author_data[canon]
+            eip_num = int(eip_str)
+            if eip_num not in ad["eips"]:
+                ad["eips"].append(eip_num)
             ad["statuses"][status] += 1
             if fork:
                 ad["forks_contributed"].add(fork)
@@ -1854,10 +1892,9 @@ def main():
     # Compute author influence and select top 40
     eip_author_scores = {}
     for name, ad in eip_author_data.items():
-        authored = len(ad["eips_authored"])
-        coauthored = len(ad["eips_coauthored"])
+        eip_count = len(ad["eips"])
         forks = len(ad["forks_contributed"])
-        score = ad["influence_sum"] + 2 * authored + 0.5 * coauthored + 5 * forks
+        score = ad["influence_sum"] + 2 * eip_count + 5 * forks
         eip_author_scores[name] = score
 
     top_eip_authors = sorted(eip_author_scores.keys(), key=lambda n: eip_author_scores[n], reverse=True)[:40]
@@ -1867,8 +1904,7 @@ def main():
         ad = eip_author_data[name]
         eip_authors_output[name] = {
             "name": name,
-            "eips_authored": sorted(ad["eips_authored"]),
-            "eips_coauthored": sorted(ad["eips_coauthored"]),
+            "eips": sorted(ad["eips"]),
             "statuses": dict(ad["statuses"].most_common()),
             "forks_contributed": sorted(ad["forks_contributed"]),
             "influence_sum": round(ad["influence_sum"], 3),
@@ -1876,7 +1912,7 @@ def main():
             "active_years": sorted(ad["active_years"]),
         }
 
-    print(f"  {len(eip_authors_output)} EIP author profiles")
+    print(f"  {len(eip_authors_output)} EIP author profiles ({merged_count} names merged)")
 
     # -----------------------------------------------------------------------
     # Assemble output

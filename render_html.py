@@ -203,8 +203,7 @@ def prepare_viz_data(data):
     for name, a in data.get("eip_authors", {}).items():
         compact_eip_authors[name] = {
             "n": name,
-            "ea": a.get("eips_authored", []),
-            "ec": a.get("eips_coauthored", []),
+            "eips": a.get("eips", []),
             "st": a.get("statuses", {}),
             "fk": a.get("forks_contributed", []),
             "inf": a.get("influence_score", 0),
@@ -842,7 +841,6 @@ document.addEventListener('DOMContentLoaded', () => {
   buildTimeline();
   setupSearch();
   setupInfSlider();
-  patchZoomForEips();
   // Click outside dismisses EIP popover
   document.addEventListener('click', function(ev) {
     var pop = document.getElementById('eip-popover');
@@ -1179,6 +1177,7 @@ function applyContentVisibility() {
   });
   d3.selectAll('.eip-square').style('display', showEips ? null : 'none');
   d3.selectAll('.eip-label').style('display', showEips ? null : 'none');
+  d3.selectAll('.eip-lane-label').style('display', showEips ? null : 'none');
   // Cross-ref edges: only when both posts and EIPs are visible
   d3.selectAll('.cross-ref-edge').style('display', (showPosts && showEips) ? null : 'none');
 }
@@ -1439,10 +1438,12 @@ function buildTimeline() {
   const height = container.clientHeight || 700;
 
   const histH = 24; // histogram height
+  const eipReservedH = 80; // height reserved for EIP swim lane at top
+  const eipGap = 8; // gap between EIP lane and topic lanes
   const margin = {top: 50, right: 40, bottom: 30 + histH, left: 180};
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
-  const swimH = plotH - histH; // swim lane area above histogram
+  const swimH = plotH - histH - eipReservedH - eipGap; // swim lane area for topic threads
 
   // Group topics by thread for swim lanes
   const threadTopics = {};
@@ -1523,7 +1524,7 @@ function buildTimeline() {
     const x1 = xScale(new Date(era.end));
     eraRects.push(
       zoomG.append('rect').attr('class', 'era-bg')
-        .attr('x', x0).attr('y', 0).attr('width', x1 - x0).attr('height', swimH)
+        .attr('x', x0).attr('y', 0).attr('width', x1 - x0).attr('height', topicLaneY0 + swimH)
         .attr('fill', eraColors[i] || '#333')
         .datum({start: new Date(era.start), end: new Date(era.end)})
     );
@@ -1549,19 +1550,19 @@ function buildTimeline() {
     const x = xScale(fd);
     forkLines.push(
       zoomG.append('line').attr('class', 'fork-line')
-        .attr('x1', x).attr('x2', x).attr('y1', -5).attr('y2', swimH + histH)
+        .attr('x1', x).attr('x2', x).attr('y1', -5).attr('y2', topicLaneY0 + swimH + histH)
         .datum(fd)
     );
     forkLabels.push(
       zoomG.append('text').attr('class', 'fork-label')
-        .attr('x', x).attr('y', swimH + histH + 15).attr('text-anchor', 'middle')
+        .attr('x', x).attr('y', topicLaneY0 + swimH + histH + 15).attr('text-anchor', 'middle')
         .text(f.cn || f.n)
         .attr('paint-order', 'stroke').attr('stroke', '#0a0a0f').attr('stroke-width', 3)
         .datum(fd)
     );
     // Invisible wide hover area for fork interaction
     var hoverLine = zoomG.append('line').attr('class', 'fork-hover-line')
-      .attr('x1', x).attr('x2', x).attr('y1', -5).attr('y2', swimH + histH)
+      .attr('x1', x).attr('x2', x).attr('y1', -5).attr('y2', topicLaneY0 + swimH + histH)
       .datum({date: fd, fork: f})
       .on('mouseover', function(ev, d) { showForkTooltip(ev, d.fork); })
       .on('mouseout', function() { hideTooltip(); })
@@ -1569,11 +1570,28 @@ function buildTimeline() {
     forkHoverLines.push(hoverLine);
   });
 
+  // EIP lane label + separator (at top of plot area)
+  const topicLaneY0 = eipReservedH + eipGap; // Y offset where topic lanes begin
+  fixedG.append('text').attr('x', -10).attr('y', eipReservedH / 2)
+    .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
+    .attr('fill', '#88aacc').attr('font-size', 11).attr('font-weight', 500)
+    .attr('class', 'eip-lane-label')
+    .text('EIPs');
+  fixedG.append('line').attr('x1', 0).attr('x2', plotW)
+    .attr('y1', topicLaneY0 - eipGap / 2).attr('y2', topicLaneY0 - eipGap / 2)
+    .attr('stroke', '#2a3a4a').attr('stroke-width', 0.5)
+    .attr('class', 'eip-lane-label');
+
+  // Expose EIP lane dimensions for drawEipTimeline()
+  window._eipLaneY0 = 0;
+  window._eipLaneH = eipReservedH;
+  window._topicLaneY0 = topicLaneY0;
+
   // Swim lane labels + separators (labels are fixed; separators are in zoomG)
   const laneIdx = {};
   laneOrder.forEach((tid, i) => {
     laneIdx[tid] = i;
-    const y = i * laneH + laneH / 2;
+    const y = topicLaneY0 + i * laneH + laneH / 2;
     const name = tid === '_other' ? 'Other' : (DATA.threads[tid] ? DATA.threads[tid].n : tid);
     const color = tid === '_other' ? '#555' : (THREAD_COLORS[tid] || '#555');
     fixedG.append('text').attr('x', -10).attr('y', y)
@@ -1582,7 +1600,7 @@ function buildTimeline() {
       .text(name.length > 22 ? name.slice(0, 20) + '\u2026' : name);
     if (i > 0) {
       fixedG.append('line').attr('x1', 0).attr('x2', plotW)
-        .attr('y1', i * laneH).attr('y2', i * laneH)
+        .attr('y1', topicLaneY0 + i * laneH).attr('y2', topicLaneY0 + i * laneH)
         .attr('stroke', '#1a1a2a').attr('stroke-width', 0.5);
     }
   });
@@ -1591,7 +1609,7 @@ function buildTimeline() {
   Object.values(DATA.topics).forEach(t => {
     const th = (t.th && laneIdx[t.th] !== undefined) ? t.th : '_other';
     const lane = laneIdx[th];
-    const yBase = lane * laneH + laneH * 0.12;
+    const yBase = topicLaneY0 + lane * laneH + laneH * 0.12;
     const yRange = laneH * 0.76;
     t._yPos = yBase + (hashCode(t.id) % 100) / 100 * yRange;
     t._date = new Date(t.d);
@@ -1692,7 +1710,7 @@ function buildTimeline() {
   var barWidthBase = Math.max(1, xScale(new Date(2020, 1, 1)) - xScale(new Date(2020, 0, 1)));
 
   var histG = zoomG.append('g').attr('class', 'histogram-g')
-    .attr('transform', 'translate(0,' + swimH + ')');
+    .attr('transform', 'translate(0,' + (topicLaneY0 + swimH) + ')');
 
   histG.selectAll('.histogram-bar')
     .data(histData)
@@ -1716,7 +1734,7 @@ function buildTimeline() {
   // X axis (below histogram + swimlanes)
   var xAxisG = root.append('g')
     .attr('class', 'x-axis')
-    .attr('transform', 'translate(0,' + (swimH + histH) + ')');
+    .attr('transform', 'translate(0,' + (topicLaneY0 + swimH + histH) + ')');
   var xAxisFn = d3.axisBottom(xScale).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y'));
   xAxisG.call(xAxisFn);
   xAxisG.selectAll('text').attr('fill', '#666').attr('font-size', 10);
@@ -1809,6 +1827,23 @@ function buildTimeline() {
     d3.selectAll('.histogram-bar')
       .attr('x', function(d) { return newX(d.date); })
       .attr('width', zoomedBarW);
+
+    // Update EIP squares
+    d3.selectAll('.eip-square').attr('x', function(d) {
+      if (!d || !d._eipDate) return 0;
+      var sz = eipRScale ? eipRScale(d.inf) * 1.4 : 6;
+      return newX(d._eipDate) - sz / 2;
+    });
+    // Update EIP labels
+    d3.selectAll('.eip-label').attr('x', function(d) {
+      if (!d || !d._eipDate) return 0;
+      var sz = eipRScale ? eipRScale(d.inf) * 1.4 : 6;
+      return newX(d._eipDate) + sz / 2 + 3;
+    });
+    // Update cross-ref edges
+    d3.selectAll('.cross-ref-edge')
+      .attr('x1', function(d) { return d && d.eipDate ? newX(d.eipDate) : 0; })
+      .attr('x2', function(d) { return d && d.topicDate ? newX(d.topicDate) : 0; });
 
     // Update x-axis with adaptive tick density
     var axisFn;
@@ -3665,13 +3700,9 @@ function drawEipTimeline() {
   var zoomG = d3.select('#timeline-view svg g g[clip-path] g');
   if (zoomG.empty()) return;
 
-  // Get current dimensions from the existing timeline
-  var svgEl = d3.select('#timeline-view svg');
-  var height = +svgEl.attr('height') || 700;
-  // We'll place the EIP lane above the swim lanes (y < 0 in the plot group's coordinate system)
-  // Actually, let's use the top 40px of the plot area
-  eipLaneH = 36;
-  eipLaneY0 = -eipLaneH - 8; // above the plot area
+  // Use the space reserved by buildTimeline() at the top of the plot area
+  eipLaneH = window._eipLaneH || 80;
+  eipLaneY0 = window._eipLaneY0 || 0;
 
   // EIP influence scale (squares are sized by influence)
   var maxEipInf = 0;
@@ -3693,22 +3724,7 @@ function drawEipTimeline() {
     eipData.push(e);
   });
 
-  // Add EIP lane label (fixed group - need to find it)
-  var fixedG = d3.select('#timeline-view svg > g > g:first-child');
-  if (!fixedG.empty()) {
-    fixedG.append('text').attr('x', -10).attr('y', eipLaneY0 + eipLaneH / 2)
-      .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
-      .attr('fill', '#88aacc').attr('font-size', 11).attr('font-weight', 500)
-      .attr('class', 'eip-lane-label')
-      .text('EIPs');
-    // Separator line
-    fixedG.append('line').attr('x1', 0).attr('x2', tlPlotW)
-      .attr('y1', eipLaneY0 + eipLaneH + 4).attr('y2', eipLaneY0 + eipLaneH + 4)
-      .attr('stroke', '#2a3a4a').attr('stroke-width', 0.5)
-      .attr('class', 'eip-lane-label');
-  }
-
-  // Draw EIP squares
+  // Draw EIP squares (lane label + separator drawn by buildTimeline)
   var eipG = zoomG.append('g').attr('class', 'eip-layer');
 
   // Cross-reference edges (EIP → related topic)
@@ -3764,9 +3780,6 @@ function drawEipTimeline() {
       .style('display', showEips ? null : 'none');
   });
 
-  // Hook into zoom handler to update EIP positions
-  var origOnZoom = d3.select('#timeline-view svg').on('zoom.eip');
-  d3.select('#timeline-view svg').on('zoom.eip', null); // will re-register below
 }
 
 function showEipTooltip(ev, e) {
@@ -3913,12 +3926,10 @@ function showEipAuthorDetail(name) {
   content.innerHTML =
     '<h2>' + escHtml(name) + '</h2>' +
     '<div class="meta">EIP Author</div>' +
-    '<div class="eip-detail-stat"><span class="label">EIPs Authored</span><span class="value">' + (a.ea || []).length + '</span></div>' +
-    '<div class="eip-detail-stat"><span class="label">EIPs Co-authored</span><span class="value">' + (a.ec || []).length + '</span></div>' +
+    '<div class="eip-detail-stat"><span class="label">EIPs</span><span class="value">' + (a.eips || []).length + '</span></div>' +
     '<div class="eip-detail-stat"><span class="label">Influence Score</span><span class="value">' + (a.inf || 0).toFixed(3) + '</span></div>' +
     '<div class="eip-detail-stat"><span class="label">Active Years</span><span class="value">' + yearsHtml + '</span></div>' +
-    eipTagsHtml(a.ea, 'Authored') +
-    eipTagsHtml(a.ec, 'Co-authored') +
+    eipTagsHtml(a.eips, 'EIPs') +
     forksHtml + statusHtml;
 
   panel.classList.add('open');
@@ -3949,7 +3960,7 @@ function buildEipAuthorList() {
   authors.slice(0, 25).forEach(function(a) {
     var item = document.createElement('div');
     item.className = 'author-item';
-    var eipCount = (a.ea || []).length + (a.ec || []).length;
+    var eipCount = (a.eips || []).length;
     var topFork = (a.fk && a.fk.length > 0) ? a.fk[0] : '';
     item.innerHTML = '<span class="author-dot" style="background:#88aacc"></span>' +
       '<span class="author-name">' + escHtml(a.n) + '</span>' +
@@ -3959,37 +3970,7 @@ function buildEipAuthorList() {
   });
 }
 
-// ========================================================================
-// ZOOM HANDLER UPDATE FOR EIP NODES
-// ========================================================================
-// Patch the zoom handler to also move EIP nodes
-var _origZoomPatch = false;
-function patchZoomForEips() {
-  if (_origZoomPatch) return;
-  _origZoomPatch = true;
-  // We hook into the D3 zoom event by adding an extra handler
-  var svg = d3.select('#timeline-view svg');
-  svg.on('zoom.eip-patch', function(ev) {
-    if (!ev || !ev.transform) return;
-    var newX = ev.transform.rescaleX(tlXScaleOrig);
-    // Update EIP squares
-    d3.selectAll('.eip-square').attr('x', function(d) {
-      if (!d || !d._eipDate) return 0;
-      var sz = eipRScale ? eipRScale(d.inf) * 1.4 : 6;
-      return newX(d._eipDate) - sz/2;
-    });
-    // Update EIP labels
-    d3.selectAll('.eip-label').attr('x', function(d) {
-      if (!d || !d._eipDate) return 0;
-      var sz = eipRScale ? eipRScale(d.inf) * 1.4 : 6;
-      return newX(d._eipDate) + sz/2 + 3;
-    });
-    // Update cross-ref edges
-    d3.selectAll('.cross-ref-edge')
-      .attr('x1', function(d) { return d && d.eipDate ? newX(d.eipDate) : 0; })
-      .attr('x2', function(d) { return d && d.topicDate ? newX(d.topicDate) : 0; });
-  });
-}
+// (EIP zoom updates are integrated into the main onZoom handler in buildTimeline)
 """
 
 
