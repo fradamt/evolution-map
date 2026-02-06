@@ -37,8 +37,8 @@ header .stats span { white-space: nowrap; }
 .controls button:hover { background: #2a2a3e; }
 .controls button.active { background: #333366; border-color: #5555aa; color: #fff; }
 
-#main-area { grid-column: 1; overflow: hidden; position: relative; overscroll-behavior: none; }
-#sidebar { grid-column: 2; background: #12121a; border-left: 1px solid #2a2a3a; overflow-y: auto; position: relative; }
+#main-area { grid-column: 1; overflow: hidden; position: relative; overscroll-behavior: none; min-width: 0; }
+#sidebar { grid-column: 2; background: #12121a; border-left: 1px solid #2a2a3a; overflow-y: auto; position: relative; min-width: 0; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 .sidebar-width-toggle { position: absolute; right: 8px; top: 8px; width: 18px; height: 18px; border: 1px solid #2a2a3a;
@@ -1046,36 +1046,13 @@ function setupSidebarWidth() {
   applySidebarWidthState();
 }
 
-function rerenderCurrentViewForLayout() {
-  var tl = document.querySelector('#timeline-view svg');
-  if (tl) tl.remove();
-  tlSvg = null;
-  var net = document.querySelector('#network-view svg');
-  if (net) net.remove();
-  simulation = null;
-  var co = document.querySelector('#coauthor-view svg');
-  if (co) co.remove();
-  coAuthorSimulation = null;
-
-  if (activeView === 'timeline') {
-    buildTimeline();
-    if (showEips) drawEipTimeline();
-    if (showMagicians) drawMagiciansTimeline();
-  } else if (activeView === 'network') {
-    buildNetwork();
-  } else if (activeView === 'coauthor') {
-    buildCoAuthorNetwork();
-  }
-  applyFilters();
-  if (pinnedTopicId) applyPinnedHighlight();
-}
-
 function toggleSidebarWidth() {
   sidebarWide = !sidebarWide;
   applySidebarWidthState();
   try { localStorage.setItem('evmap.sidebarWide', sidebarWide ? '1' : '0'); } catch (e) {}
   refreshAuthorSidebarList();
-  rerenderCurrentViewForLayout();
+  applyFilters();
+  if (pinnedTopicId) applyPinnedHighlight();
 }
 
 // === INIT ===
