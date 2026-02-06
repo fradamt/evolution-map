@@ -683,9 +683,12 @@ header .stats span { white-space: nowrap; }
 
 /* EIP squares on timeline */
 .eip-square { cursor: pointer; pointer-events: all; }
+.magicians-triangle { cursor: pointer; pointer-events: all; }
+.magicians-label { fill: #c8b5db; font-size: 8px; pointer-events: none; }
 
 /* Cross-reference edges (EIP ↔ topic) */
 .cross-ref-edge { stroke-dasharray: 4 3; pointer-events: none; }
+.magicians-ref-edge { pointer-events: none; }
 
 /* EIP status colors */
 .eip-color-final { fill: #4caf50; stroke: #4caf50; }
@@ -821,6 +824,23 @@ Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
 });
 var magiciansTopicById = DATA.magiciansTopics || {};
 
+// Cross-forum traversal indices
+var eipToMagiciansRefs = {};
+var topicToMagiciansRefs = {};
+(DATA.crossForumEdges || []).forEach(function(edge) {
+  if (!edge) return;
+  if (edge.sT === 'eip' && edge.tT === 'magicians_topic' && edge.s !== undefined && edge.t !== undefined) {
+    var eipNum = String(edge.s);
+    if (!eipToMagiciansRefs[eipNum]) eipToMagiciansRefs[eipNum] = new Set();
+    eipToMagiciansRefs[eipNum].add(Number(edge.t));
+  }
+  if (edge.sT === 'topic' && edge.tT === 'magicians_topic' && edge.s !== undefined && edge.t !== undefined) {
+    var topicId = String(edge.s);
+    if (!topicToMagiciansRefs[topicId]) topicToMagiciansRefs[topicId] = new Set();
+    topicToMagiciansRefs[topicId].add(Number(edge.t));
+  }
+});
+
 // EIP status → color
 var EIP_STATUS_COLORS = {
   'Final': '#4caf50', 'Living': '#26c6da', 'Review': '#fdd835', 'Last Call': '#fdd835',
@@ -876,6 +896,7 @@ function eipNodeId(node) {
 
 function eipThread(node) {
   if (!node) return null;
+  if (node._eipThread !== undefined && node._eipThread !== null) return node._eipThread;
   return node.th || node.thread || node.eipThread || null;
 }
 
@@ -894,6 +915,17 @@ function eipMatchesFilter(node) {
   if (eipVisibilityMode === 'connected' && !connectedEipNodeIds.has(nid)) return false;
   if (minInfluence > 0 && eipInfluence(node) < minInfluence) return false;
   if (activeThread && eipThread(node) !== activeThread) return false;
+  return true;
+}
+
+function magiciansMatchesFilter(node) {
+  if (!node || !showMagicians) return false;
+  var inf = node._magInf;
+  if (inf === undefined || inf === null) inf = magiciansInfluenceScore(node);
+  if (minInfluence > 0 && inf < minInfluence) return false;
+  var th = node._magThread;
+  if (th === undefined) th = magiciansThreadFromTopic(node);
+  if (activeThread && th !== activeThread) return false;
   return true;
 }
 
@@ -982,7 +1014,7 @@ function networkNodeMatchesFilter(node) {
   var sourceType = networkNodeSourceType(node);
   if (sourceType === 'fork') return true;
   if (sourceType === 'eip') return showEips && eipMatchesFilter(node);
-  if (sourceType === 'magicians') return showMagicians && genericNetworkNodeMatchesFilter(node);
+  if (sourceType === 'magicians') return magiciansMatchesFilter(node);
   if (sourceType === 'topic') {
     if (!showPosts) return false;
     var t = DATA.topics[node.id];
@@ -1096,6 +1128,10 @@ function showView(view) {
   document.getElementById('btn-timeline').classList.toggle('active', view === 'timeline');
   document.getElementById('btn-network').classList.toggle('active', view === 'network');
   document.getElementById('btn-coauthor').classList.toggle('active', view === 'coauthor');
+  if (view === 'timeline') {
+    if (showEips && !document.querySelector('.eip-square')) drawEipTimeline();
+    if (showMagicians && !document.querySelector('.magicians-triangle')) drawMagiciansTimeline();
+  }
   if (view === 'network' && !document.querySelector('#network-view svg')) buildNetwork();
   if (view === 'coauthor' && !document.querySelector('#coauthor-view svg')) buildCoAuthorNetwork();
   if (lineageActive) applyLineageHighlight();
@@ -1383,6 +1419,9 @@ function toggleContent(type) {
   } else if (type === 'magicians') {
     showMagicians = !showMagicians;
     document.getElementById('toggle-magicians').classList.toggle('active', showMagicians);
+    if (showMagicians && activeView === 'timeline' && !document.querySelector('.magicians-triangle')) {
+      drawMagiciansTimeline();
+    }
     if (activeView === 'network') {
       var mNetSvg = document.querySelector('#network-view svg');
       if (mNetSvg) { mNetSvg.remove(); simulation = null; }
@@ -1421,8 +1460,17 @@ function applyContentVisibility() {
   d3.selectAll('.eip-label').style('display', function(d) {
     return showEips && eipMatchesFilter(d) ? null : 'none';
   });
-  d3.selectAll('.magicians-triangle').style('display', showMagicians ? null : 'none');
-  d3.selectAll('.magicians-label').style('display', showMagicians ? null : 'none');
+  d3.selectAll('.magicians-triangle').style('display', function(d) {
+    return magiciansMatchesFilter(d) ? null : 'none';
+  });
+  d3.selectAll('.magicians-label').style('display', function(d) {
+    return magiciansMatchesFilter(d) ? null : 'none';
+  });
+  d3.selectAll('.magicians-ref-edge').style('display', function(d) {
+    if (!(showPosts && showMagicians)) return 'none';
+    if (!d || !d.magTopic || !magiciansMatchesFilter(d.magTopic)) return 'none';
+    return null;
+  });
   d3.selectAll('.eip-lane-label').style('display', showEips ? null : 'none');
   // Cross-ref edges: only when both posts and EIPs are visible
   d3.selectAll('.cross-ref-edge').style('display', function(d) {
@@ -1708,14 +1756,14 @@ function buildTimeline() {
   const height = container.clientHeight || 700;
 
   const histH = 24; // histogram height
-  const eipReservedH = 80; // height reserved for EIP swim lane at top
-  const eipGap = 8; // gap between EIP lane and topic lanes
+  const eipReservedH = 0; // no dedicated EIP lane in thread-native mode
+  const eipGap = 0;
   const forkLabelH = 18; // extra row for fork labels between histogram and x-axis dates
   const margin = {top: 50, right: 40, bottom: 30 + histH + forkLabelH, left: 180};
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
-  const swimH = plotH - histH - eipReservedH - eipGap; // swim lane area for topic threads
-  const topicLaneY0 = eipReservedH + eipGap; // Y offset where topic lanes begin
+  const swimH = plotH - histH; // full swim-lane area for thread-native entities
+  const topicLaneY0 = 0;
 
   // Group topics by thread for swim lanes
   const threadTopics = {};
@@ -1890,22 +1938,6 @@ function buildTimeline() {
     .text('ethresear.ch live')
     .datum(liveLineData);
 
-  // EIP lane label + separator (at top of plot area)
-  fixedG.append('text').attr('x', -10).attr('y', eipReservedH / 2)
-    .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
-    .attr('fill', '#88aacc').attr('font-size', 11).attr('font-weight', 500)
-    .attr('class', 'eip-lane-label')
-    .text('EIPs');
-  fixedG.append('line').attr('x1', 0).attr('x2', plotW)
-    .attr('y1', topicLaneY0 - eipGap / 2).attr('y2', topicLaneY0 - eipGap / 2)
-    .attr('stroke', '#2a3a4a').attr('stroke-width', 0.5)
-    .attr('class', 'eip-lane-label');
-
-  // Expose EIP lane dimensions for drawEipTimeline()
-  window._eipLaneY0 = 0;
-  window._eipLaneH = eipReservedH;
-  window._topicLaneY0 = topicLaneY0;
-
   // Swim lane labels + separators (labels are fixed; separators are in zoomG)
   const laneIdx = {};
   laneOrder.forEach((tid, i) => {
@@ -1923,6 +1955,11 @@ function buildTimeline() {
         .attr('stroke', '#1a1a2a').attr('stroke-width', 0.5);
     }
   });
+
+  // Expose lane geometry for thread-native non-topic entities (EIPs/Magicians).
+  window._topicLaneY0 = topicLaneY0;
+  window._laneH = laneH;
+  window._laneIdx = laneIdx;
 
   // Pre-compute fixed y positions for topics (y is stable across zoom)
   Object.values(DATA.topics).forEach(t => {
@@ -2156,6 +2193,21 @@ function buildTimeline() {
     // Update cross-ref edges
     d3.selectAll('.cross-ref-edge')
       .attr('x1', function(d) { return d && d.eipDate ? newX(d.eipDate) : 0; })
+      .attr('x2', function(d) { return d && d.topicDate ? newX(d.topicDate) : 0; });
+
+    // Update Magicians triangles + labels + cross-ref edges
+    d3.selectAll('.magicians-triangle').attr('d', function(d) {
+      if (!d || !d._magDate) return '';
+      var r = magiciansRScale ? magiciansRScale(d._magInf || 0) : 6;
+      return trianglePath(newX(d._magDate), d._magYPos, r);
+    });
+    d3.selectAll('.magicians-label').attr('x', function(d) {
+      if (!d || !d._magDate) return 0;
+      var r = magiciansRScale ? magiciansRScale(d._magInf || 0) : 6;
+      return newX(d._magDate) + r + 3;
+    });
+    d3.selectAll('.magicians-ref-edge')
+      .attr('x1', function(d) { return d && d.magDate ? newX(d.magDate) : 0; })
       .attr('x2', function(d) { return d && d.topicDate ? newX(d.topicDate) : 0; });
 
     // Update x-axis with adaptive tick density
@@ -2396,6 +2448,31 @@ function filterTimeline() {
         var t = DATA.topics[d.topicId];
         if (!t) return 0.02;
         return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.08;
+      });
+  }
+
+  // Filter Magicians triangles
+  if (showMagicians) {
+    d3.selectAll('.magicians-triangle')
+      .style('display', function(d) { return magiciansMatchesFilter(d) ? null : 'none'; })
+      .transition().duration(200)
+      .attr('opacity', 0.78);
+    d3.selectAll('.magicians-label')
+      .style('display', function(d) { return magiciansMatchesFilter(d) ? null : 'none'; });
+    d3.selectAll('.magicians-ref-edge')
+      .style('display', function(d) {
+        if (!showPosts || !showMagicians) return 'none';
+        if (!d || !d.magTopic || !magiciansMatchesFilter(d.magTopic)) return 'none';
+        var t = DATA.topics[d.topicId];
+        if (!t) return 'none';
+        if (hasFilter && !topicMatchesFilter(t)) return 'none';
+        return null;
+      })
+      .attr('stroke-opacity', function(d) {
+        if (!d) return 0.02;
+        var t = DATA.topics[d.topicId];
+        if (!t) return 0.02;
+        return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.10;
       });
   }
 }
@@ -3696,6 +3773,68 @@ function exportRefsMarkdown(topicId, direction) {
   });
 }
 
+function toggleCrossForumMode() {
+  var panel = document.getElementById('cross-forum-panel');
+  var btn = document.getElementById('cross-forum-btn');
+  if (!panel || !btn) return;
+  var currentlyOpen = panel.style.display !== 'none';
+  panel.style.display = currentlyOpen ? 'none' : 'block';
+  btn.textContent = currentlyOpen ? 'Cross-Forum Mode' : 'Hide Cross-Forum';
+}
+
+function buildCrossForumTraversalHtml(t) {
+  if (!t) return '';
+
+  var orderedEips = [];
+  var seenEips = new Set();
+  (t.peips || []).concat(t.eips || []).forEach(function(e) {
+    var num = Number(e);
+    if (!num || seenEips.has(num)) return;
+    seenEips.add(num);
+    orderedEips.push(num);
+  });
+
+  var eipRows = orderedEips.slice(0, 18).map(function(eipNum) {
+    var magSet = new Set();
+    var eip = (DATA.eipCatalog || {})[String(eipNum)];
+    if (eip && eip.mt) magSet.add(Number(eip.mt));
+    var mapped = eipToMagiciansRefs[String(eipNum)];
+    if (mapped) mapped.forEach(function(mid) { magSet.add(Number(mid)); });
+
+    var magArr = Array.from(magSet).filter(Boolean).sort(function(a, b) { return a - b; });
+    var magHtml = magArr.length > 0
+      ? magArr.map(function(mid) {
+          return '<span class="eip-tag" style="border-color:#6a4a85;color:#c8b5db;cursor:pointer" onclick="showMagiciansTopicDetailById(' + mid + ')">M#' + mid + '</span>';
+        }).join(' ')
+      : '<span style="color:#666;font-size:10px">no linked Magicians thread</span>';
+
+    return '<div class="ref-item"><span class="eip-tag primary" onclick="showEipDetailByNum(' + eipNum + ')">EIP-' + eipNum + '</span> ' +
+      '<span style="color:#666">\u2192</span> ' + magHtml + '</div>';
+  }).join('');
+
+  var directMagSet = new Set((t.mr || []).map(function(mid) { return Number(mid); }));
+  var directMapped = topicToMagiciansRefs[String(t.id)];
+  if (directMapped) directMapped.forEach(function(mid) { directMagSet.add(Number(mid)); });
+  var directMagArr = Array.from(directMagSet).filter(Boolean).sort(function(a, b) { return a - b; });
+  var directHtml = directMagArr.length > 0
+    ? directMagArr.map(function(mid) {
+        return '<span class="eip-tag" style="border-color:#6a4a85;color:#c8b5db;cursor:pointer" onclick="showMagiciansTopicDetailById(' + mid + ')">M#' + mid + '</span>';
+      }).join(' ')
+    : '<span style="color:#666;font-size:10px">none</span>';
+
+  if (!eipRows && directMagArr.length === 0) {
+    return '<div id="cross-forum-panel" class="detail-refs" style="display:none"><h4>Cross-Forum Traversal</h4>' +
+      '<div style="font-size:11px;color:#666">No related EIP/Magicians links for this topic.</div></div>';
+  }
+
+  return '<div id="cross-forum-panel" class="detail-refs" style="display:none">' +
+    '<h4>Cross-Forum Traversal</h4>' +
+    '<div style="font-size:10px;color:#666;margin-bottom:6px">ethresear.ch topic \u2192 related EIPs \u2192 related Magicians threads</div>' +
+    (eipRows ? '<div style="margin-bottom:8px">' + eipRows + '</div>' : '') +
+    '<div><strong style="font-size:11px;color:#888">Direct topic \u2192 Magicians</strong><div style="margin-top:4px">' + directHtml + '</div></div>' +
+    '</div>';
+}
+
 // === DETAIL PANEL ===
 function showDetail(t) {
   var wasAlreadyPinned = pinnedTopicId !== null;
@@ -3772,6 +3911,7 @@ function showDetail(t) {
     });
     magiciansHtml += '</div>';
   }
+  var traversalHtml = buildCrossForumTraversalHtml(t);
 
   content.innerHTML =
     '<h2>' + escHtml(t.t) + '</h2>' +
@@ -3798,7 +3938,10 @@ function showDetail(t) {
     ';color:' + (similarActive && similarSet.has(t.id) ? '#44aa88' : '#66bbaa') +
     ';padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">' +
     (similarActive && similarSet.has(t.id) ? 'Clear Similar (' + (similarSet.size - 1) + ')' : 'Find Similar') +
-    '</button></div>' +
+    '</button>' +
+    '<button id="cross-forum-btn" onclick="toggleCrossForumMode()" ' +
+    'style="background:#1a1a2e;border:1px solid #6a4a85;color:#c8b5db;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">Cross-Forum Mode</button>' +
+    '</div>' +
     (t.exc ? '<div class="detail-excerpt"><span id="excerpt-short">' + escHtml(t.exc.length > 300 ? t.exc.slice(0, 300) + '...' : t.exc) + '</span>' +
       '<span id="excerpt-full" style="display:none">' + escHtml(t.exc) + '</span>' +
       (t.exc.length > 300 ? ' <span onclick="toggleExcerpt()" style="color:#66bbaa;cursor:pointer;font-size:10px;font-style:normal" id="excerpt-toggle">show more</span>' : '') +
@@ -3810,6 +3953,7 @@ function showDetail(t) {
       (t.eips || []).filter(function(e) { return !primarySet.has(e); }).map(function(e) {
         return '<span class="eip-tag" onclick="showEipPopover(' + e + ', event)">EIP-' + e + '</span>';
       }).join(' ') + '</div>' : '') +
+    traversalHtml +
     magiciansHtml +
     (outRefs ? '<div class="detail-refs"><h4>References (' + t.out.length + ') <span onclick="exportRefsMarkdown(' + t.id + ',\'out\')" ' +
       'style="font-size:9px;color:#66bbaa;cursor:pointer;text-transform:none;font-weight:400;margin-left:6px">copy md</span></h4>' + outRefs + '</div>' : '') +
@@ -4256,17 +4400,50 @@ function starPoints(cx, cy, outerR, innerR, nPoints) {
 // EIP TIMELINE NODES
 // ========================================================================
 var eipRScale = null;
-var eipLaneY0 = 0; // top of the EIPs lane
-var eipLaneH = 0;
+var magiciansRScale = null;
+
+function inferEipThread(eipNum) {
+  var tids = eipToTopicIds[eipNum] || eipToTopicIds[String(eipNum)] || [];
+  var counts = {};
+  tids.forEach(function(tid) {
+    var t = DATA.topics[tid];
+    if (!t || !t.th) return;
+    counts[t.th] = (counts[t.th] || 0) + 1;
+  });
+  var best = null;
+  var bestCount = 0;
+  Object.keys(counts).forEach(function(th) {
+    if (counts[th] > bestCount) {
+      bestCount = counts[th];
+      best = th;
+    }
+  });
+  return best;
+}
+
+function timelineLaneYForThread(threadId, seed) {
+  var laneIdx = window._laneIdx || {};
+  var laneH = window._laneH || 0;
+  var topicLaneY0 = window._topicLaneY0 || 0;
+  if (!laneH) return null;
+  var resolved = (threadId && laneIdx[threadId] !== undefined) ? threadId : '_other';
+  var lane = laneIdx[resolved];
+  if (lane === undefined) lane = 0;
+  var yBase = topicLaneY0 + lane * laneH + laneH * 0.12;
+  var yRange = laneH * 0.76;
+  return yBase + (hashCode(seed) % 100) / 100 * yRange;
+}
+
+function trianglePath(cx, cy, r) {
+  return 'M' + cx.toFixed(2) + ',' + (cy - r).toFixed(2) +
+    ' L' + (cx + r).toFixed(2) + ',' + (cy + r).toFixed(2) +
+    ' L' + (cx - r).toFixed(2) + ',' + (cy + r).toFixed(2) + ' Z';
+}
 
 function drawEipTimeline() {
   // Find the timeline's zoom group
   var zoomG = d3.select('#timeline-view svg g g[clip-path] g');
   if (zoomG.empty()) return;
-
-  // Use the space reserved by buildTimeline() at the top of the plot area
-  eipLaneH = window._eipLaneH || 80;
-  eipLaneY0 = window._eipLaneY0 || 0;
 
   // EIP influence scale (squares are sized by influence)
   var maxEipInf = 0;
@@ -4282,14 +4459,18 @@ function drawEipTimeline() {
     if ((e.inf || 0) < 0.05 || !e.cr) return;
     var d = new Date(e.cr);
     if (isNaN(d)) return;
+    var inferredThread = e.th || inferEipThread(Number(num));
+    var yPos = timelineLaneYForThread(inferredThread, Number(num));
+    if (yPos === null) return;
     e._eipDate = d;
     e._eipNum = Number(num);
     e._eipNodeId = 'eip_' + num;
-    e._eipYPos = eipLaneY0 + eipLaneH * 0.15 + (hashCode(Number(num)) % 100) / 100 * eipLaneH * 0.7;
+    e._eipThread = inferredThread || null;
+    e._eipYPos = yPos;
     eipData.push(e);
   });
 
-  // Draw EIP squares (lane label + separator drawn by buildTimeline)
+  // Draw EIP squares in the same thread lanes as topics
   var eipG = zoomG.append('g').attr('class', 'eip-layer');
 
   // Cross-reference edges (EIP → related topic)
@@ -4314,7 +4495,7 @@ function drawEipTimeline() {
         eipNodeId: edge.source,
         eipNum: Number(eipNum),
         eipInf: eip.inf || 0,
-        eipThread: eip.th || null,
+        eipThread: eip._eipThread || eip.th || null,
         topicId: edge.target,
       })
       .style('display', (showPosts && showEips) ? null : 'none');
@@ -4355,6 +4536,92 @@ function drawEipTimeline() {
       .style('display', showEips ? null : 'none');
   });
 
+}
+
+function drawMagiciansTimeline() {
+  var zoomG = d3.select('#timeline-view svg g g[clip-path] g');
+  if (zoomG.empty()) return;
+
+  var maxMagInf = 0;
+  Object.values(DATA.magiciansTopics || {}).forEach(function(mt) {
+    var inf = magiciansInfluenceScore(mt);
+    if (inf > maxMagInf) maxMagInf = inf;
+  });
+  magiciansRScale = d3.scaleSqrt().domain([0, maxMagInf || 1]).range([3, 11]);
+
+  var magData = [];
+  Object.entries(DATA.magiciansTopics || {}).forEach(function(entry) {
+    var mtid = entry[0], mt = entry[1] || {};
+    if (!mt.d) return;
+    var d = new Date(mt.d);
+    if (isNaN(d)) return;
+    var thread = magiciansThreadFromTopic(mt);
+    var yPos = timelineLaneYForThread(thread, Number(mtid));
+    if (yPos === null) return;
+    mt._magDate = d;
+    mt._magId = Number(mtid);
+    mt._magInf = magiciansInfluenceScore(mt);
+    mt._magThread = thread || null;
+    mt._magYPos = yPos;
+    magData.push(mt);
+  });
+
+  var magG = zoomG.append('g').attr('class', 'magicians-layer');
+
+  // Cross-reference edges (Magicians topic -> related ethresearch topic)
+  var crossRefG = magG.append('g');
+  magData.forEach(function(mt) {
+    (mt.er || []).forEach(function(tid) {
+      var topic = DATA.topics[tid];
+      if (!topic || topic._yPos === undefined) return;
+      crossRefG.append('line')
+        .attr('class', 'magicians-ref-edge')
+        .attr('x1', tlXScale(mt._magDate)).attr('y1', mt._magYPos)
+        .attr('x2', tlXScale(topic._date)).attr('y2', topic._yPos)
+        .attr('stroke', '#7a5c96').attr('stroke-opacity', 0.10).attr('stroke-width', 0.6)
+        .attr('stroke-dasharray', '3 3')
+        .datum({
+          magDate: mt._magDate,
+          topicDate: topic._date,
+          magY: mt._magYPos,
+          topicY: topic._yPos,
+          magTopic: mt,
+          topicId: tid
+        })
+        .style('display', (showPosts && showMagicians && magiciansMatchesFilter(mt)) ? null : 'none');
+    });
+  });
+
+  var triG = magG.append('g');
+  magData.forEach(function(mt) {
+    var r = magiciansRScale(mt._magInf);
+    triG.append('path')
+      .attr('class', 'magicians-triangle')
+      .attr('d', trianglePath(tlXScale(mt._magDate), mt._magYPos, r))
+      .attr('fill', '#bb88cc')
+      .attr('stroke', '#bb88cc')
+      .attr('stroke-width', 0.5)
+      .attr('opacity', 0.78)
+      .datum(mt)
+      .on('click', function(ev, d) { showMagiciansTopicDetailById(d._magId); })
+      .on('mouseover', function(ev, d) { showMagiciansTooltip(ev, d); })
+      .on('mouseout', function() { hideTooltip(); })
+      .style('display', magiciansMatchesFilter(mt) ? null : 'none');
+  });
+
+  var topMagicians = magData.slice().sort(function(a, b) { return (b._magInf || 0) - (a._magInf || 0); }).slice(0, 12);
+  var labelG = magG.append('g');
+  topMagicians.forEach(function(mt) {
+    var r = magiciansRScale(mt._magInf);
+    labelG.append('text')
+      .attr('class', 'magicians-label')
+      .attr('x', tlXScale(mt._magDate) + r + 3)
+      .attr('y', mt._magYPos + 3)
+      .attr('fill', '#c8b5db').attr('font-size', 8).attr('pointer-events', 'none')
+      .text('M#' + mt._magId)
+      .datum(mt)
+      .style('display', magiciansMatchesFilter(mt) ? null : 'none');
+  });
 }
 
 function showEipTooltip(ev, e) {
