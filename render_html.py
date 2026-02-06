@@ -733,18 +733,17 @@ def generate_html(viz_json, data):
 <body>
 <div id="app">
   <header>
-    <h1>Ethereum Research Evolution Map</h1>
+    <h1><span class="title-long">Ethereum Research Evolution Map</span><span class="title-short">Ethereum Evolution</span></h1>
     <div class="stats">
-      <span>{meta['total_topics']} topics</span>
-      <span>{meta['included_edges']} citations</span>
-      <span>2017\u20132026</span>
+      <span class="stats-topics">{meta['total_topics']} topics</span>
+      <span class="stats-citations">{meta['included_edges']} citations</span>
+      <span class="stats-range">2017\u20132026</span>
       <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
     </div>
     <div class="content-toggles">
       <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresear.ch topics">\u25CF EthResearch</button>
       <button id="toggle-eips" class="content-toggle" onclick="toggleContent('eips')" title="Toggle EIP nodes">\u25A0 EIPs</button>
       <button id="toggle-magicians" class="content-toggle" onclick="toggleContent('magicians')" title="Toggle Magicians nodes">\u25B2 Magicians</button>
-      <button id="toggle-eip-visibility" class="content-toggle disabled" onclick="toggleEipVisibilityMode()" title="Toggle between linked-only and all EIPs">Linked EIPs</button>
     </div>
     <div id="filter-breadcrumb" class="breadcrumb"></div>
     <div class="inf-slider-wrap">
@@ -873,6 +872,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 header { grid-column: 1 / -1; padding: 12px 20px; background: #12121a;
          border-bottom: 1px solid #2a2a3a; display: flex; align-items: center; gap: 20px; }
 header h1 { font-size: 18px; font-weight: 600; color: #fff; white-space: nowrap; }
+header h1 .title-short { display: none; }
 header .stats { font-size: 12px; color: #888; display: flex; gap: 15px; }
 header .stats span { white-space: nowrap; }
 .inf-slider-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
@@ -894,11 +894,12 @@ header .stats span { white-space: nowrap; }
 #sidebar { grid-column: 2; background: #12121a; border-left: 1px solid #2a2a3a; overflow-y: auto; position: relative; min-width: 0; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-.sidebar-width-toggle { position: absolute; right: 8px; top: 8px; width: 18px; height: 18px; border: 1px solid #2a2a3a;
-                        border-radius: 3px; background: #12121a; color: #7788cc;
-                        font-size: 10px; cursor: pointer; z-index: 20; line-height: 1; padding: 0; }
+.sidebar-width-toggle { position: fixed; left: 0; top: 50%; transform: translate(-50%, -50%);
+                        width: 24px; height: 36px; border: 1px solid #2a2a3a;
+                        border-radius: 0 6px 6px 0; background: #12121a; color: #7788cc;
+                        font-size: 11px; cursor: pointer; z-index: 200; line-height: 1; padding: 0; }
 .sidebar-width-toggle:hover { background: #1a1a2e; color: #aab6ff; }
-#sidebar .sidebar-section:first-child { padding-top: 32px; }
+#sidebar .sidebar-section:first-child { padding-top: 12px; }
 
 #timeline-view, #network-view, #coauthor-view { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
 #timeline-view { display: block; overscroll-behavior: none; }
@@ -1139,6 +1140,18 @@ header .stats span { white-space: nowrap; }
 .content-toggle:hover { background: #2a2a3e; }
 .content-toggle.active { background: #2a3a2a; border-color: #4a6a4a; color: #88cc88; }
 .content-toggle.disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+
+@media (max-width: 1450px) {
+  header { padding: 10px 12px; gap: 10px; }
+  header h1 .title-long { display: none; }
+  header h1 .title-short { display: inline; }
+  header .stats .stats-topics,
+  header .stats .stats-range { display: none; }
+}
+
+@media (max-width: 1240px) {
+  header .stats .stats-citations { display: none; }
+}
 
 /* EIP squares on timeline */
 .eip-square { cursor: pointer; pointer-events: all; }
@@ -1945,11 +1958,15 @@ function networkNodeMatchesFilter(node) {
 }
 
 function updateEipVisibilityUi() {
-  var btn = document.getElementById('toggle-eip-visibility');
-  if (!btn) return;
-  btn.textContent = eipVisibilityMode === 'connected' ? 'Linked EIPs' : 'All EIPs';
-  btn.classList.toggle('active', showEips);
-  btn.classList.toggle('disabled', !showEips);
+  var eipBtn = document.getElementById('toggle-eips');
+  if (!eipBtn) return;
+  var suffix = '';
+  if (showEips) suffix = eipVisibilityMode === 'connected' ? ' (linked)' : ' (all)';
+  eipBtn.textContent = '\u25A0 EIPs' + suffix;
+  eipBtn.classList.toggle('active', showEips);
+  eipBtn.title = showEips
+    ? 'Click cycles linked/all/off'
+    : 'Toggle EIP nodes';
 }
 
 // Build co-author edge index: author_id -> set of connected author_ids
@@ -2000,6 +2017,16 @@ function setupInfSlider() {
   });
 }
 
+function positionSidebarToggle() {
+  var sidebar = document.getElementById('sidebar');
+  var btn = document.getElementById('sidebar-width-toggle');
+  if (!sidebar || !btn) return;
+  var rect = sidebar.getBoundingClientRect();
+  if (!isFinite(rect.left) || !isFinite(rect.top) || rect.height <= 0) return;
+  btn.style.left = Math.round(rect.left) + 'px';
+  btn.style.top = Math.round(rect.top + rect.height / 2) + 'px';
+}
+
 function applySidebarWidthState() {
   var app = document.getElementById('app');
   var btn = document.getElementById('sidebar-width-toggle');
@@ -2007,6 +2034,7 @@ function applySidebarWidthState() {
   app.classList.toggle('sidebar-wide', sidebarWide);
   btn.innerHTML = sidebarWide ? '&#9654;' : '&#9664;';
   btn.title = sidebarWide ? 'Collapse sidebar' : 'Expand sidebar';
+  requestAnimationFrame(positionSidebarToggle);
 }
 
 function setupSidebarWidth() {
@@ -2035,6 +2063,10 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSearch();
   setupInfSlider();
   updateEipVisibilityUi();
+  positionSidebarToggle();
+  window.addEventListener('resize', positionSidebarToggle);
+  var sidebarEl = document.getElementById('sidebar');
+  if (sidebarEl) sidebarEl.addEventListener('scroll', positionSidebarToggle, {passive: true});
   // Click outside dismisses EIP popover
   document.addEventListener('click', function(ev) {
     var pop = document.getElementById('eip-popover');
@@ -2371,19 +2403,36 @@ function toggleMilestones() {
   if (btn) btn.classList.toggle('active', milestonesVisible);
 }
 
-function toggleContent(type) {
+function toggleContent(type, mode) {
   if (type === 'posts') {
     showPosts = !showPosts;
     document.getElementById('toggle-posts').classList.toggle('active', showPosts);
   } else if (type === 'eips') {
-    showEips = !showEips;
-    document.getElementById('toggle-eips').classList.toggle('active', showEips);
+    var prevShowEips = showEips;
+    var prevMode = eipVisibilityMode;
+    if (mode === 'off') {
+      showEips = false;
+      eipVisibilityMode = 'connected';
+    } else if (mode === 'on') {
+      showEips = true;
+    } else {
+      // Single-button cycle: off -> linked -> all -> off
+      if (!showEips) {
+        showEips = true;
+        eipVisibilityMode = 'connected';
+      } else if (eipVisibilityMode === 'connected') {
+        eipVisibilityMode = 'all';
+      } else {
+        showEips = false;
+        eipVisibilityMode = 'connected';
+      }
+    }
     // Draw EIP nodes on timeline if first time
     if (showEips && activeView === 'timeline' && !document.querySelector('.eip-square')) {
       drawEipTimeline();
     }
-    // Rebuild network if EIP toggle changes and network is visible
-    if (activeView === 'network') {
+    // Rebuild network when EIP visibility/mode changes and network is visible
+    if (activeView === 'network' && (prevShowEips !== showEips || prevMode !== eipVisibilityMode)) {
       var netSvg = document.querySelector('#network-view svg');
       if (netSvg) { netSvg.remove(); simulation = null; }
       buildNetwork();
@@ -5916,7 +5965,7 @@ function applyHash() {
   updateEipVisibilityUi();
 
   if (params.eips === '1' && !showEips) {
-    toggleContent('eips');
+    toggleContent('eips', 'on');
     changed = true;
   } else if (params.eips === '1' && showEips && eipModeChanged && activeView === 'network') {
     var netSvg = document.querySelector('#network-view svg');
@@ -5990,8 +6039,9 @@ function updateBreadcrumb() {
       '<span class="bc-close" onclick="event.stopPropagation();toggleContent(\'posts\')">&times;</span></span>');
   }
   if (showEips) {
-    parts.push('<span class="bc-tag" style="border-color:#4a6a4a;color:#88cc88">EIPs on' +
-      '<span class="bc-close" onclick="event.stopPropagation();toggleContent(\'eips\')">&times;</span></span>');
+    var modeLabel = eipVisibilityMode === 'all' ? 'all' : 'linked';
+    parts.push('<span class="bc-tag" style="border-color:#4a6a4a;color:#88cc88">EIPs ' + modeLabel +
+      '<span class="bc-close" onclick="event.stopPropagation();toggleContent(\'eips\', \'off\')">&times;</span></span>');
   }
   if (showMagicians) {
     parts.push('<span class="bc-tag" style="border-color:#6a4a85;color:#c8b5db">Magicians on' +
