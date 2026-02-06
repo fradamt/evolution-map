@@ -91,7 +91,7 @@ ALL_FORK_EIPS = set(EIP_TO_FORK.keys())
 # Era definitions
 # ---------------------------------------------------------------------------
 ERAS = [
-    {"id": "genesis", "name": "Genesis", "start": "2017-09-01", "end": "2017-12-31",
+    {"id": "genesis", "name": "Early Research", "start": "2017-09-01", "end": "2017-12-31",
      "character": "Casper basics, stateless clients, early sharding ideas",
      "forks": ["Byzantium"]},
     {"id": "scaling_wars", "name": "Scaling Wars", "start": "2018-01-01", "end": "2018-12-31",
@@ -281,11 +281,84 @@ THREAD_SEEDS = {
     },
 }
 
+# Global protocol relevance guardrail.
+# This keeps topic->thread assignment focused on protocol research even when
+# a generic keyword overlaps with a thread seed.
+PROTOCOL_ANCHOR_PATTERNS = [
+    # Core protocol terms
+    r"\bprotocol\b", r"\bconsensus\b", r"\bfork.?choice\b", r"\bfinality\b",
+    r"\bvalidator", r"\battestat", r"\bslashing\b", r"\bbeacon\b",
+    r"\beip[- ]?\d{1,5}\b", r"\bhard.?fork\b",
+    # Data availability / scaling
+    r"\bshard", r"\bdata.?availab", r"\bdas\b", r"\bblob", r"\bdanksharding\b",
+    r"\bproto.?dank\b", r"\bpeer.?das\b", r"\berasure.?cod",
+    # L2 / sequencing
+    r"\brollup\b", r"\bl2\b", r"\blayer.?2\b", r"\bplasma\b",
+    r"\bsequenc", r"\bpre.?confirm", r"\bbased.?rollup",
+    # MEV / PBS
+    r"\bpbs\b", r"\bmev\b", r"\bepbs\b", r"\bproposer\b", r"\bbuilder\b",
+    r"\bblock.?auction\b", r"\bpayload.?timeliness\b",
+    # Economics / fees
+    r"\bissuance\b", r"\bstaking\b", r"\breward.?curve\b", r"\bbase.?fee\b",
+    r"\bfee.?market\b", r"\bgas.?limit\b", r"\bgas.?price\b", r"\b1559\b",
+    # State / execution
+    r"\bstate\b", r"\bstateless\b", r"\bverkle\b", r"\btrie\b", r"\bwitness\b",
+    r"\bevm\b", r"\bexecution.?layer\b",
+    # Privacy / cryptography
+    r"\bzk\b", r"\bsnark", r"\bstark", r"\bzero.?knowledge\b", r"\bmaci\b",
+    r"\bsemaphore\b", r"\bstealth.?address\b",
+    # Censorship resistance
+    r"\binclusion.?list\b", r"\bfocil\b", r"\bcensorship.?resist",
+]
+
+NON_PROTOCOL_PATTERNS = [
+    # Public-goods/funding space
+    r"\bpublic goods?\b", r"\bquadratic funding\b", r"\bretroactive funding\b",
+    r"\bgrants?\b", r"\bcommons\b", r"\bphilanthrop", r"\bdonation",
+    # Governance / token politics
+    r"\bgovernance\b", r"\bfutarchy\b", r"\btokenomics\b", r"\btreasury\b",
+    r"\bdao\b", r"\bvoting\b",
+    # App/business-level terms
+    r"\bdefi\b", r"\bdex\b", r"\bnft\b", r"\bmarketplace\b", r"\bairdrop\b",
+    r"\bico\b", r"\bwallet\b", r"\bmarketing\b", r"\badoption\b",
+    r"\bsocial\b", r"\breputation\b", r"\bcontent curation\b",
+    r"\bprediction market", r"\binsurance\b", r"\btrading\b", r"\bexchange\b",
+]
+
+LOW_PROTOCOL_CATEGORIES = {
+    "Administrivia",
+    "Applications",
+    "Better ICOs",
+    "Data Science",
+    "Decentralized exchanges",
+    "Mining",
+    "Miscellaneous",
+    "Tools",
+}
+
+# Categories to exclude from the analysis corpus entirely.
+# This is applied before influence scoring, thread assignment, and graph build.
+EXCLUDED_CATEGORY_NAMES = {
+    "protocol calls",
+    "protocol call",
+}
+EXCLUDED_TITLE_PATTERNS = [
+    r"\bprotocol calls?\b",
+    r"\ball ?core ?devs?\b",
+    r"\bcore devs?\s+calls?\b",
+    r"\bnotes?\s+from\s+(?:the\s+)?(?:all\s+)?core\s+devs?\b",
+    r"\bacd[e]?\b.*\b(call|meeting|notes?)\b",
+    r"\b(call|meeting|notes?)\b.*\bacd[e]?\b",
+]
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 EIP_RE = re.compile(r"EIP[- ]?(\d{1,5})", re.IGNORECASE)
 ETHRESEAR_URL_RE = re.compile(r"https?://ethresear\.ch/t/[^/]+/(\d+)")
+PROTOCOL_ANCHOR_RES = [re.compile(p, re.IGNORECASE) for p in PROTOCOL_ANCHOR_PATTERNS]
+NON_PROTOCOL_RES = [re.compile(p, re.IGNORECASE) for p in NON_PROTOCOL_PATTERNS]
+EXCLUDED_TITLE_RES = [re.compile(p, re.IGNORECASE) for p in EXCLUDED_TITLE_PATTERNS]
 
 # Coauthor detection helpers
 COAUTHOR_ALIASES = {
@@ -662,6 +735,79 @@ def normalize(values):
     return [(v - mn) / rng for v in values]
 
 
+def protocol_relevance_signals(topic):
+    """Compute coarse protocol relevance signals for a topic."""
+    title = topic.get("title", "")
+    excerpt = topic.get("first_post_excerpt", "")
+    tags = " ".join(topic.get("tags", []) or [])
+    text = f"{title} {excerpt} {tags}".lower()
+
+    anchor_hits = sum(1 for pat in PROTOCOL_ANCHOR_RES if pat.search(text))
+    non_protocol_hits = sum(1 for pat in NON_PROTOCOL_RES if pat.search(text))
+
+    primary_eips = topic.get("primary_eips", []) or []
+    eip_mentions = topic.get("eip_mentions", []) or []
+    eip_bonus = 2 if primary_eips else (1 if len(eip_mentions) >= 2 else 0)
+
+    category_name = topic.get("category_name", "")
+    category_penalty = 1 if category_name in LOW_PROTOCOL_CATEGORIES else 0
+
+    # Cap each side to prevent long titles/excerpts from over-counting.
+    relevance_score = (
+        min(anchor_hits, 4)
+        + eip_bonus
+        - min(non_protocol_hits, 3)
+        - category_penalty
+    )
+
+    return {
+        "score": relevance_score,
+        "anchor_hits": anchor_hits,
+        "non_protocol_hits": non_protocol_hits,
+        "has_primary_eips": bool(primary_eips),
+    }
+
+
+def is_protocol_relevant_topic(topic, thread_score):
+    """Decide if a topic should be eligible for thread assignment."""
+    sig = protocol_relevance_signals(topic)
+
+    # Strong non-protocol signal with no protocol anchors: require very strong
+    # thread evidence before assigning.
+    clearly_non_protocol = (
+        sig["non_protocol_hits"] >= 2
+        and sig["anchor_hits"] == 0
+        and not sig["has_primary_eips"]
+    )
+    if clearly_non_protocol and thread_score < 3.0:
+        return False, sig
+
+    if sig["score"] >= 1:
+        return True, sig
+
+    # Fallback path: allow high-confidence thread matches if there is at least
+    # one protocol anchor (or a primary EIP) even when global score is weak.
+    if thread_score >= 2.5 and (sig["anchor_hits"] >= 1 or sig["has_primary_eips"]):
+        return True, sig
+
+    # Very strong thread evidence with no explicit non-protocol signal.
+    if thread_score >= 3.0 and sig["non_protocol_hits"] == 0:
+        return True, sig
+
+    return False, sig
+
+
+def excluded_corpus_reason(category_name, title):
+    """Return exclusion reason ('category' | 'title') or None."""
+    if category_name and category_name.strip().lower() in EXCLUDED_CATEGORY_NAMES:
+        return "category"
+    if title:
+        for pat in EXCLUDED_TITLE_RES:
+            if pat.search(title):
+                return "title"
+    return None
+
+
 def extract_eips_from_text(text):
     """Extract EIP numbers from text."""
     return list(set(int(m) for m in EIP_RE.findall(text)))
@@ -737,6 +883,7 @@ def main():
     # Load magicians topics (for cross-forum reverse links)
     # -----------------------------------------------------------------------
     magicians_ethresearch_refs = defaultdict(set)  # magicians_topic_id → set of ethresear.ch topic_ids
+    magicians_topic_meta = {}  # magicians_topic_id -> compact metadata
     if MAGICIANS_TOPICS_DIR.exists():
         magicians_files = list(MAGICIANS_TOPICS_DIR.glob("*.json"))
         if magicians_files:
@@ -748,6 +895,20 @@ def main():
                     with open(mf) as f:
                         mdata = json.load(f)
                     mtid = mdata.get("id")
+                    if not mtid:
+                        continue
+                    if mtid:
+                        magicians_topic_meta[mtid] = {
+                            "id": mtid,
+                            "title": mdata.get("title", ""),
+                            "slug": mdata.get("slug", ""),
+                            "date": parse_date(mdata.get("created_at")),
+                            "views": mdata.get("views", 0),
+                            "like_count": mdata.get("like_count", 0),
+                            "posts_count": mdata.get("posts_count", 0),
+                            "author": mdata.get("details", {}).get("created_by", {}).get("username", ""),
+                            "tags": (mdata.get("tags", []) or [])[:8],
+                        }
                     for post in mdata.get("post_stream", {}).get("posts", []):
                         cooked = post.get("cooked", "")
                         for m in ethresearch_url_re.finditer(cooked):
@@ -821,6 +982,8 @@ def main():
     username_to_names = defaultdict(set)
     all_usernames = set()
     load_errors = 0
+    excluded_category_count = 0
+    excluded_title_count = 0
 
     for tid_str, meta in index.items():
         tid = int(tid_str)
@@ -834,6 +997,16 @@ def main():
                 topic_data = json.load(f)
         except (json.JSONDecodeError, IOError):
             load_errors += 1
+            continue
+
+        title = topic_data.get("title", meta.get("title", ""))
+        category_name = meta.get("category_name", categories.get(meta.get("category_id"), ""))
+        excluded_reason = excluded_corpus_reason(category_name, title)
+        if excluded_reason == "category":
+            excluded_category_count += 1
+            continue
+        if excluded_reason == "title":
+            excluded_title_count += 1
             continue
 
         posts = topic_data.get("post_stream", {}).get("posts", [])
@@ -850,7 +1023,6 @@ def main():
         # Title EIPs = strong signal the topic IS about that EIP
         # OP EIPs = moderate signal if mentioned substantively
         # Reply EIPs = weak, often just citing context
-        title = topic_data.get("title", meta.get("title", ""))
         title_eips = set(extract_eips_from_text(title))
         op_eips = set()
         op_eip_counts = Counter()  # how many times each EIP appears in OP
@@ -903,7 +1075,7 @@ def main():
             "author": author,
             "date": parse_date(meta.get("created_at")),
             "category_id": meta.get("category_id"),
-            "category_name": meta.get("category_name", categories.get(meta.get("category_id"), "")),
+            "category_name": category_name,
             "tags": tags,
             "views": meta.get("views", 0),
             "like_count": meta.get("like_count", 0),
@@ -919,6 +1091,10 @@ def main():
 
     if load_errors:
         print(f"  Warning: {load_errors} topic files failed to load")
+    if excluded_category_count:
+        print(f"  Excluded {excluded_category_count} topics by category filter")
+    if excluded_title_count:
+        print(f"  Excluded {excluded_title_count} topics by title filter")
     print(f"  Loaded {len(topics)} topics")
 
     # -----------------------------------------------------------------------
@@ -1155,6 +1331,8 @@ def main():
 
         return score
 
+    blocked_by_relevance = 0
+
     # Assign each topic to best-matching thread (all topics, not just included)
     for tid in tids:
         t = topics[tid]
@@ -1165,15 +1343,20 @@ def main():
             if s > best_score:
                 best_score = s
                 best_thread = thread_id
-        if best_score >= 1.0:
+
+        protocol_ok, _sig = is_protocol_relevant_topic(t, best_score)
+        if best_score >= 1.0 and protocol_ok:
             t["research_thread"] = best_thread
         else:
+            if best_score >= 1.0 and not protocol_ok:
+                blocked_by_relevance += 1
             t["research_thread"] = None
 
     # Thread stats
     thread_counts = Counter(topics[t]["research_thread"] for t in included if topics[t].get("research_thread"))
     unassigned = sum(1 for t in included if not topics[t].get("research_thread"))
     print(f"  Thread assignments: {dict(thread_counts)}")
+    print(f"  Blocked by protocol relevance guardrail: {blocked_by_relevance}")
     print(f"  Unassigned: {unassigned}")
 
     # -----------------------------------------------------------------------
@@ -1598,6 +1781,75 @@ def main():
 
     total_with_mrefs = sum(1 for v in topic_magicians_refs.values() if v)
     print(f"  {total_with_mrefs} topics with magicians cross-references")
+
+    # First-class magicians topic entities
+    magicians_topic_ids = set()
+    for refs in topic_magicians_refs.values():
+        magicians_topic_ids.update(refs)
+    for eip_meta in eip_catalog.values():
+        mtid = eip_meta.get("magicians_topic_id")
+        if mtid:
+            magicians_topic_ids.add(mtid)
+
+    magicians_topics_output = {}
+    for mtid in sorted(magicians_topic_ids):
+        idx_meta = magicians_index.get(str(mtid), {})
+        full_meta = magicians_topic_meta.get(mtid, {})
+        magicians_topics_output[str(mtid)] = {
+            "id": mtid,
+            "title": full_meta.get("title") or idx_meta.get("title", ""),
+            "slug": full_meta.get("slug") or "",
+            "date": full_meta.get("date") or parse_date(idx_meta.get("created_at")),
+            "category_name": idx_meta.get("category_name"),
+            "author": full_meta.get("author", ""),
+            "views": full_meta.get("views", idx_meta.get("views", 0)),
+            "like_count": full_meta.get("like_count", idx_meta.get("like_count", 0)),
+            "posts_count": full_meta.get("posts_count", idx_meta.get("posts_count", 0)),
+            "tags": full_meta.get("tags", []),
+            "eips": sorted({int(e) for e in magicians_to_eips.get(mtid, [])}),
+            "ethresearch_refs": sorted(magicians_ethresearch_refs.get(mtid, set())),
+        }
+
+    # Explicit cross-forum edge list for downstream visualizations
+    cross_forum_edges = []
+    cross_edge_set = set()
+
+    def _add_cross_edge(source_type, source, target_type, target, edge_type):
+        key = (source_type, source, target_type, target, edge_type)
+        if key in cross_edge_set:
+            return
+        cross_edge_set.add(key)
+        cross_forum_edges.append({
+            "source_type": source_type,
+            "source": source,
+            "target_type": target_type,
+            "target": target,
+            "type": edge_type,
+        })
+
+    # topic -> eip
+    for tid in tids:
+        for eip_num in topics[tid].get("eip_mentions", []):
+            if str(eip_num) in eip_catalog:
+                _add_cross_edge("topic", tid, "eip", eip_num, "topic_eip")
+
+    # eip -> magicians_topic and eip -> ethresearch topic (canonical discussion links)
+    for eip_str, eip_meta in eip_catalog.items():
+        eip_num = int(eip_str)
+        mtid = eip_meta.get("magicians_topic_id")
+        if mtid:
+            _add_cross_edge("eip", eip_num, "magicians_topic", mtid, "eip_magicians")
+        etid = eip_meta.get("ethresearch_topic_id")
+        if etid and etid in topics:
+            _add_cross_edge("eip", eip_num, "topic", etid, "eip_ethresearch")
+
+    # topic -> magicians_topic (direct or inferred via EIP linkage)
+    for tid, mrefs in topic_magicians_refs.items():
+        for mtid in mrefs:
+            _add_cross_edge("topic", tid, "magicians_topic", mtid, "topic_magicians")
+
+    print(f"  {len(magicians_topics_output)} magicians topic entities")
+    print(f"  {len(cross_forum_edges)} cross-forum edges")
 
     # -----------------------------------------------------------------------
     # Build included topics output (only included ones, slimmed down)
@@ -2034,18 +2286,26 @@ def main():
     print("Writing analysis.json...")
     output = {
         "metadata": {
-            "total_topics": len(index),
+            "total_topics": len(topics),
+            "scraped_topics": len(index),
+            "excluded_topics": excluded_category_count + excluded_title_count,
+            "excluded_by_category": excluded_category_count,
+            "excluded_by_title": excluded_title_count,
             "included": len(included),
             "total_edges": total_edges,
             "included_edges": len(graph_edges),
             "eip_catalog_size": len(eip_catalog_output),
             "eip_nodes": len(eip_graph_nodes),
             "eip_edges": len(eip_graph_edges),
+            "magicians_topics": len(magicians_topics_output),
+            "cross_forum_edges": len(cross_forum_edges),
             "generated_at": datetime.now().isoformat()[:19],
         },
         "eras": ERAS,
         "forks": forks_output,
         "eip_catalog": eip_catalog_output,
+        "magicians_topics": magicians_topics_output,
+        "cross_forum_edges": cross_forum_edges,
         "eip_authors": eip_authors_output,
         "eip_graph": {
             "nodes": eip_graph_nodes,

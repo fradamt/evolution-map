@@ -268,6 +268,7 @@ def generate_html(viz_json, data):
     <div class="content-toggles">
       <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresearch posts">\u25CF Posts</button>
       <button id="toggle-eips" class="content-toggle" onclick="toggleContent('eips')" title="Toggle EIP nodes">\u25A0 EIPs</button>
+      <button id="toggle-eip-visibility" class="content-toggle disabled" onclick="toggleEipVisibilityMode()" title="Toggle between linked-only and all EIPs">Linked EIPs</button>
     </div>
     <div id="filter-breadcrumb" class="breadcrumb"></div>
     <div class="inf-slider-wrap">
@@ -641,6 +642,7 @@ header .stats span { white-space: nowrap; }
                   border-radius: 3px; cursor: pointer; font-size: 10px; }
 .content-toggle:hover { background: #2a2a3e; }
 .content-toggle.active { background: #2a3a2a; border-color: #4a6a4a; color: #88cc88; }
+.content-toggle.disabled { opacity: 0.45; cursor: default; pointer-events: none; }
 
 /* EIP squares on timeline */
 .eip-square { cursor: pointer; pointer-events: all; }
@@ -704,6 +706,7 @@ let pathSet = new Set();
 let pathEdgeSet = new Set();
 let showPosts = true;
 let showEips = false;
+let eipVisibilityMode = 'connected'; // 'connected' | 'all'
 let eipAuthorTab = false; // false = ethresearch, true = EIP authors
 
 // Build milestone index: topic_id -> {threadId, threadName, note, human}
@@ -778,6 +781,14 @@ Object.values(DATA.topics).forEach(function(t) {
   });
 });
 
+// EIPs that are directly connected to ethresear.ch topics
+var connectedEipNodeIds = new Set();
+((DATA.eipGraph || {}).edges || []).forEach(function(edge) {
+  if (edge.type === 'eip_topic' && typeof edge.source === 'string' && edge.source.indexOf('eip_') === 0) {
+    connectedEipNodeIds.add(edge.source);
+  }
+});
+
 // Build reverse lookup: eip_num -> list of EIPs that require it
 var eipRequiredBy = {};
 Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
@@ -787,6 +798,65 @@ Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
     eipRequiredBy[req].push(Number(eipNum));
   });
 });
+
+function eipNumFromNode(node) {
+  if (!node) return null;
+  if (node._eipNum !== undefined && node._eipNum !== null) return Number(node._eipNum);
+  if (node.eipNum !== undefined && node.eipNum !== null) return Number(node.eipNum);
+  if (node.id && typeof node.id === 'string' && node.id.indexOf('eip_') === 0) {
+    return Number(node.id.slice(4));
+  }
+  return null;
+}
+
+function eipNodeId(node) {
+  if (!node) return null;
+  if (node._eipNodeId) return node._eipNodeId;
+  if (node.id && typeof node.id === 'string' && node.id.indexOf('eip_') === 0) return node.id;
+  var num = eipNumFromNode(node);
+  if (num === null || isNaN(num)) return null;
+  return 'eip_' + num;
+}
+
+function eipThread(node) {
+  if (!node) return null;
+  return node.th || node.thread || node.eipThread || null;
+}
+
+function eipInfluence(node) {
+  if (!node) return 0;
+  if (node.eipInf !== undefined && node.eipInf !== null) return node.eipInf;
+  if (node.inf !== undefined && node.inf !== null) return node.inf;
+  if (node.influence !== undefined && node.influence !== null) return node.influence;
+  return 0;
+}
+
+function eipMatchesFilter(node) {
+  if (!node) return false;
+  var nid = eipNodeId(node);
+  if (!nid) return false;
+  if (eipVisibilityMode === 'connected' && !connectedEipNodeIds.has(nid)) return false;
+  if (minInfluence > 0 && eipInfluence(node) < minInfluence) return false;
+  if (activeThread && eipThread(node) !== activeThread) return false;
+  return true;
+}
+
+function networkNodeMatchesFilter(node) {
+  if (!node) return false;
+  if (node.isFork) return true;
+  if (node.isEip) return showEips && eipMatchesFilter(node);
+  var t = DATA.topics[node.id];
+  if (!t) return false;
+  return topicMatchesFilter(t);
+}
+
+function updateEipVisibilityUi() {
+  var btn = document.getElementById('toggle-eip-visibility');
+  if (!btn) return;
+  btn.textContent = eipVisibilityMode === 'connected' ? 'Linked EIPs' : 'All EIPs';
+  btn.classList.toggle('active', showEips);
+  btn.classList.toggle('disabled', !showEips);
+}
 
 // Build co-author edge index: author_id -> set of connected author_ids
 const coAuthorEdgeIndex = {};
@@ -841,6 +911,7 @@ document.addEventListener('DOMContentLoaded', () => {
   buildTimeline();
   setupSearch();
   setupInfSlider();
+  updateEipVisibilityUi();
   // Click outside dismisses EIP popover
   document.addEventListener('click', function(ev) {
     var pop = document.getElementById('eip-popover');
@@ -1061,9 +1132,10 @@ function clearFilters() {
   lineageEdgeSet = new Set();
   pathMode = false; pathStart = null; pathSet = new Set(); pathEdgeSet = new Set();
   // Reset content toggles to defaults
-  showPosts = true; showEips = false;
+  showPosts = true; showEips = false; eipVisibilityMode = 'connected';
   document.getElementById('toggle-posts').classList.add('active');
   document.getElementById('toggle-eips').classList.remove('active');
+  updateEipVisibilityUi();
   applyContentVisibility();
   if (similarActive) clearSimilar();
   document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
@@ -1164,8 +1236,23 @@ function toggleContent(type) {
       buildNetwork();
     }
   }
+  updateEipVisibilityUi();
   applyContentVisibility();
   applyFilters();
+  updateHash();
+}
+
+function toggleEipVisibilityMode() {
+  if (!showEips) return;
+  eipVisibilityMode = eipVisibilityMode === 'connected' ? 'all' : 'connected';
+  updateEipVisibilityUi();
+  if (activeView === 'network') {
+    var netSvg = document.querySelector('#network-view svg');
+    if (netSvg) { netSvg.remove(); simulation = null; }
+    buildNetwork();
+  }
+  applyFilters();
+  updateHash();
 }
 
 function applyContentVisibility() {
@@ -1175,11 +1262,19 @@ function applyContentVisibility() {
   d3.selectAll('.milestone-marker').style('display', function(d) {
     return showPosts && milestonesVisible ? null : 'none';
   });
-  d3.selectAll('.eip-square').style('display', showEips ? null : 'none');
-  d3.selectAll('.eip-label').style('display', showEips ? null : 'none');
+  d3.selectAll('.eip-square').style('display', function(d) {
+    return showEips && eipMatchesFilter(d) ? null : 'none';
+  });
+  d3.selectAll('.eip-label').style('display', function(d) {
+    return showEips && eipMatchesFilter(d) ? null : 'none';
+  });
   d3.selectAll('.eip-lane-label').style('display', showEips ? null : 'none');
   // Cross-ref edges: only when both posts and EIPs are visible
-  d3.selectAll('.cross-ref-edge').style('display', (showPosts && showEips) ? null : 'none');
+  d3.selectAll('.cross-ref-edge').style('display', function(d) {
+    if (!(showPosts && showEips)) return 'none';
+    if (d && !eipMatchesFilter(d)) return 'none';
+    return null;
+  });
 }
 
 function toggleCollapse(id) {
@@ -1405,7 +1500,7 @@ function highlightTopicSet(ids) {
     d3.selectAll('.edge-line').attr('stroke-opacity', 0.01);
     syncLabelsFromMap(targetOp);
   } else {
-    d3.selectAll('.net-node circle').attr('opacity', d => ids.has(d.id) ? 0.9 : 0.06);
+    d3.selectAll('.net-node .net-shape').attr('opacity', d => ids.has(d.id) ? 0.9 : 0.06);
     d3.selectAll('.net-link').attr('stroke-opacity', 0.02);
   }
 }
@@ -1769,7 +1864,7 @@ function buildTimeline() {
   tlMarginLeft = margin.left;
 
   var zoom = d3.zoom()
-    .scaleExtent([0.5, 8])
+    .scaleExtent([1, 8])
     .translateExtent([[0, 0], [plotW, height]])
     .extent([[0, 0], [plotW, height]])
     .filter(function(ev) {
@@ -1983,7 +2078,7 @@ function applyPinnedHighlightNetwork() {
   connected = new Set(connected);
   connected.add(pinnedTopicId);
 
-  d3.selectAll('.net-node circle').attr('opacity', function(n) {
+  d3.selectAll('.net-node .net-shape').attr('opacity', function(n) {
     return connected.has(n.id) ? 1 : 0.08;
   });
   d3.selectAll('.net-link').attr('stroke-opacity', function(l) {
@@ -2031,7 +2126,7 @@ function highlightTopicInView(topicId) {
     var connected = topicEdgeIndex[String(topicId)] || new Set();
     var connSet = new Set(connected);
     connSet.add(topicId);
-    d3.selectAll('.net-node circle')
+    d3.selectAll('.net-node .net-shape')
       .attr('opacity', function(n) { return connSet.has(n.id) ? 1 : (n.id === pinnedTopicId ? 0.7 : 0.08); })
       .attr('stroke-width', function(n) { return n.id === topicId ? 2.5 : 0.5; });
     d3.selectAll('.net-link').attr('stroke-opacity', function(l) {
@@ -2049,7 +2144,7 @@ function highlightTopicInView(topicId) {
 function restorePinnedHighlight() {
   // Revert stroke-width and restore pinned or filter state
   d3.selectAll('.topic-circle').attr('stroke-width', 0.5);
-  d3.selectAll('.net-node circle').attr('stroke-width', 0.5);
+  d3.selectAll('.net-node .net-shape').attr('stroke-width', 0.5);
   if (pinnedTopicId) {
     applyPinnedHighlight();
   } else {
@@ -2088,12 +2183,28 @@ function filterTimeline() {
   // Filter EIP squares
   if (showEips) {
     d3.selectAll('.eip-square')
+      .style('display', function(d) { return eipMatchesFilter(d) ? null : 'none'; })
       .transition().duration(200)
       .attr('opacity', function(d) {
-        if (!d) return 0.7;
-        if (minInfluence > 0 && (d.inf || 0) < minInfluence) return 0.08;
-        if (activeThread && d.th !== activeThread) return 0.08;
         return 0.7;
+      });
+    d3.selectAll('.eip-label')
+      .style('display', function(d) { return eipMatchesFilter(d) ? null : 'none'; });
+    d3.selectAll('.cross-ref-edge')
+      .style('display', function(d) {
+        if (!showPosts || !showEips) return 'none';
+        if (!d) return 'none';
+        if (!eipMatchesFilter(d)) return 'none';
+        var t = DATA.topics[d.topicId];
+        if (!t) return 'none';
+        if (hasFilter && !topicMatchesFilter(t)) return 'none';
+        return null;
+      })
+      .attr('stroke-opacity', function(d) {
+        if (!d) return 0.02;
+        var t = DATA.topics[d.topicId];
+        if (!t) return 0.02;
+        return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.08;
       });
   }
 }
@@ -2193,10 +2304,12 @@ function buildNetwork() {
 
   // Add EIP nodes when toggle is on
   if (showEips) {
+    var includeConnectedOnly = eipVisibilityMode === 'connected';
     var eipGraphNodes = (DATA.eipGraph || {}).nodes || [];
     var eipGraphEdges = (DATA.eipGraph || {}).edges || [];
     eipGraphNodes.forEach(function(en) {
       if (nodeMap[en.id]) return; // skip duplicates
+      if (includeConnectedOnly && !connectedEipNodeIds.has(en.id)) return;
       var eipNum = en.eip_num;
       var eip = DATA.eipCatalog[String(eipNum)];
       nodes.push({id: en.id, title: 'EIP-' + eipNum + ': ' + en.title, isEip: true, eipNum: eipNum,
@@ -2248,13 +2361,14 @@ function buildNetwork() {
 
   // Fork diamonds
   node.filter(function(d) { return d.isFork; }).append('rect')
-    .attr('class', 'fork-diamond')
+    .attr('class', 'fork-diamond net-shape')
     .attr('width', 12).attr('height', 12)
     .attr('transform', 'rotate(45)')
     .attr('x', -6).attr('y', -6);
 
   // Topic circles (not EIP nodes)
   node.filter(function(d) { return !d.isFork && !d.isEip; }).append('circle')
+    .attr('class', 'net-shape net-topic-shape')
     .attr('r', function(d) { return rScale(d.influence || 0); })
     .attr('fill', function(d) { return THREAD_COLORS[d.thread] || '#555'; })
     .attr('stroke', function(d) { return THREAD_COLORS[d.thread] || '#555'; })
@@ -2263,6 +2377,7 @@ function buildNetwork() {
 
   // EIP squares in network
   node.filter(function(d) { return d.isEip; }).append('rect')
+    .attr('class', 'net-shape net-eip-shape')
     .attr('width', function(d) { return rScale(d.influence || 0) * 1.4; })
     .attr('height', function(d) { return rScale(d.influence || 0) * 1.4; })
     .attr('x', function(d) { return -rScale(d.influence || 0) * 0.7; })
@@ -2297,11 +2412,26 @@ function buildNetwork() {
   node.on('mouseover', function(ev, d) {
     if (d.isFork) return;
     var t = DATA.topics[d.id];
-    if (t) showTooltip(ev, t);
+    if (d.isEip && d.eipNum) {
+      var e = DATA.eipCatalog[String(d.eipNum)];
+      if (e) {
+        showEipTooltip(ev, {
+          _eipNum: d.eipNum,
+          t: e.t || d.title,
+          s: e.s,
+          fk: e.fk,
+          inf: e.inf || d.influence || 0,
+          erc: e.erc || 0,
+          ml: e.ml || 0,
+        });
+      }
+    } else if (t) {
+      showTooltip(ev, t);
+    }
 
     // If a filter is active and this node doesn't match, only show tooltip
-    var hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
-    if (hasFilter && t && !topicMatchesFilter(t)) return;
+    var hasFilter = activeThread || activeAuthor || activeCategory || activeTag || minInfluence > 0;
+    if (hasFilter && !networkNodeMatchesFilter(d)) return;
 
     // Highlight connections
     var connected = new Set();
@@ -2313,10 +2443,9 @@ function buildNetwork() {
     });
     connected.add(d.id);
 
-    node.selectAll('circle').attr('opacity', function(n) {
-      var nt = DATA.topics[n.id];
-      if (connected.has(n.id) && (!hasFilter || (nt && topicMatchesFilter(nt)))) return 1;
-      if (hasFilter && nt && !topicMatchesFilter(nt)) return 0.05;
+    node.selectAll('.net-shape').attr('opacity', function(n) {
+      if (connected.has(n.id) && (!hasFilter || networkNodeMatchesFilter(n))) return 1;
+      if (hasFilter && !networkNodeMatchesFilter(n)) return 0.05;
       return 0.08;
     });
     link.attr('stroke-opacity', function(l) {
@@ -2333,9 +2462,8 @@ function buildNetwork() {
   node.on('mouseout', function(ev, d) {
     hideTooltip();
     // If we didn't change opacities (dimmed node hover), nothing to restore
-    var hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
-    var t = DATA.topics[d.id];
-    if (hasFilter && t && !topicMatchesFilter(t)) return;
+    var hasFilter = activeThread || activeAuthor || activeCategory || activeTag || minInfluence > 0;
+    if (hasFilter && !networkNodeMatchesFilter(d)) return;
     if (pinnedTopicId) {
       applyPinnedHighlightNetwork();
     } else {
@@ -2350,26 +2478,41 @@ function buildNetwork() {
         .attr('y2', function(d) { return d.target.y; });
     node.attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
   });
+
+  if (pinnedTopicId) applyPinnedHighlightNetwork();
+  else filterNetwork();
 }
 
 function filterNetwork() {
   if (lineageActive) { applyLineageNetwork(); return; }
   var hasFilter = activeThread || activeAuthor || activeCategory || activeTag || minInfluence > 0;
+  var visibleById = {};
 
-  d3.selectAll('.net-node circle').attr('opacity', function(d) {
-    var t = DATA.topics[d.id];
-    if (!t) return 0.7;
-    if (hasFilter) {
-      return topicMatchesFilter(t) ? 0.85 : 0.08;
-    }
-    return 0.7;
+  d3.selectAll('.net-node').each(function(d) {
+    var visible = networkNodeMatchesFilter(d);
+    visibleById[d.id] = visible;
+    d3.select(this).style('display', visible ? null : 'none');
+    d3.select(this).selectAll('.net-shape').attr('opacity', function(n) {
+      if (!visible) return 0;
+      if (n.isFork) return hasFilter ? 0.55 : 0.65;
+      if (n.isEip) return hasFilter ? 0.85 : 0.75;
+      return hasFilter ? 0.85 : 0.7;
+    });
   });
 
   d3.selectAll('.net-link')
+    .style('display', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return (visibleById[sid] && visibleById[tid]) ? null : 'none';
+    })
     .attr('stroke', '#334')
     .attr('stroke-width', 1)
-    .attr('stroke-opacity', function() {
-      return hasFilter ? 0.04 : 0.12;
+    .attr('stroke-opacity', function(l) {
+      var sid = typeof l.source === 'object' ? l.source.id : l.source;
+      var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      if (!visibleById[sid] || !visibleById[tid]) return 0;
+      return hasFilter ? 0.16 : 0.12;
     })
     .attr('marker-end', 'url(#net-arrow-default)');
 }
@@ -3023,7 +3166,7 @@ function applyLineageTimeline() {
 }
 
 function applyLineageNetwork() {
-  d3.selectAll('.net-node circle').attr('opacity', function(d) {
+  d3.selectAll('.net-node .net-shape').attr('opacity', function(d) {
     return lineageSet.has(d.id) ? 1 : 0.04;
   });
 
@@ -3150,7 +3293,7 @@ function applyPathHighlight() {
       });
     syncLabels();
   } else if (activeView === 'network') {
-    d3.selectAll('.net-node circle').attr('opacity', function(d) { return pathSet.has(d.id) ? 1 : 0.04; });
+    d3.selectAll('.net-node .net-shape').attr('opacity', function(d) { return pathSet.has(d.id) ? 1 : 0.04; });
     d3.selectAll('.net-link')
       .attr('stroke', function(l) {
         var sid = typeof l.source === 'object' ? l.source.id : l.source;
@@ -3586,7 +3729,10 @@ function buildHash() {
   if (activeThread) parts.push('thread=' + encodeURIComponent(activeThread));
   if (activeAuthor) parts.push('author=' + encodeURIComponent(activeAuthor));
   if (pinnedTopicId) parts.push('topic=' + pinnedTopicId);
-  if (showEips) parts.push('eips=1');
+  if (showEips) {
+    parts.push('eips=1');
+    if (eipVisibilityMode === 'all') parts.push('eipmode=all');
+  }
   return parts.length > 0 ? '#' + parts.join('&') : '';
 }
 
@@ -3605,6 +3751,7 @@ function updateHash() {
 function applyHash() {
   var params = parseHash();
   var changed = false;
+  var eipModeChanged = false;
 
   // Switch view if specified
   if (params.view && params.view !== activeView) {
@@ -3637,9 +3784,23 @@ function applyHash() {
   }
 
   // Apply EIP toggle from hash
+  if (params.eipmode) {
+    var mode = params.eipmode === 'all' ? 'all' : 'connected';
+    if (mode !== eipVisibilityMode) {
+      eipVisibilityMode = mode;
+      eipModeChanged = true;
+      changed = true;
+    }
+  }
+  updateEipVisibilityUi();
+
   if (params.eips === '1' && !showEips) {
     toggleContent('eips');
     changed = true;
+  } else if (params.eips === '1' && showEips && eipModeChanged && activeView === 'network') {
+    var netSvg = document.querySelector('#network-view svg');
+    if (netSvg) { netSvg.remove(); simulation = null; }
+    buildNetwork();
   }
 
   if (changed) applyFilters();
@@ -3747,6 +3908,7 @@ function drawEipTimeline() {
     if (isNaN(d)) return;
     e._eipDate = d;
     e._eipNum = Number(num);
+    e._eipNodeId = 'eip_' + num;
     e._eipYPos = eipLaneY0 + eipLaneH * 0.15 + (hashCode(Number(num)) % 100) / 100 * eipLaneH * 0.7;
     eipData.push(e);
   });
@@ -3768,7 +3930,17 @@ function drawEipTimeline() {
       .attr('x1', tlXScale(eip._eipDate)).attr('y1', eip._eipYPos)
       .attr('x2', tlXScale(topic._date)).attr('y2', topic._yPos)
       .attr('stroke', '#5566aa').attr('stroke-opacity', 0.08).attr('stroke-width', 0.5)
-      .datum({eipDate: eip._eipDate, topicDate: topic._date, eipY: eip._eipYPos, topicY: topic._yPos})
+      .datum({
+        eipDate: eip._eipDate,
+        topicDate: topic._date,
+        eipY: eip._eipYPos,
+        topicY: topic._yPos,
+        eipNodeId: edge.source,
+        eipNum: Number(eipNum),
+        eipInf: eip.inf || 0,
+        eipThread: eip.th || null,
+        topicId: edge.target,
+      })
       .style('display', (showPosts && showEips) ? null : 'none');
   });
 
