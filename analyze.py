@@ -748,6 +748,59 @@ def main():
             total_refs = sum(len(v) for v in magicians_ethresearch_refs.values())
             print(f"  Scanned {scanned} magicians topics, found {total_refs} ethresear.ch references")
 
+    # Load magicians index for EIP engagement metrics
+    magicians_index = {}
+    if MAGICIANS_INDEX_PATH.exists():
+        with open(MAGICIANS_INDEX_PATH) as f:
+            magicians_index = json.load(f)
+
+    # -----------------------------------------------------------------------
+    # Enrich EIP catalog with magicians engagement metrics
+    # -----------------------------------------------------------------------
+    print("Enriching EIP catalog with magicians engagement...")
+    eip_magicians_enriched = 0
+    for eip_str, eip_meta in eip_catalog.items():
+        mtid = eip_meta.get("magicians_topic_id")
+        if not mtid:
+            continue
+        mtid_str = str(mtid)
+        # Get basic metrics from magicians index
+        midx = magicians_index.get(mtid_str, {})
+        eip_meta["magicians_views"] = midx.get("views", 0)
+        eip_meta["magicians_likes"] = midx.get("like_count", 0)
+        eip_meta["magicians_posts"] = midx.get("posts_count", 0)
+
+        # Load full topic file for richer metrics
+        mtopic_path = MAGICIANS_TOPICS_DIR / f"{mtid}.json"
+        if mtopic_path.exists():
+            try:
+                with open(mtopic_path) as f:
+                    mdata = json.load(f)
+                parts = mdata.get("details", {}).get("participants", [])
+                eip_meta["magicians_participants"] = len(parts)
+                # Sum of post scores and incoming links
+                score_sum = 0
+                link_sum = 0
+                for post in mdata.get("post_stream", {}).get("posts", []):
+                    score_sum += post.get("score", 0)
+                    link_sum += post.get("incoming_link_count", 0)
+                eip_meta["magicians_score_sum"] = round(score_sum, 1)
+                # Top 10 participants
+                eip_meta["magicians_participants_list"] = [
+                    {"username": p["username"], "post_count": p["post_count"]}
+                    for p in parts[:10]
+                ]
+                eip_magicians_enriched += 1
+            except (json.JSONDecodeError, IOError):
+                eip_meta["magicians_participants"] = 0
+                eip_meta["magicians_score_sum"] = 0
+                eip_meta["magicians_participants_list"] = []
+        else:
+            eip_meta["magicians_participants"] = 0
+            eip_meta["magicians_score_sum"] = 0
+            eip_meta["magicians_participants_list"] = []
+    print(f"  Enriched {eip_magicians_enriched} EIPs with magicians topic data")
+
     # -----------------------------------------------------------------------
     # Pass 1: Load all topics, extract metadata and links
     # -----------------------------------------------------------------------
@@ -1603,6 +1656,229 @@ def main():
     print(f"  {len(minor_topics_output)} minor topics")
 
     # -----------------------------------------------------------------------
+    # EIP influence scoring
+    # -----------------------------------------------------------------------
+    print("Computing EIP influence scores...")
+
+    # Status weights
+    EIP_STATUS_WEIGHT = {
+        "Final": 1.0, "Living": 0.9, "Last Call": 0.7, "Review": 0.6,
+        "Draft": 0.4, "Stagnant": 0.2, "Withdrawn": 0.05, "Moved": 0.05,
+    }
+
+    # Pre-compute ethresearch citation count: how many topics mention each EIP
+    eip_ethresearch_citations = Counter()
+    for tid in tids:
+        for eip_num in topics[tid].get("eip_mentions", []):
+            eip_ethresearch_citations[eip_num] += 1
+
+    # Shipped forks set
+    shipped_forks = {f["name"] for f in FORKS_MANUAL if f["date"]}
+
+    # Collect raw component values for normalization
+    eip_nums = sorted(eip_catalog.keys(), key=lambda x: int(x))
+    raw_magicians = []
+    raw_citations = []
+    for eip_str in eip_nums:
+        em = eip_catalog[eip_str]
+        likes = em.get("magicians_likes", 0)
+        views = em.get("magicians_views", 0)
+        posts = em.get("magicians_posts", 0)
+        raw_magicians.append(likes + math.log1p(views) + math.sqrt(posts))
+        raw_citations.append(eip_ethresearch_citations.get(int(eip_str), 0))
+
+    norm_mag = normalize(raw_magicians)
+    norm_cit = normalize(raw_citations)
+
+    above_010 = 0
+    above_015 = 0
+    for i, eip_str in enumerate(eip_nums):
+        em = eip_catalog[eip_str]
+        status = em.get("status", "")
+        status_w = EIP_STATUS_WEIGHT.get(status, 0.1)
+        fork = em.get("fork")
+        fork_bonus = 0.3 if fork and fork in shipped_forks else 0.0
+        requires = em.get("requires", [])
+        requires_depth = min(len(requires) * 0.05, 0.3)
+
+        score = (
+            0.25 * status_w
+            + 0.30 * norm_mag[i]
+            + 0.20 * norm_cit[i]
+            + 0.15 * fork_bonus
+            + 0.10 * requires_depth
+        )
+        em["influence_score"] = round(score, 4)
+        em["ethresearch_citation_count"] = eip_ethresearch_citations.get(int(eip_str), 0)
+
+        if score >= 0.10:
+            above_010 += 1
+        if score >= 0.15:
+            above_015 += 1
+
+    print(f"  {above_010} EIPs above 0.10, {above_015} above 0.15")
+
+    # -----------------------------------------------------------------------
+    # Assign EIP research threads
+    # -----------------------------------------------------------------------
+    print("Assigning EIP research threads...")
+    eip_thread_assigned = 0
+    for eip_str, em in eip_catalog.items():
+        title = em.get("title", "")
+        if not title:
+            em["research_thread"] = None
+            continue
+        best_thread = None
+        best_score = 0
+        title_lower = title.lower()
+        for thread_id, thread_def in THREAD_SEEDS.items():
+            s = 0
+            for pat in thread_def["title_patterns"]:
+                if re.search(pat, title_lower):
+                    s += 2
+                    break
+            # Boost from related ethresearch topics' thread assignments
+            eip_num = int(eip_str)
+            related_tids = eipToTopics_set = set()
+            for tid in tids:
+                if eip_num in topics[tid].get("eip_mentions", []):
+                    related_tids.add(tid)
+            thread_count = sum(1 for t in related_tids if topics[t].get("research_thread") == thread_id)
+            if thread_count >= 2:
+                s += 1
+            if s > best_score:
+                best_score = s
+                best_thread = thread_id
+        em["research_thread"] = best_thread if best_score >= 1.0 else None
+        if em["research_thread"]:
+            eip_thread_assigned += 1
+    print(f"  {eip_thread_assigned} EIPs assigned to research threads")
+
+    # -----------------------------------------------------------------------
+    # Build EIP graph nodes and edges
+    # -----------------------------------------------------------------------
+    print("Building EIP graph...")
+    eip_graph_nodes = []
+    eip_graph_edges = []
+
+    # Nodes: EIPs with influence >= 0.05
+    eip_node_set = set()
+    for eip_str, em in eip_catalog.items():
+        if em.get("influence_score", 0) >= 0.05:
+            eip_node_set.add(eip_str)
+            eip_graph_nodes.append({
+                "id": "eip_" + eip_str,
+                "eip_num": int(eip_str),
+                "title": em.get("title", ""),
+                "date": em.get("created"),
+                "influence": em.get("influence_score", 0),
+                "status": em.get("status"),
+                "thread": em.get("research_thread"),
+                "fork": em.get("fork"),
+                "is_eip": True,
+            })
+
+    # Edges: eip_topic (EIP → top 5 most-influential ethresearch topics mentioning it)
+    for eip_str in eip_node_set:
+        eip_num = int(eip_str)
+        related = []
+        for tid in tids:
+            t = topics[tid]
+            if eip_num in t.get("eip_mentions", []) and tid in included:
+                related.append((tid, t["influence_score"]))
+        related.sort(key=lambda x: -x[1])
+        for tid, _ in related[:5]:
+            eip_graph_edges.append({
+                "source": "eip_" + eip_str,
+                "target": tid,
+                "type": "eip_topic",
+            })
+
+    # Edges: eip_requires (EIP → required EIPs)
+    for eip_str in eip_node_set:
+        em = eip_catalog[eip_str]
+        for req in em.get("requires", []):
+            req_str = str(req)
+            if req_str in eip_node_set:
+                eip_graph_edges.append({
+                    "source": "eip_" + eip_str,
+                    "target": "eip_" + req_str,
+                    "type": "eip_requires",
+                })
+
+    # Edges: eip_fork (EIP → fork name)
+    for eip_str in eip_node_set:
+        em = eip_catalog[eip_str]
+        if em.get("fork"):
+            eip_graph_edges.append({
+                "source": "eip_" + eip_str,
+                "target": "fork_" + em["fork"],
+                "type": "eip_fork",
+            })
+
+    print(f"  {len(eip_graph_nodes)} EIP nodes, {len(eip_graph_edges)} EIP edges")
+
+    # -----------------------------------------------------------------------
+    # Build EIP author profiles
+    # -----------------------------------------------------------------------
+    print("Building EIP author profiles...")
+    eip_author_data = defaultdict(lambda: {
+        "eips_authored": [], "eips_coauthored": [],
+        "statuses": Counter(), "forks_contributed": set(),
+        "influence_sum": 0.0, "active_years": set(),
+    })
+
+    for eip_str, em in eip_catalog.items():
+        eip_authors_list = em.get("authors", [])
+        if not eip_authors_list:
+            continue
+        inf = em.get("influence_score", 0)
+        status = em.get("status", "")
+        fork = em.get("fork")
+        created = em.get("created", "")
+        year = created[:4] if created and len(created) >= 4 else None
+
+        for i, author_name in enumerate(eip_authors_list):
+            ad = eip_author_data[author_name]
+            if i == 0:
+                ad["eips_authored"].append(int(eip_str))
+            else:
+                ad["eips_coauthored"].append(int(eip_str))
+            ad["statuses"][status] += 1
+            if fork:
+                ad["forks_contributed"].add(fork)
+            ad["influence_sum"] += inf
+            if year:
+                ad["active_years"].add(int(year))
+
+    # Compute author influence and select top 40
+    eip_author_scores = {}
+    for name, ad in eip_author_data.items():
+        authored = len(ad["eips_authored"])
+        coauthored = len(ad["eips_coauthored"])
+        forks = len(ad["forks_contributed"])
+        score = ad["influence_sum"] + 2 * authored + 0.5 * coauthored + 5 * forks
+        eip_author_scores[name] = score
+
+    top_eip_authors = sorted(eip_author_scores.keys(), key=lambda n: eip_author_scores[n], reverse=True)[:40]
+
+    eip_authors_output = {}
+    for name in top_eip_authors:
+        ad = eip_author_data[name]
+        eip_authors_output[name] = {
+            "name": name,
+            "eips_authored": sorted(ad["eips_authored"]),
+            "eips_coauthored": sorted(ad["eips_coauthored"]),
+            "statuses": dict(ad["statuses"].most_common()),
+            "forks_contributed": sorted(ad["forks_contributed"]),
+            "influence_sum": round(ad["influence_sum"], 3),
+            "influence_score": round(eip_author_scores[name], 3),
+            "active_years": sorted(ad["active_years"]),
+        }
+
+    print(f"  {len(eip_authors_output)} EIP author profiles")
+
+    # -----------------------------------------------------------------------
     # Assemble output
     # -----------------------------------------------------------------------
     # -----------------------------------------------------------------------
@@ -1621,6 +1897,13 @@ def main():
             "requires": eip_meta.get("requires", []),
             "magicians_topic_id": eip_meta.get("magicians_topic_id"),
             "ethresearch_topic_id": eip_meta.get("ethresearch_topic_id"),
+            "influence_score": eip_meta.get("influence_score", 0),
+            "research_thread": eip_meta.get("research_thread"),
+            "magicians_views": eip_meta.get("magicians_views", 0),
+            "magicians_likes": eip_meta.get("magicians_likes", 0),
+            "magicians_posts": eip_meta.get("magicians_posts", 0),
+            "magicians_participants": eip_meta.get("magicians_participants", 0),
+            "ethresearch_citation_count": eip_meta.get("ethresearch_citation_count", 0),
         }
 
     print("Writing analysis.json...")
@@ -1631,11 +1914,18 @@ def main():
             "total_edges": total_edges,
             "included_edges": len(graph_edges),
             "eip_catalog_size": len(eip_catalog_output),
+            "eip_nodes": len(eip_graph_nodes),
+            "eip_edges": len(eip_graph_edges),
             "generated_at": datetime.now().isoformat()[:19],
         },
         "eras": ERAS,
         "forks": forks_output,
         "eip_catalog": eip_catalog_output,
+        "eip_authors": eip_authors_output,
+        "eip_graph": {
+            "nodes": eip_graph_nodes,
+            "edges": eip_graph_edges,
+        },
         "topics": topics_output,
         "minor_topics": minor_topics_output,
         "authors": authors_output,
