@@ -213,6 +213,35 @@ def prepare_viz_data(data):
     # Compact EIP graph
     eip_graph = data.get("eip_graph", {"nodes": [], "edges": []})
 
+    # Compact Magicians topic entities
+    compact_magicians = {}
+    for mtid, mt in data.get("magicians_topics", {}).items():
+        compact_magicians[str(mtid)] = {
+            "id": mt.get("id"),
+            "t": mt.get("title"),
+            "sl": mt.get("slug"),
+            "d": mt.get("date"),
+            "cat": mt.get("category_name"),
+            "a": mt.get("author"),
+            "vw": mt.get("views", 0),
+            "lk": mt.get("like_count", 0),
+            "pc": mt.get("posts_count", 0),
+            "tg": mt.get("tags", [])[:8],
+            "eips": mt.get("eips", []),
+            "er": mt.get("ethresearch_refs", [])[:24],
+        }
+
+    # Compact explicit cross-forum edges
+    compact_cross_edges = []
+    for edge in data.get("cross_forum_edges", []):
+        compact_cross_edges.append({
+            "sT": edge.get("source_type"),
+            "s": edge.get("source"),
+            "tT": edge.get("target_type"),
+            "t": edge.get("target"),
+            "ty": edge.get("type"),
+        })
+
     return {
         "meta": data["metadata"],
         "topics": compact_topics,
@@ -224,6 +253,8 @@ def prepare_viz_data(data):
         "eipCatalog": compact_eips,
         "eipAuthors": compact_eip_authors,
         "eipGraph": eip_graph,
+        "magiciansTopics": compact_magicians,
+        "crossForumEdges": compact_cross_edges,
         "graph": {
             "nodes": graph["nodes"],
             "edges": graph["edges"],
@@ -266,8 +297,9 @@ def generate_html(viz_json, data):
       <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
     </div>
     <div class="content-toggles">
-      <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresearch posts">\u25CF Posts</button>
+      <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresear.ch topics">\u25CF EthResearch</button>
       <button id="toggle-eips" class="content-toggle" onclick="toggleContent('eips')" title="Toggle EIP nodes">\u25A0 EIPs</button>
+      <button id="toggle-magicians" class="content-toggle" onclick="toggleContent('magicians')" title="Toggle Magicians nodes">\u25B2 Magicians</button>
       <button id="toggle-eip-visibility" class="content-toggle disabled" onclick="toggleEipVisibilityMode()" title="Toggle between linked-only and all EIPs">Linked EIPs</button>
     </div>
     <div id="filter-breadcrumb" class="breadcrumb"></div>
@@ -701,6 +733,7 @@ let simulation = null;
 let coAuthorSimulation = null;
 let hoveredTopicId = null;
 let pinnedTopicId = null;
+let activeMagiciansId = null;
 let lineageActive = false;
 let lineageSet = new Set();
 let lineageEdgeSet = new Set(); // "src-tgt" strings for fast edge lookup
@@ -711,6 +744,7 @@ let pathSet = new Set();
 let pathEdgeSet = new Set();
 let showPosts = true;
 let showEips = false;
+let showMagicians = false;
 let eipVisibilityMode = 'connected'; // 'connected' | 'all'
 let eipAuthorTab = false; // false = ethresearch, true = EIP authors
 
@@ -785,6 +819,7 @@ Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
     magiciansToEips[eip.mt].push(eipNum);
   }
 });
+var magiciansTopicById = DATA.magiciansTopics || {};
 
 // EIP status → color
 var EIP_STATUS_COLORS = {
@@ -862,12 +897,61 @@ function eipMatchesFilter(node) {
   return true;
 }
 
+function magiciansNodeId(id) {
+  return 'mag_' + String(id);
+}
+
+function crossForumNodeId(sourceType, source) {
+  if (sourceType === 'topic') return Number(source);
+  if (sourceType === 'eip') return 'eip_' + Number(source);
+  if (sourceType === 'magicians_topic') return magiciansNodeId(source);
+  return null;
+}
+
+function magiciansThreadFromTopic(mt) {
+  if (!mt) return null;
+  var counts = {};
+  (mt.er || []).forEach(function(tid) {
+    var t = DATA.topics[tid];
+    if (!t || !t.th) return;
+    counts[t.th] = (counts[t.th] || 0) + 1;
+  });
+  (mt.eips || []).forEach(function(eipNum) {
+    var e = (DATA.eipCatalog || {})[String(eipNum)];
+    if (!e || !e.th) return;
+    counts[e.th] = (counts[e.th] || 0) + 1;
+  });
+  var best = null;
+  var bestCount = 0;
+  Object.keys(counts).forEach(function(th) {
+    if (counts[th] > bestCount) {
+      bestCount = counts[th];
+      best = th;
+    }
+  });
+  return best;
+}
+
+function magiciansInfluenceScore(mt) {
+  if (!mt) return 0;
+  var views = Number(mt.vw || 0);
+  var likes = Number(mt.lk || 0);
+  var posts = Number(mt.pc || 0);
+  var log10Views = Math.log(views + 10) / Math.LN10;
+  var score = 0;
+  score += Math.min(0.45, log10Views / 10);
+  score += Math.min(0.30, likes / 200);
+  score += Math.min(0.30, posts / 120);
+  return Math.max(0.04, score);
+}
+
 function networkNodeSourceType(node) {
   if (!node) return null;
   if (node.sourceType) return node.sourceType;
   if (node.isFork) return 'fork';
   if (node.isEip) return 'eip';
   if (node.id && typeof node.id === 'string' && node.id.indexOf('eip_') === 0) return 'eip';
+  if (node.id && typeof node.id === 'string' && node.id.indexOf('mag_') === 0) return 'magicians';
   return 'topic';
 }
 
@@ -898,6 +982,7 @@ function networkNodeMatchesFilter(node) {
   var sourceType = networkNodeSourceType(node);
   if (sourceType === 'fork') return true;
   if (sourceType === 'eip') return showEips && eipMatchesFilter(node);
+  if (sourceType === 'magicians') return showMagicians && genericNetworkNodeMatchesFilter(node);
   if (sourceType === 'topic') {
     if (!showPosts) return false;
     var t = DATA.topics[node.id];
@@ -1180,6 +1265,7 @@ function clearFilters() {
   activeAuthor = null;
   activeCategory = null;
   activeTag = null;
+  activeMagiciansId = null;
   minInfluence = defaultInfluenceThreshold;
   var slider = document.getElementById('inf-slider');
   if (slider) { slider.value = defaultSliderPct; }
@@ -1190,9 +1276,10 @@ function clearFilters() {
   lineageEdgeSet = new Set();
   pathMode = false; pathStart = null; pathSet = new Set(); pathEdgeSet = new Set();
   // Reset content toggles to defaults
-  showPosts = true; showEips = false; eipVisibilityMode = 'connected';
+  showPosts = true; showEips = false; showMagicians = false; eipVisibilityMode = 'connected';
   document.getElementById('toggle-posts').classList.add('active');
   document.getElementById('toggle-eips').classList.remove('active');
+  document.getElementById('toggle-magicians').classList.remove('active');
   updateEipVisibilityUi();
   applyContentVisibility();
   if (similarActive) clearSimilar();
@@ -1293,6 +1380,14 @@ function toggleContent(type) {
       if (netSvg) { netSvg.remove(); simulation = null; }
       buildNetwork();
     }
+  } else if (type === 'magicians') {
+    showMagicians = !showMagicians;
+    document.getElementById('toggle-magicians').classList.toggle('active', showMagicians);
+    if (activeView === 'network') {
+      var mNetSvg = document.querySelector('#network-view svg');
+      if (mNetSvg) { mNetSvg.remove(); simulation = null; }
+      buildNetwork();
+    }
   }
   updateEipVisibilityUi();
   applyContentVisibility();
@@ -1326,6 +1421,8 @@ function applyContentVisibility() {
   d3.selectAll('.eip-label').style('display', function(d) {
     return showEips && eipMatchesFilter(d) ? null : 'none';
   });
+  d3.selectAll('.magicians-triangle').style('display', showMagicians ? null : 'none');
+  d3.selectAll('.magicians-label').style('display', showMagicians ? null : 'none');
   d3.selectAll('.eip-lane-label').style('display', showEips ? null : 'none');
   // Cross-ref edges: only when both posts and EIPs are visible
   d3.selectAll('.cross-ref-edge').style('display', function(d) {
@@ -2436,6 +2533,47 @@ function buildNetwork() {
     });
   }
 
+  // Add Magicians topic nodes and cross-forum edges when toggle is on
+  if (showMagicians) {
+    Object.entries(DATA.magiciansTopics || {}).forEach(function(entry) {
+      var mtid = entry[0];
+      var mt = entry[1] || {};
+      var nodeId = magiciansNodeId(mtid);
+      if (nodeMap[nodeId]) return;
+      nodes.push({
+        id: nodeId,
+        title: mt.t || ('Magicians #' + mtid),
+        isMagicians: true,
+        sourceType: 'magicians',
+        magiciansId: Number(mtid),
+        influence: magiciansInfluenceScore(mt),
+        thread: magiciansThreadFromTopic(mt),
+        category: mt.cat || null,
+        date: mt.d || null
+      });
+      nodeMap[nodeId] = nodes[nodes.length - 1];
+    });
+
+    var crossSet = new Set();
+    (DATA.crossForumEdges || []).forEach(function(edge) {
+      if (!edge) return;
+      if (edge.sT !== 'magicians_topic' && edge.tT !== 'magicians_topic') return;
+      var srcId = crossForumNodeId(edge.sT, edge.s);
+      var tgtId = crossForumNodeId(edge.tT, edge.t);
+      if (!srcId || !tgtId) return;
+      if (!nodeMap[srcId] || !nodeMap[tgtId]) return;
+      var key = String(srcId) + '->' + String(tgtId) + '|' + (edge.ty || '');
+      if (crossSet.has(key)) return;
+      crossSet.add(key);
+      links.push({
+        source: srcId,
+        target: tgtId,
+        isCrossForum: true,
+        crossType: edge.ty || null
+      });
+    });
+  }
+
   const maxInf = d3.max(nodes, function(n) { return n.influence || 0; }) || 1;
   const rScale = d3.scaleSqrt().domain([0, maxInf]).range([3, 16]);
 
@@ -2451,7 +2589,11 @@ function buildNetwork() {
     .data(links).join('line')
     .attr('class', 'net-link')
     .attr('stroke-opacity', 0.12)
-    .attr('stroke-dasharray', function(d) { return d.eipEdgeType === 'eip_requires' ? '4 3' : null; })
+    .attr('stroke-dasharray', function(d) {
+      if (d.eipEdgeType === 'eip_requires') return '4 3';
+      if (d.isCrossForum) return d.crossType === 'topic_magicians' ? '2 3' : '5 3';
+      return null;
+    })
     .attr('marker-end', 'url(#net-arrow-default)');
 
   const node = g.append('g').selectAll('g')
@@ -2498,6 +2640,19 @@ function buildNetwork() {
     .attr('stroke-width', 0.5)
     .attr('opacity', 0.7);
 
+  // Magicians topics as triangles in network
+  node.filter(function(d) { return d.isMagicians; }).append('path')
+    .attr('class', 'net-shape net-magicians-shape')
+    .attr('d', function(d) {
+      var r = rScale(d.influence || 0) * 0.9;
+      return 'M0,' + (-r.toFixed(2)) + ' L' + r.toFixed(2) + ',' + r.toFixed(2) +
+        ' L' + (-r.toFixed(2)) + ',' + r.toFixed(2) + ' Z';
+    })
+    .attr('fill', '#bb88cc')
+    .attr('stroke', '#bb88cc')
+    .attr('stroke-width', 0.5)
+    .attr('opacity', 0.78);
+
   // Network node labels for top 20 by influence
   var netTopNodes = nodes.filter(function(n) { return !n.isFork && n.influence; })
     .sort(function(a, b) { return (b.influence || 0) - (a.influence || 0); }).slice(0, 20);
@@ -2515,6 +2670,7 @@ function buildNetwork() {
   node.on('click', function(ev, d) {
     if (d.isFork) return;
     if (d.isEip && d.eipNum) { showEipDetailByNum(d.eipNum); return; }
+    if (d.isMagicians && d.magiciansId) { showMagiciansTopicDetailById(d.magiciansId); return; }
     var t = DATA.topics[d.id];
     if (t) handleTopicClick(ev, t);
   });
@@ -2535,6 +2691,9 @@ function buildNetwork() {
           ml: e.ml || 0,
         });
       }
+    } else if (d.isMagicians && d.magiciansId) {
+      var mt = (DATA.magiciansTopics || {})[String(d.magiciansId)];
+      if (mt) showMagiciansTooltip(ev, mt);
     } else if (t) {
       showTooltip(ev, t);
     }
@@ -3541,6 +3700,7 @@ function exportRefsMarkdown(topicId, direction) {
 function showDetail(t) {
   var wasAlreadyPinned = pinnedTopicId !== null;
   pinnedTopicId = t.id;
+  activeMagiciansId = null;
   applyPinnedHighlight();
   // Auto-scroll timeline when navigating between topics (not on first click)
   if (wasAlreadyPinned) scrollToTopic(t.id);
@@ -3667,6 +3827,7 @@ function showDetail(t) {
 function closeDetail() {
   document.getElementById('detail-panel').classList.remove('open');
   pinnedTopicId = null;
+  activeMagiciansId = null;
   if (similarActive) clearSimilar();
   applyFilters();
   updateHash();
@@ -3696,6 +3857,84 @@ function showTooltip(ev, t) {
 
 function hideTooltip() {
   document.getElementById('tooltip').style.display = 'none';
+}
+
+function magiciansTopicUrl(mt) {
+  if (!mt) return 'https://ethereum-magicians.org';
+  if (mt.sl) return 'https://ethereum-magicians.org/t/' + encodeURIComponent(mt.sl) + '/' + mt.id;
+  return 'https://ethereum-magicians.org/t/' + mt.id;
+}
+
+function showMagiciansTooltip(ev, mt) {
+  if (!mt) return;
+  var tip = document.getElementById('tooltip');
+  var eipHint = (mt.eips || []).slice(0, 3).map(function(e) { return 'EIP-' + e; }).join(', ');
+  tip.innerHTML = '<strong>Magicians #' + mt.id + ': ' + escHtml(mt.t || '') + '</strong><br>' +
+                  escHtml(mt.a || 'unknown') + ' \u00b7 ' + (mt.d || '') +
+                  ' \u00b7 posts: ' + Number(mt.pc || 0) +
+                  (eipHint ? '<br><span style="color:#bfa6d6">' + eipHint + '</span>' : '');
+  tip.style.display = 'block';
+  var x = ev.clientX + 14;
+  var y = ev.clientY - 10;
+  var tw = tip.offsetWidth;
+  var th = tip.offsetHeight;
+  if (x + tw > window.innerWidth - 10) x = ev.clientX - tw - 14;
+  if (y + th > window.innerHeight - 10) y = window.innerHeight - th - 10;
+  if (y < 5) y = 5;
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
+}
+
+function showMagiciansTopicDetailById(id) {
+  var mt = (DATA.magiciansTopics || {})[String(id)];
+  if (!mt) return;
+  showMagiciansTopicDetail(mt);
+}
+
+function showMagiciansTopicDetail(mt) {
+  if (!mt) return;
+  pinnedTopicId = null;
+  activeMagiciansId = mt.id;
+  if (similarActive) clearSimilar();
+  applyFilters();
+  var panel = document.getElementById('detail-panel');
+  var content = document.getElementById('detail-content');
+  var threadId = magiciansThreadFromTopic(mt);
+  var thread = threadId ? DATA.threads[threadId] : null;
+  var threadName = thread ? thread.n : 'Unassigned';
+  var threadColor = threadId ? (THREAD_COLORS[threadId] || '#bb88cc') : '#bb88cc';
+  var eips = (mt.eips || []);
+  var relTopics = (mt.er || []).map(function(tid) { return DATA.topics[tid]; }).filter(Boolean)
+    .sort(function(a, b) { return (b.inf || 0) - (a.inf || 0); });
+  var relTopicsHtml = relTopics.slice(0, 12).map(function(t) {
+    return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + t.id + '])" ' +
+      'onmouseenter="highlightTopicInView(' + t.id + ')" ' +
+      'onmouseleave="restorePinnedHighlight()">' + escHtml(t.t) + '</a></div>';
+  }).join('');
+  var tagsHtml = (mt.tg || []).map(function(tag) {
+    return '<span class="eip-tag" style="border-color:#6a4a85;color:#c8b5db">' + escHtml(tag) + '</span>';
+  }).join(' ');
+  var eipsHtml = eips.map(function(e) {
+    return '<span class="eip-tag primary" onclick="showEipDetailByNum(' + e + ')">EIP-' + e + '</span>';
+  }).join(' ');
+  var threadValueHtml = threadId
+    ? '<span class="value" style="color:' + threadColor + ';cursor:pointer" onclick="toggleThread(\'' + escHtml(threadId) + '\')">' + threadName + '</span>'
+    : '<span class="value" style="color:' + threadColor + '">' + threadName + '</span>';
+
+  content.innerHTML =
+    '<h2>Magicians #' + mt.id + ': ' + escHtml(mt.t || '') + '</h2>' +
+    '<div class="meta">by <strong>' + escHtml(mt.a || 'unknown') + '</strong> \u00b7 ' + (mt.d || '') +
+    ' \u00b7 <a href="' + magiciansTopicUrl(mt) + '" target="_blank">Open on ethereum-magicians.org \u2192</a></div>' +
+    '<div class="detail-stat"><span class="label">Thread</span>' + threadValueHtml + '</div>' +
+    '<div class="detail-stat"><span class="label">Views</span><span class="value">' + Number(mt.vw || 0).toLocaleString() + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Likes</span><span class="value">' + Number(mt.lk || 0).toLocaleString() + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Posts</span><span class="value">' + Number(mt.pc || 0).toLocaleString() + '</span></div>' +
+    (mt.cat ? '<div class="detail-stat"><span class="label">Category</span><span class="value">' + escHtml(mt.cat) + '</span></div>' : '') +
+    (eipsHtml ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Related EIPs</strong> ' + eipsHtml + '</div>' : '') +
+    (tagsHtml ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#666">Tags</strong> ' + tagsHtml + '</div>' : '') +
+    (relTopicsHtml ? '<div class="detail-refs"><h4>Related ethresear.ch Topics (' + relTopics.length + ')</h4>' + relTopicsHtml + '</div>' : '');
+  panel.classList.add('open');
+  updateHash();
 }
 
 // === EIP POPOVER ===
@@ -3841,10 +4080,12 @@ function buildHash() {
   if (activeThread) parts.push('thread=' + encodeURIComponent(activeThread));
   if (activeAuthor) parts.push('author=' + encodeURIComponent(activeAuthor));
   if (pinnedTopicId) parts.push('topic=' + pinnedTopicId);
+  if (activeMagiciansId) parts.push('mag=' + activeMagiciansId);
   if (showEips) {
     parts.push('eips=1');
     if (eipVisibilityMode === 'all') parts.push('eipmode=all');
   }
+  if (showMagicians) parts.push('mags=1');
   return parts.length > 0 ? '#' + parts.join('&') : '';
 }
 
@@ -3915,6 +4156,11 @@ function applyHash() {
     buildNetwork();
   }
 
+  if (params.mags === '1' && !showMagicians) {
+    toggleContent('magicians');
+    changed = true;
+  }
+
   if (changed) applyFilters();
 
   // Open topic detail
@@ -3930,6 +4176,12 @@ function applyHash() {
   // Open EIP detail from hash
   if (params.eip) {
     showEipDetailByNum(Number(params.eip));
+    changed = true;
+  }
+
+  // Open Magicians detail from hash
+  if (params.mag) {
+    showMagiciansTopicDetailById(Number(params.mag));
     changed = true;
   }
 }
@@ -3960,6 +4212,18 @@ function updateBreadcrumb() {
   if (activeTag) {
     parts.push('<span class="bc-tag">' + escHtml(activeTag) +
       '<span class="bc-close" onclick="event.stopPropagation();toggleTag(\'' + escHtml(activeTag) + '\')">&times;</span></span>');
+  }
+  if (!showPosts) {
+    parts.push('<span class="bc-tag">EthResearch off' +
+      '<span class="bc-close" onclick="event.stopPropagation();toggleContent(\'posts\')">&times;</span></span>');
+  }
+  if (showEips) {
+    parts.push('<span class="bc-tag" style="border-color:#4a6a4a;color:#88cc88">EIPs on' +
+      '<span class="bc-close" onclick="event.stopPropagation();toggleContent(\'eips\')">&times;</span></span>');
+  }
+  if (showMagicians) {
+    parts.push('<span class="bc-tag" style="border-color:#6a4a85;color:#c8b5db">Magicians on' +
+      '<span class="bc-close" onclick="event.stopPropagation();toggleContent(\'magicians\')">&times;</span></span>');
   }
   if (parts.length === 0) {
     parts.push('<span class="bc-hint">Click to filter \u00b7 Double-click for details \u00b7 <span style="cursor:pointer;color:#667" onclick="toggleHelp()">?</span> for shortcuts</span>');
@@ -4124,6 +4388,7 @@ function showEipDetailByNum(num) {
 }
 
 function showEipDetail(eip, num) {
+  activeMagiciansId = null;
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
   var color = eipColor(eip);
