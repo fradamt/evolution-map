@@ -175,7 +175,8 @@ header .stats span { white-space: nowrap; }
 .magicians-link:hover { text-decoration: underline; }
 .search-item-eip { border-left: 2px solid #88aacc; }
 .fork-tag { display: inline-block; font-size: 10px; padding: 1px 5px; background: #3a3a1a;
-            border: 1px solid #5a5a2a; border-radius: 3px; margin: 1px; color: #cccc88; }
+            border: 1px solid #5a5a2a; border-radius: 3px; margin: 1px; color: #cccc88; cursor: pointer; }
+.fork-tag:hover { background: #45451d; border-color: #6a6a33; }
 
 /* Thread bar in author detail */
 .thread-bar-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 11px; }
@@ -3397,7 +3398,8 @@ function showEraDetail(eraIdx) {
   var forksHtml = eraForks.length > 0 ?
     '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Forks Shipped</strong><div style="margin-top:4px">' +
     eraForks.map(function(f) {
-      return '<span class="fork-tag">' + escHtml(f.cn || f.n) + ' (' + f.d.slice(0, 7) + ')</span>';
+      var forkName = f.cn || f.n;
+      return '<span class="fork-tag" onclick="openForkByName(' + jsQuote(forkName) + ', event)">' + escHtml(forkName) + ' (' + f.d.slice(0, 7) + ')</span>';
     }).join(' ') + '</div></div>' : '';
 
   // Most active threads in this era (count topics per thread)
@@ -4221,7 +4223,7 @@ function showEipPopover(eipNum, ev) {
   if (typeCat.length) html += '<div style="margin-top:6px;color:#aaa;font-size:11px">' + typeCat.join(' &middot; ') + '</div>';
 
   // Fork
-  if (eip.fk) html += '<div style="margin-top:4px"><span class="fork-tag">' + escHtml(eip.fk) + '</span></div>';
+  if (eip.fk) html += '<div style="margin-top:4px"><span class="fork-tag" onclick="openForkByName(' + jsQuote(eip.fk) + ', event)">' + escHtml(eip.fk) + '</span></div>';
 
   // Created
   if (eip.cr) html += '<div style="margin-top:4px;color:#888;font-size:11px">Created: ' + escHtml(eip.cr) + '</div>';
@@ -4283,6 +4285,36 @@ function positionPopover(pop, ev) {
 
 function closeEipPopover() {
   document.getElementById('eip-popover').style.display = 'none';
+}
+
+function findForkByName(name) {
+  if (!name) return null;
+  var needle = String(name).toLowerCase();
+  for (var i = 0; i < (DATA.forks || []).length; i++) {
+    var f = DATA.forks[i];
+    if (!f) continue;
+    if ((f.cn && String(f.cn).toLowerCase() === needle) ||
+        (f.n && String(f.n).toLowerCase() === needle) ||
+        (f.el && String(f.el).toLowerCase() === needle) ||
+        (f.cl && String(f.cl).toLowerCase() === needle)) {
+      return f;
+    }
+  }
+  return null;
+}
+
+function openForkByName(name, ev) {
+  var f = findForkByName(name);
+  if (!f) {
+    showToast('No fork metadata found for ' + name);
+    return;
+  }
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  if (ev && ev.clientX !== undefined && ev.clientY !== undefined) {
+    showForkPopover(ev, f);
+    return;
+  }
+  showForkPopover({clientX: window.innerWidth * 0.55, clientY: 120, stopPropagation: function() {}}, f);
 }
 
 function showForkPopover(ev, f) {
@@ -4852,7 +4884,7 @@ function showEipDetail(eip, num) {
     '<h2 style="color:' + color + '">EIP-' + num + ': ' + escHtml(eip.t || '') + '</h2>' +
     '<div class="meta"><span class="' + statusClass + '">' + escHtml(eip.s || '') + '</span>' +
     (typeCatParts.length ? ' \u00b7 ' + typeCatParts.join(' \u00b7 ') : '') +
-    (eip.fk ? ' <span class="fork-tag">' + escHtml(eip.fk) + '</span>' : '') +
+    (eip.fk ? ' <span class="fork-tag" onclick="openForkByName(' + jsQuote(eip.fk) + ', event)">' + escHtml(eip.fk) + '</span>' : '') +
     '</div>' +
     '<div class="eip-detail-stat"><span class="label">Created</span><span class="value">' + escHtml(eip.cr || '') + '</span></div>' +
     '<div class="eip-detail-stat"><span class="label">Influence</span><span class="value">' + (eip.inf || 0).toFixed(3) + '</span></div>' +
@@ -4900,7 +4932,7 @@ function showEipAuthorDetail(name) {
   var forksHtml = '';
   if (a.fk && a.fk.length > 0) {
     forksHtml = '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Forks Contributed</strong><div style="margin-top:4px">' +
-      a.fk.map(function(f) { return '<span class="fork-tag">' + escHtml(f) + '</span>'; }).join(' ') + '</div></div>';
+      a.fk.map(function(f) { return '<span class="fork-tag" onclick="openForkByName(' + jsQuote(f) + ', event)">' + escHtml(f) + '</span>'; }).join(' ') + '</div></div>';
   }
 
   var yearsHtml = (a.yrs && a.yrs.length > 0) ? a.yrs.join(', ') : '';
