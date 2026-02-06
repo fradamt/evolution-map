@@ -4285,6 +4285,8 @@ function buildNetwork() {
     .attr('width', 12).attr('height', 12)
     .attr('transform', 'rotate(45)')
     .attr('x', -6).attr('y', -6);
+  node.filter(function(d) { return d.isFork; }).append('title')
+    .text(function(d) { return d.title || d.fork || 'Fork'; });
 
   // Topic circles
   node.filter(function(d) { return !d.isFork && !d.isEip && !d.isMagicians; }).append('circle')
@@ -4336,7 +4338,12 @@ function buildNetwork() {
 
   // Events
   node.on('click', function(ev, d) {
-    if (d.isFork) return;
+    if (d.isFork) {
+      var fork = findForkByName(d.fork || d.title);
+      if (fork) showForkPopover(ev, fork);
+      else showToast('No fork metadata found for ' + (d.title || d.fork || 'this fork'));
+      return;
+    }
     if (d.isEip && d.eipNum) { showEipDetailByNum(d.eipNum); return; }
     if (d.isMagicians && d.magiciansId) { showMagiciansTopicDetailById(d.magiciansId); return; }
     var t = DATA.topics[d.id];
@@ -4344,7 +4351,17 @@ function buildNetwork() {
   });
 
   node.on('mouseover', function(ev, d) {
-    if (d.isFork) return;
+    if (d.isFork) {
+      var fork = findForkByName(d.fork || d.title);
+      showForkTooltip(ev, fork || {
+        n: d.fork || d.title || 'Fork',
+        cn: d.title || d.fork || 'Fork',
+        d: d.date || '',
+        eips: [],
+        rt: []
+      });
+      return;
+    }
     var t = DATA.topics[d.id];
     if (d.isEip && d.eipNum) {
       var e = DATA.eipCatalog[String(d.eipNum)];
@@ -4481,6 +4498,8 @@ function buildCoAuthorNetwork() {
     .attr('width', width).attr('height', height);
 
   var g = svg.append('g');
+  var coUserInteracted = false;
+  var coAutoFitted = false;
 
   // Zoom
   var coZoom = d3.zoom()
@@ -4488,6 +4507,7 @@ function buildCoAuthorNetwork() {
     .extent([[0, 0], [width, height]])
     .translateExtent([[-width * 0.8, -height * 0.8], [width * 1.8, height * 1.8]])
     .on('start', function() {
+      coUserInteracted = true;
       hideTooltip();
       filterCoAuthorNetwork();
     })
@@ -4538,13 +4558,41 @@ function buildCoAuthorNetwork() {
     return '#667';
   }
 
+  function fitCoAuthorToViewport(animate) {
+    if (coNodes.length === 0) return;
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    var found = 0;
+    coNodes.forEach(function(n) {
+      if (!isFinite(n.x) || !isFinite(n.y)) return;
+      found += 1;
+      if (n.x < minX) minX = n.x;
+      if (n.x > maxX) maxX = n.x;
+      if (n.y < minY) minY = n.y;
+      if (n.y > maxY) maxY = n.y;
+    });
+    if (found < 2) return;
+    var dx = Math.max(1, maxX - minX);
+    var dy = Math.max(1, maxY - minY);
+    var padding = 90;
+    var scale = Math.min(2.4, Math.max(0.7, Math.min((width - padding) / dx, (height - padding) / dy)));
+    var cx = (minX + maxX) / 2;
+    var cy = (minY + maxY) / 2;
+    var t = d3.zoomIdentity
+      .translate((width / 2) - (scale * cx), (height / 2) - (scale * cy))
+      .scale(scale);
+    if (animate) svg.transition().duration(420).call(coZoom.transform, t);
+    else svg.call(coZoom.transform, t);
+  }
+
   // Force simulation
   coAuthorSimulation = d3.forceSimulation(coNodes)
     .force('link', d3.forceLink(coLinks).id(function(d) { return d.id; })
-      .distance(function(d) { return Math.max(32, 110 - d.weight * 8); })
-      .strength(function(d) { return 0.14 + (d.weight / maxWeight) * 0.26; }))
-    .force('charge', d3.forceManyBody().strength(-140))
+      .distance(function(d) { return Math.max(26, 88 - d.weight * 7); })
+      .strength(function(d) { return 0.2 + (d.weight / maxWeight) * 0.3; }))
+    .force('charge', d3.forceManyBody().strength(-95))
     .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('x', d3.forceX(width / 2).strength(0.045))
+    .force('y', d3.forceY(height / 2).strength(0.045))
     .force('collision', d3.forceCollide().radius(function(d) {
       return rScale(d.inf || 0) + 3;
     }));
@@ -4563,6 +4611,7 @@ function buildCoAuthorNetwork() {
     .call(d3.drag()
       .on('start', function(ev, d) {
         if (!ev.active) coAuthorSimulation.alphaTarget(0.3).restart();
+        coUserInteracted = true;
         d._dragMoved = false;
         d.fx = d.x; d.fy = d.y;
         hideTooltip();
@@ -4673,6 +4722,18 @@ function buildCoAuthorNetwork() {
         .attr('y2', function(d) { return d.target.y; });
     node.attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
   });
+  coAuthorSimulation.on('end', function() {
+    if (!coAutoFitted && !coUserInteracted) {
+      coAutoFitted = true;
+      fitCoAuthorToViewport(true);
+    }
+  });
+  setTimeout(function() {
+    if (!coAutoFitted && !coUserInteracted) {
+      coAutoFitted = true;
+      fitCoAuthorToViewport(true);
+    }
+  }, 600);
 }
 
 function filterCoAuthorNetwork() {
