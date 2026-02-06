@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import re
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -44,6 +45,260 @@ AUTHOR_COLORS = [
     "#d62828", "#6a994e", "#bc6c25", "#7209b7", "#4361ee",
     "#606c38", "#9d4edd", "#264653", "#a8dadc", "#b5838d",
 ]
+
+# High-confidence manual links between EIP metadata names and ethresear.ch usernames.
+# Auto-linking handles most first-initial+surname style usernames; these cover common
+# aliases where normalization is not enough (eg, "fradamt" vs "Francesco D'Amato").
+EIP_TO_ETH_AUTHOR_OVERRIDES = {
+    "Vitalik Buterin": ["vbuterin"],
+    "Justin Drake": ["JustinDrake"],
+    "Ansgar Dietrichs": ["adietrichs"],
+    "Anders Elowsson": ["aelowsson"],
+    "Dankrad Feist": ["dankrad"],
+    "Francesco D'Amato": ["fradamt"],
+}
+
+# Manual aliases for Magicians handles that should map to ethresear.ch usernames.
+MAG_TO_ETH_AUTHOR_OVERRIDES = {
+    "vbuterin_old": ["vbuterin"],
+}
+
+# Manual aliases for Magicians handles that should map directly to EIP author names.
+MAG_TO_EIP_AUTHOR_OVERRIDES = {
+    "vbuterin": ["Vitalik Buterin"],
+    "JustinDrake": ["Justin Drake"],
+    "CarlBeek": ["Carl Beekhuizen"],
+}
+
+
+def _norm_alnum(value):
+    return re.sub(r"[^a-z0-9]", "", (value or "").lower())
+
+
+def _norm_alpha(value):
+    return re.sub(r"[^a-z]", "", (value or "").lower())
+
+
+def _collect_ethresearch_usernames(data):
+    usernames = set(data.get("authors", {}).keys())
+    for source in ("topics", "minor_topics"):
+        for topic in data.get(source, {}).values():
+            author = topic.get("author")
+            if author:
+                usernames.add(author)
+            usernames.update(topic.get("coauthors", []))
+            usernames.update(topic.get("authors", []))
+    # Ignore trivial usernames that create noisy false positives in heuristic matching.
+    return sorted(u for u in usernames if len(_norm_alnum(u)) >= 4)
+
+
+def _collect_magicians_usernames(data):
+    usernames = set()
+    for topic in data.get("magicians_topics", {}).values():
+        author = (topic.get("author") or "").strip()
+        if author:
+            usernames.add(author)
+    return sorted(u for u in usernames if len(_norm_alnum(u)) >= 3)
+
+
+def _score_handle_to_handle_match(source_handle, target_handle):
+    src = _norm_alnum(source_handle)
+    tgt = _norm_alnum(target_handle)
+    if not src or not tgt:
+        return 0
+    if src == tgt:
+        return 320
+    # Allow tiny affixes around an otherwise exact handle match.
+    if src in tgt and len(tgt) - len(src) <= 2:
+        return 250
+    if tgt in src and len(src) - len(tgt) <= 2:
+        return 250
+    return 0
+
+
+def _score_eip_name_to_mag_handle(eip_name, mag_handle):
+    """Scoring for matching a full EIP author name to a Magicians handle."""
+    handle = _norm_alnum(mag_handle)
+    if not handle:
+        return 0
+
+    full = _norm_alnum(eip_name)
+    parts = [_norm_alpha(p) for p in str(eip_name).split() if _norm_alpha(p)]
+    first = parts[0] if parts else ""
+    last = parts[-1] if parts else ""
+    first_last = (first + last) if first and last else ""
+
+    score = 0
+    if handle == full:
+        score += 320
+    if first_last:
+        if handle == first_last:
+            score += 300
+        if handle == first[0] + last:
+            score += 280
+        if handle.startswith(first[0] + last):
+            score += 260
+        if first_last in handle and len(handle) - len(first_last) <= 2:
+            score += 250
+        if len(last) >= 4 and last in handle:
+            score += 90
+        if len(first) >= 3 and first in handle:
+            score += 30
+    if handle in full and len(full) - len(handle) <= 2:
+        score += 180
+    return score
+
+
+def _score_eip_to_eth_match(eip_name, username):
+    """Return a confidence score for matching an EIP full name to a username."""
+    user_norm = _norm_alnum(username)
+    name_norm = _norm_alnum(eip_name)
+    if not user_norm:
+        return 0
+
+    parts = [_norm_alpha(p) for p in str(eip_name).split() if _norm_alpha(p)]
+    first = parts[0] if parts else ""
+    last = parts[-1] if parts else ""
+
+    score = 0
+    if user_norm == name_norm:
+        score += 300
+    if first and user_norm == first and len(first) >= 6:
+        score += 230
+    if first and last:
+        if user_norm == first + last:
+            score += 280
+        if user_norm == first[0] + last:
+            score += 260
+        if user_norm.startswith(first[0] + last):
+            score += 240
+        if len(first) >= 2 and user_norm.startswith(first[:2] + last):
+            score += 220
+        if len(first) >= 3 and user_norm.startswith(first[:3] + last):
+            score += 200
+        if len(last) >= 5 and len(user_norm) > 3 and user_norm.startswith(first[:2]) and last.startswith(user_norm[2:]):
+            score += 175
+        if len(last) >= 5 and len(user_norm) > 2 and user_norm.startswith(first[0]) and last.startswith(user_norm[1:]):
+            score += 185
+        if last in user_norm:
+            score += 90
+        if first in user_norm:
+            score += 30
+
+    if user_norm and user_norm in name_norm:
+        score += 30
+    return score
+
+
+def _build_author_links(data):
+    """Create bidirectional links between ethresear.ch and EIP author identities."""
+    usernames = _collect_ethresearch_usernames(data)
+    mag_usernames = _collect_magicians_usernames(data)
+    eip_names = sorted(data.get("eip_authors", {}).keys())
+
+    eip_to_eth = {}
+    for eip_name in eip_names:
+        mapped = []
+        for override in EIP_TO_ETH_AUTHOR_OVERRIDES.get(eip_name, []):
+            if override in usernames and override not in mapped:
+                mapped.append(override)
+
+        scored = sorted(
+            ((_score_eip_to_eth_match(eip_name, username), username) for username in usernames),
+            key=lambda x: x[0],
+            reverse=True,
+        )
+        best_score, best_user = scored[0] if scored else (0, None)
+        second_score = scored[1][0] if len(scored) > 1 else 0
+
+        # Conservative auto-linking: high confidence and clearly ahead of runner-up.
+        if best_user and best_score >= 240 and (best_score - second_score) >= 40:
+            if best_user not in mapped:
+                mapped.append(best_user)
+
+        if mapped:
+            eip_to_eth[eip_name] = sorted(mapped)
+
+    eth_to_eip = {}
+    for eip_name, eth_users in eip_to_eth.items():
+        for username in eth_users:
+            eth_to_eip.setdefault(username, []).append(eip_name)
+    for username in list(eth_to_eip.keys()):
+        eth_to_eip[username] = sorted(set(eth_to_eip[username]))
+
+    mag_to_eth = {}
+    for mag_user in mag_usernames:
+        mapped = []
+        for override in MAG_TO_ETH_AUTHOR_OVERRIDES.get(mag_user, []):
+            if override in usernames and override not in mapped:
+                mapped.append(override)
+
+        scored = sorted(
+            ((_score_handle_to_handle_match(mag_user, username), username) for username in usernames),
+            key=lambda x: x[0],
+            reverse=True,
+        )
+        best_score, best_user = scored[0] if scored else (0, None)
+        second_score = scored[1][0] if len(scored) > 1 else 0
+        if best_user and best_score >= 300 and (best_score - second_score) >= 40:
+            if best_user not in mapped:
+                mapped.append(best_user)
+
+        if mapped:
+            mag_to_eth[mag_user] = sorted(set(mapped))
+
+    eth_to_mag = {}
+    for mag_user, eth_users in mag_to_eth.items():
+        for username in eth_users:
+            eth_to_mag.setdefault(username, []).append(mag_user)
+    for username in list(eth_to_mag.keys()):
+        eth_to_mag[username] = sorted(set(eth_to_mag[username]))
+
+    mag_to_eip = {}
+    for mag_user in mag_usernames:
+        mapped = []
+
+        # User-provided/manual aliasing first.
+        for override in MAG_TO_EIP_AUTHOR_OVERRIDES.get(mag_user, []):
+            if override in eip_names and override not in mapped:
+                mapped.append(override)
+
+        # Bridge via ethresear.ch identity links.
+        for eth_user in mag_to_eth.get(mag_user, []):
+            for eip_name in eth_to_eip.get(eth_user, []):
+                if eip_name not in mapped:
+                    mapped.append(eip_name)
+
+        # Conservative direct matching to EIP author names.
+        scored = sorted(
+            ((_score_eip_name_to_mag_handle(eip_name, mag_user), eip_name) for eip_name in eip_names),
+            key=lambda x: x[0],
+            reverse=True,
+        )
+        best_score, best_name = scored[0] if scored else (0, None)
+        second_score = scored[1][0] if len(scored) > 1 else 0
+        if best_name and best_score >= 240 and (best_score - second_score) >= 40:
+            if best_name not in mapped:
+                mapped.append(best_name)
+
+        if mapped:
+            mag_to_eip[mag_user] = sorted(set(mapped))
+
+    eip_to_mag = {}
+    for mag_user, eip_linked in mag_to_eip.items():
+        for eip_name in eip_linked:
+            eip_to_mag.setdefault(eip_name, []).append(mag_user)
+    for eip_name in list(eip_to_mag.keys()):
+        eip_to_mag[eip_name] = sorted(set(eip_to_mag[eip_name]))
+
+    return {
+        "ethToEip": eth_to_eip,
+        "eipToEth": eip_to_eth,
+        "magToEth": mag_to_eth,
+        "ethToMag": eth_to_mag,
+        "magToEip": mag_to_eip,
+        "eipToMag": eip_to_mag,
+    }
 
 
 def main():
@@ -185,7 +440,7 @@ def prepare_viz_data(data):
             "c": e.get("category"),
             "cr": e.get("created"),
             "fk": e.get("fork"),
-            "au": e.get("authors", [])[:5],
+            "au": e.get("authors", []),
             "rq": e.get("requires", []),
             "mt": e.get("magicians_topic_id"),
             "et": e.get("ethresearch_topic_id"),
@@ -242,6 +497,8 @@ def prepare_viz_data(data):
             "ty": edge.get("type"),
         })
 
+    author_links = _build_author_links(data)
+
     return {
         "meta": data["metadata"],
         "topics": compact_topics,
@@ -255,6 +512,7 @@ def prepare_viz_data(data):
         "eipGraph": eip_graph,
         "magiciansTopics": compact_magicians,
         "crossForumEdges": compact_cross_edges,
+        "authorLinks": author_links,
         "graph": {
             "nodes": graph["nodes"],
             "edges": graph["edges"],
@@ -361,6 +619,11 @@ def generate_html(viz_json, data):
           <option value="lk">Likes</option>
           <option value="ind">Citations</option>
           <option value="tp">Posts</option>
+        </select>
+        <select id="eip-author-sort" onchange="buildEipAuthorList(this.value)" style="display:none;font-size:10px;background:#1a1a2e;color:#aaa;border:1px solid #333;border-radius:3px;padding:1px 4px;cursor:pointer">
+          <option value="inf">Influence</option>
+          <option value="total">Total</option>
+          <option value="shipped">Shipped (Final)</option>
         </select>
       </h3>
       <div class="author-tab-wrap">
@@ -729,6 +992,7 @@ def _build_js():
 let activeView = 'timeline';
 let activeThread = null;
 let activeAuthor = null;
+let activeEipAuthor = null;
 let activeCategory = null;
 let activeTag = null;
 let minInfluence = 0;
@@ -865,6 +1129,125 @@ var connectedEipNodeIds = new Set();
   }
 });
 
+// Linked author identities across ethresear.ch and EIP datasets.
+const AUTHOR_LINKS = DATA.authorLinks || {};
+const ETH_TO_EIP_AUTHORS = AUTHOR_LINKS.ethToEip || {};
+const EIP_TO_ETH_AUTHORS = AUTHOR_LINKS.eipToEth || {};
+const MAG_TO_ETH_AUTHORS = AUTHOR_LINKS.magToEth || {};
+const ETH_TO_MAG_AUTHORS = AUTHOR_LINKS.ethToMag || {};
+const MAG_TO_EIP_AUTHORS = AUTHOR_LINKS.magToEip || {};
+const EIP_TO_MAG_AUTHORS = AUTHOR_LINKS.eipToMag || {};
+
+function linkedEipAuthors(username) {
+  return ETH_TO_EIP_AUTHORS[username] || [];
+}
+
+function linkedEthAuthors(eipAuthorName) {
+  return EIP_TO_ETH_AUTHORS[eipAuthorName] || [];
+}
+
+function linkedEthAuthorsFromMag(magAuthor) {
+  return MAG_TO_ETH_AUTHORS[magAuthor] || [];
+}
+
+function linkedEipAuthorsFromMag(magAuthor) {
+  return MAG_TO_EIP_AUTHORS[magAuthor] || [];
+}
+
+function linkedMagAuthorsFromEth(username) {
+  return ETH_TO_MAG_AUTHORS[username] || [];
+}
+
+function linkedMagAuthorsFromEip(eipAuthorName) {
+  return EIP_TO_MAG_AUTHORS[eipAuthorName] || [];
+}
+
+function getActiveEthAuthorSet() {
+  var out = new Set();
+  if (activeAuthor) out.add(activeAuthor);
+  if (activeEipAuthor) {
+    linkedEthAuthors(activeEipAuthor).forEach(function(u) { out.add(u); });
+  }
+  return out;
+}
+
+function getActiveEipAuthorSet() {
+  var out = new Set();
+  if (activeEipAuthor) out.add(activeEipAuthor);
+  if (activeAuthor) {
+    linkedEipAuthors(activeAuthor).forEach(function(name) { out.add(name); });
+  }
+  return out;
+}
+
+function getActiveMagiciansAuthorSet() {
+  var out = new Set();
+  if (activeAuthor) {
+    out.add(activeAuthor);
+    linkedMagAuthorsFromEth(activeAuthor).forEach(function(name) { out.add(name); });
+  }
+  if (activeEipAuthor) {
+    linkedMagAuthorsFromEip(activeEipAuthor).forEach(function(name) { out.add(name); });
+  }
+  return out;
+}
+
+function hasAuthorFilter() {
+  return !!activeAuthor || !!activeEipAuthor;
+}
+
+function clearAuthorFilterState() {
+  activeAuthor = null;
+  activeEipAuthor = null;
+}
+
+function clearAuthorFilter() {
+  clearAuthorFilterState();
+  lineageActive = false;
+  lineageSet = new Set();
+  lineageEdgeSet = new Set();
+  refreshAuthorSidebarList();
+  document.getElementById('search-box').value = '';
+  applyFilters();
+  updateHash();
+}
+
+function selectLinkedAuthorIdentity(ethUsername, eipAuthorName) {
+  activeAuthor = ethUsername || null;
+  activeEipAuthor = eipAuthorName || null;
+  lineageActive = false;
+  lineageSet = new Set();
+  lineageEdgeSet = new Set();
+  refreshAuthorSidebarList();
+  document.getElementById('search-box').value = '';
+  applyFilters();
+  updateHash();
+}
+
+function jsQuote(s) {
+  return '\'' + String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\'';
+}
+
+function openMagiciansAuthor(authorName) {
+  var linkedEth = linkedEthAuthorsFromMag(authorName);
+  var linkedEip = linkedEipAuthorsFromMag(authorName);
+  if (linkedEth.length === 0 && linkedEip.length === 0) {
+    showToast('No linked ethresearch/EIP identity for ' + authorName);
+    return;
+  }
+  if (linkedEth.length > 0) {
+    selectAuthor(linkedEth[0]);
+    showAuthorDetail(linkedEth[0]);
+    return;
+  }
+  openEipAuthor(linkedEip[0]);
+}
+
+function refreshAuthorSidebarList() {
+  if (eipAuthorTab) buildEipAuthorList();
+  else sortAuthorList(document.getElementById('author-sort').value || 'inf');
+}
+
 // Build reverse lookup: eip_num -> list of EIPs that require it
 var eipRequiredBy = {};
 Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
@@ -908,6 +1291,15 @@ function eipInfluence(node) {
   return 0;
 }
 
+function eipAuthorsFromNode(node) {
+  if (!node) return [];
+  if (Array.isArray(node.au) && node.au.length > 0) return node.au;
+  var num = eipNumFromNode(node);
+  if (num === null || isNaN(num)) return [];
+  var eip = (DATA.eipCatalog || {})[String(num)];
+  return (eip && Array.isArray(eip.au)) ? eip.au : [];
+}
+
 function eipMatchesFilter(node) {
   if (!node) return false;
   var nid = eipNodeId(node);
@@ -915,17 +1307,112 @@ function eipMatchesFilter(node) {
   if (eipVisibilityMode === 'connected' && !connectedEipNodeIds.has(nid)) return false;
   if (minInfluence > 0 && eipInfluence(node) < minInfluence) return false;
   if (activeThread && eipThread(node) !== activeThread) return false;
+  var activeEipAuthors = getActiveEipAuthorSet();
+  if (hasAuthorFilter()) {
+    if (activeEipAuthors.size === 0) return false;
+    var authors = eipAuthorsFromNode(node);
+    var matches = authors.some(function(name) { return activeEipAuthors.has(name); });
+    if (!matches) return false;
+  }
   return true;
 }
 
+function magiciansTopicId(node) {
+  if (!node) return null;
+  if (node._magId !== undefined && node._magId !== null) return Number(node._magId);
+  if (node.magiciansId !== undefined && node.magiciansId !== null) return Number(node.magiciansId);
+  if (node.id !== undefined && node.id !== null) return Number(node.id);
+  return null;
+}
+
+function magiciansLinkedEips(node) {
+  var id = magiciansTopicId(node);
+  if (id === null || isNaN(id)) return [];
+  return magiciansToEips[String(id)] || [];
+}
+
+function isEipDiscussionMagiciansTopic(node) {
+  return magiciansLinkedEips(node).length > 0;
+}
+
+function magiciansDisplayTitle(node) {
+  var title = (node && node.t ? String(node.t) : '').trim();
+  if (title) return title;
+  var id = magiciansTopicId(node);
+  if (id !== null && !isNaN(id)) return 'Untitled Topic (M#' + id + ')';
+  return 'Untitled Topic';
+}
+
+function magiciansLabelTitle(node, maxLen) {
+  var title = magiciansDisplayTitle(node);
+  if (!maxLen || title.length <= maxLen) return title;
+  return title.slice(0, maxLen - 1) + '\u2026';
+}
+
+function magiciansRawEngagementScore(mt) {
+  if (!mt) return 0;
+  var views = Number(mt.vw || 0);
+  var likes = Number(mt.lk || 0);
+  var posts = Number(mt.pc || 0);
+  var log10Views = Math.log(views + 10) / Math.LN10;
+  var score = 0;
+  score += Math.min(0.45, log10Views / 10);
+  score += Math.min(0.30, likes / 200);
+  score += Math.min(0.30, posts / 120);
+  return Math.max(0.04, score);
+}
+
+function quantileSorted(values, p) {
+  if (!values || values.length === 0) return 0;
+  if (p <= 0) return values[0];
+  if (p >= 1) return values[values.length - 1];
+  var idx = p * (values.length - 1);
+  var lo = Math.floor(idx);
+  var hi = Math.ceil(idx);
+  if (lo === hi) return values[lo];
+  var t = idx - lo;
+  return values[lo] * (1 - t) + values[hi] * t;
+}
+
+// Normalize Magicians influence into the EthResearch influence distribution
+// so the global slider treats both sources on a comparable scale.
+var magiciansInfluenceById = {};
+(function buildMagiciansInfluenceMap() {
+  var ethInfs = Object.values(DATA.topics || {})
+    .map(function(t) { return Number(t.inf || 0); })
+    .filter(function(v) { return isFinite(v) && v >= 0; })
+    .sort(function(a, b) { return a - b; });
+  if (ethInfs.length === 0) return;
+
+  var rows = Object.entries(DATA.magiciansTopics || {}).map(function(entry) {
+    var id = String(entry[0]);
+    var mt = entry[1] || {};
+    return {id: id, raw: magiciansRawEngagementScore(mt)};
+  });
+  if (rows.length === 0) return;
+
+  rows.sort(function(a, b) { return a.raw - b.raw; });
+  rows.forEach(function(row, idx) {
+    var p = rows.length === 1 ? 0.5 : (idx / (rows.length - 1));
+    magiciansInfluenceById[row.id] = quantileSorted(ethInfs, p);
+  });
+})();
+
 function magiciansMatchesFilter(node) {
   if (!node || !showMagicians) return false;
+  if (showEips && isEipDiscussionMagiciansTopic(node)) return false;
   var inf = node._magInf;
   if (inf === undefined || inf === null) inf = magiciansInfluenceScore(node);
   if (minInfluence > 0 && inf < minInfluence) return false;
   var th = node._magThread;
   if (th === undefined) th = magiciansThreadFromTopic(node);
   if (activeThread && th !== activeThread) return false;
+  var activeMagAuthors = getActiveMagiciansAuthorSet();
+  if (hasAuthorFilter()) {
+    if (activeMagAuthors.size === 0) return false;
+    var author = (node.a || '').trim();
+    if (!author || !activeMagAuthors.has(author)) return false;
+  }
   return true;
 }
 
@@ -966,15 +1453,12 @@ function magiciansThreadFromTopic(mt) {
 
 function magiciansInfluenceScore(mt) {
   if (!mt) return 0;
-  var views = Number(mt.vw || 0);
-  var likes = Number(mt.lk || 0);
-  var posts = Number(mt.pc || 0);
-  var log10Views = Math.log(views + 10) / Math.LN10;
-  var score = 0;
-  score += Math.min(0.45, log10Views / 10);
-  score += Math.min(0.30, likes / 200);
-  score += Math.min(0.30, posts / 120);
-  return Math.max(0.04, score);
+  var id = magiciansTopicId(mt);
+  if (id !== null && !isNaN(id)) {
+    var mapped = magiciansInfluenceById[String(id)];
+    if (mapped !== undefined) return mapped;
+  }
+  return magiciansRawEngagementScore(mt);
 }
 
 function networkNodeSourceType(node) {
@@ -1035,6 +1519,7 @@ function updateEipVisibilityUi() {
 
 // Build co-author edge index: author_id -> set of connected author_ids
 const coAuthorEdgeIndex = {};
+const coAuthorNodeSet = new Set((DATA.coGraph.nodes || []).map(function(n) { return n.id; }));
 (DATA.coGraph.edges || []).forEach(e => {
   if (!coAuthorEdgeIndex[e.source]) coAuthorEdgeIndex[e.source] = new Set();
   if (!coAuthorEdgeIndex[e.target]) coAuthorEdgeIndex[e.target] = new Set();
@@ -1271,16 +1756,22 @@ var authorSortLabels = {inf: 'inf', tc: 'topics', lk: 'likes', ind: 'cited', tp:
 
 function sortAuthorList(field) {
   var sorted = Object.values(DATA.authors).slice().sort(function(a, b) { return (b[field] || 0) - (a[field] || 0); });
+  var selectedEthAuthors = getActiveEthAuthorSet();
   var list = document.getElementById('author-list');
   list.innerHTML = '';
   sorted.slice(0, 25).forEach(function(a) {
     var item = document.createElement('div');
     item.className = 'author-item';
     item.dataset.author = a.u;
+    var linked = linkedEipAuthors(a.u);
     var valLabel = field === 'inf' ? a.inf.toFixed(1) : (a[field] || 0);
+    var countLabel = String(valLabel);
+    if (linked.length > 0) {
+      countLabel += ' · ' + linked[0] + (linked.length > 1 ? ' +' + (linked.length - 1) : '');
+    }
     item.innerHTML = '<span class="author-dot" style="background:' + (authorColorMap[a.u] || '#555') + '"></span>' +
       '<span class="author-name">' + a.u + '</span>' +
-      '<span class="author-count">' + valLabel + '</span>';
+      '<span class="author-count">' + escHtml(countLabel) + '</span>';
     item.onclick = (function(username) {
       var clickTimer = null;
       return function() {
@@ -1291,14 +1782,14 @@ function sortAuthorList(field) {
     item.ondblclick = (function(username) {
       return function() { selectAuthor(username); showAuthorDetail(username); };
     })(a.u);
-    if (activeAuthor === a.u) item.classList.add('active');
+    if (selectedEthAuthors.has(a.u)) item.classList.add('active');
     list.appendChild(item);
   });
 }
 
 function clearFilters() {
   activeThread = null;
-  activeAuthor = null;
+  clearAuthorFilterState();
   activeCategory = null;
   activeTag = null;
   activeMagiciansId = null;
@@ -1328,6 +1819,7 @@ function clearFilters() {
   if (dd) { dd.style.display = 'none'; searchDropdownIdx = -1; }
   var btn = document.getElementById('lineage-btn');
   if (btn) { btn.textContent = 'Trace Lineage'; btn.style.borderColor = '#5566aa'; btn.style.color = '#8899cc'; }
+  refreshAuthorSidebarList();
   applyFilters();
   updateHash();
 }
@@ -1353,28 +1845,37 @@ function selectThread(tid) {
 }
 
 function toggleAuthor(username) {
-  activeAuthor = activeAuthor === username ? null : username;
-  lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
-  document.querySelectorAll('.author-item').forEach(c =>
-    c.classList.toggle('active', c.dataset.author === activeAuthor));
-  document.getElementById('search-box').value = '';
-  applyFilters();
-  updateHash();
+  var linkedEips = linkedEipAuthors(username);
+  var sameSelection = activeAuthor === username && (!activeEipAuthor || linkedEips.indexOf(activeEipAuthor) >= 0);
+  if (sameSelection) clearAuthorFilter();
+  else selectLinkedAuthorIdentity(username, linkedEips.length > 0 ? linkedEips[0] : null);
 }
 
 function selectAuthor(username) {
-  activeAuthor = username;
-  lineageActive = false; lineageSet = new Set(); lineageEdgeSet = new Set();
-  document.querySelectorAll('.author-item').forEach(c =>
-    c.classList.toggle('active', c.dataset.author === activeAuthor));
-  document.getElementById('search-box').value = '';
-  applyFilters();
-  updateHash();
+  var linkedEips = linkedEipAuthors(username);
+  selectLinkedAuthorIdentity(username, linkedEips.length > 0 ? linkedEips[0] : null);
+}
+
+function toggleEipAuthor(name) {
+  var linkedEth = linkedEthAuthors(name);
+  var sameSelection = activeEipAuthor === name && (!activeAuthor || linkedEth.indexOf(activeAuthor) >= 0);
+  if (sameSelection) clearAuthorFilter();
+  else selectLinkedAuthorIdentity(linkedEth.length > 0 ? linkedEth[0] : null, name);
+}
+
+function selectEipAuthor(name) {
+  var linkedEth = linkedEthAuthors(name);
+  selectLinkedAuthorIdentity(linkedEth.length > 0 ? linkedEth[0] : null, name);
 }
 
 function openAuthor(username) {
   if (DATA.authors[username]) showAuthorDetail(username);
   else selectAuthor(username);
+}
+
+function openEipAuthor(name) {
+  selectEipAuthor(name);
+  showEipAuthorDetail(name);
 }
 
 function toggleCategory(cat) {
@@ -1516,9 +2017,9 @@ function setupSearch() {
       }
       // Clear sidebar filters when searching
       activeThread = null;
-      activeAuthor = null;
+      clearAuthorFilterState();
       document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
-      document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
+      refreshAuthorSidebarList();
       filterBySearch(q);
       populateDropdown(q);
     }, 150);
@@ -1580,16 +2081,43 @@ function populateDropdown(q) {
     // Show matching authors first, then topics
     var authorResults = [];
     Object.values(DATA.authors).forEach(function(a) {
-      if (a.u.toLowerCase().includes(q)) {
-        authorResults.push(a);
+      var aliases = linkedEipAuthors(a.u);
+      var aliasMatch = aliases.some(function(name) { return name.toLowerCase().includes(q); });
+      if (a.u.toLowerCase().includes(q) || aliasMatch) {
+        authorResults.push({author: a, aliases: aliases});
       }
     });
-    authorResults.sort(function(a, b) { return b.inf - a.inf; });
-    var authorHtml = authorResults.slice(0, 3).map(function(a) {
+    authorResults.sort(function(a, b) { return (b.author.inf || 0) - (a.author.inf || 0); });
+    var authorSlice = authorResults.slice(0, 3);
+    var authorHtml = authorSlice.map(function(entry) {
+      var a = entry.author;
+      var aliases = entry.aliases || [];
       var color = authorColorMap[a.u] || '#667';
+      var aliasMeta = aliases.length > 0 ? ' · EIP: ' + aliases[0] + (aliases.length > 1 ? ' +' + (aliases.length - 1) : '') : '';
       return '<div class="search-item" data-author="' + escHtml(a.u) + '">' +
         '<div class="si-title"><span style="color:' + color + '">\u25CF</span> ' + escHtml(a.u) + '</div>' +
-        '<div class="si-meta">' + a.tc + ' topics \u00b7 inf: ' + a.inf.toFixed(2) + '</div></div>';
+        '<div class="si-meta">' + a.tc + ' topics \u00b7 inf: ' + a.inf.toFixed(2) + escHtml(aliasMeta) + '</div></div>';
+    }).join('');
+
+    // Match EIP authors (with linked ethresear.ch aliases)
+    var eipAuthorResults = [];
+    Object.values(DATA.eipAuthors || {}).forEach(function(a) {
+      var linkedEth = linkedEthAuthors(a.n);
+      var linkedMatch = linkedEth.some(function(u) { return u.toLowerCase().includes(q); });
+      if (a.n.toLowerCase().includes(q) || linkedMatch) {
+        eipAuthorResults.push({author: a, linkedEth: linkedEth});
+      }
+    });
+    eipAuthorResults.sort(function(a, b) { return (b.author.inf || 0) - (a.author.inf || 0); });
+    var eipAuthorSlice = eipAuthorResults.slice(0, 2);
+    var eipAuthorHtml = eipAuthorSlice.map(function(entry) {
+      var a = entry.author;
+      var linkedEth = entry.linkedEth || [];
+      var meta = (a.eips || []).length + ' EIPs' +
+        (linkedEth.length > 0 ? ' · eth: ' + linkedEth[0] + (linkedEth.length > 1 ? ' +' + (linkedEth.length - 1) : '') : '');
+      return '<div class="search-item" data-eip-author="' + escHtml(a.n) + '">' +
+        '<div class="si-title"><span style="color:#88aacc">\u25A0</span> ' + escHtml(a.n) + '</div>' +
+        '<div class="si-meta">' + escHtml(meta) + '</div></div>';
     }).join('');
 
     // Match EIPs from catalog by number or title
@@ -1617,13 +2145,18 @@ function populateDropdown(q) {
       var tl = t.t.toLowerCase();
       if (tl.includes(q)) score += 3;
       if (t.a.toLowerCase().includes(q) || (t.coauth || []).some(function(u) { return u.toLowerCase().includes(q); })) score += 2;
+      if (linkedEipAuthors(t.a || '').some(function(name) { return name.toLowerCase().includes(q); })) score += 2;
+      if ((t.coauth || []).some(function(u) {
+        return linkedEipAuthors(u).some(function(name) { return name.toLowerCase().includes(q); });
+      })) score += 1;
       if (t.cat && t.cat.toLowerCase().includes(q)) score += 1;
       if (t.eips.some(function(e) { return ('eip-'+e).includes(q) || (''+e) === q; })) score += 2;
       if ((t.tg || []).some(function(tag) { return tag.toLowerCase().includes(q); })) score += 1;
       if (score > 0) topicResults.push({topic: t, score: score});
     });
     topicResults.sort(function(a, b) { return b.score - a.score || b.topic.inf - a.topic.inf; });
-    var maxTopics = 8 - Math.min(authorResults.length, 3) - eipSlice.length;
+    var maxTopics = 8 - authorSlice.length - eipSlice.length - eipAuthorSlice.length;
+    if (maxTopics < 0) maxTopics = 0;
     var topicHtml = topicResults.slice(0, maxTopics).map(function(r) {
       var t = r.topic;
       var thColor = t.th ? (THREAD_COLORS[t.th] || '#555') : '#555';
@@ -1632,9 +2165,10 @@ function populateDropdown(q) {
         '<div class="si-meta">' + escHtml(t.a) + ' \u00b7 ' + t.d.slice(0,7) + ' \u00b7 inf: ' + t.inf.toFixed(2) + '</div></div>';
     }).join('');
 
-    dropdown.innerHTML = eipHtml + authorHtml + topicHtml;
+    dropdown.innerHTML = eipHtml + eipAuthorHtml + authorHtml + topicHtml;
     results = eipSlice.map(function() { return {type:'eip'}; })
-      .concat(authorResults.slice(0, 3).map(function(a) { return {type:'author'}; }))
+      .concat(eipAuthorSlice.map(function() { return {type:'eip_author'}; }))
+      .concat(authorSlice.map(function() { return {type:'author'}; }))
       .concat(topicResults.slice(0, maxTopics).map(function(r) { return {type:'topic'}; }));
   }
 
@@ -1647,12 +2181,16 @@ function populateDropdown(q) {
       var topicId = el.dataset.topicId;
       var authorId = el.dataset.author;
       var eipId = el.dataset.eip;
+      var eipAuthorId = el.dataset.eipAuthor;
       if (eipId) {
         showEipDetailByNum(Number(eipId));
+      } else if (eipAuthorId) {
+        openEipAuthor(eipAuthorId);
       } else if (topicId) {
         var t = DATA.topics[Number(topicId)];
         if (t) showDetail(t);
       } else if (authorId) {
+        selectAuthor(authorId);
         showAuthorDetail(authorId);
       }
       dropdown.style.display = 'none';
@@ -1674,13 +2212,26 @@ function filterBySearch(q) {
     (DATA.coGraph.nodes || []).forEach(function(n) {
       if (n.id.toLowerCase().includes(q)) matchingAuthors.add(n.id);
     });
+    Object.entries(EIP_TO_ETH_AUTHORS).forEach(function(entry) {
+      var eipAuthor = entry[0], linkedEth = entry[1] || [];
+      if (eipAuthor.toLowerCase().includes(q)) {
+        linkedEth.forEach(function(u) { matchingAuthors.add(u); });
+      }
+    });
     highlightCoAuthorSet(matchingAuthors);
     return;
   }
   const matching = new Set();
   Object.values(DATA.topics).forEach(t => {
+    var authorAliasMatch = linkedEipAuthors(t.a || '').some(function(name) {
+      return name.toLowerCase().includes(q);
+    });
+    var coauthorAliasMatch = (t.coauth || []).some(function(u) {
+      return linkedEipAuthors(u).some(function(name) { return name.toLowerCase().includes(q); });
+    });
     if (t.t.toLowerCase().includes(q) || t.a.toLowerCase().includes(q) ||
         (t.coauth || []).some(u => u.toLowerCase().includes(q)) ||
+        authorAliasMatch || coauthorAliasMatch ||
         (t.cat && t.cat.toLowerCase().includes(q)) ||
         t.eips.some(e => ('eip-'+e).includes(q) || (''+e) === q) ||
         (t.tg || []).some(tag => tag.toLowerCase().includes(q))) {
@@ -2226,7 +2777,7 @@ function buildTimeline() {
 }
 
 function onTimelineHover(ev, d, entering) {
-  var hasFilter = activeThread || activeAuthor || activeCategory || activeTag;
+  var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag;
   if (entering) {
     hoveredTopicId = d.id;
     showTooltip(ev, d);
@@ -2276,7 +2827,12 @@ function onTimelineHover(ev, d, entering) {
 function topicMatchesFilter(t) {
   if (minInfluence > 0 && (t.inf || 0) < minInfluence) return false;
   if (activeThread && t.th !== activeThread) return false;
-  if (activeAuthor && t.a !== activeAuthor && (t.coauth || []).indexOf(activeAuthor) < 0) return false;
+  var activeEthAuthors = getActiveEthAuthorSet();
+  if (hasAuthorFilter()) {
+    if (activeEthAuthors.size === 0) return false;
+    var coauthors = t.coauth || [];
+    if (!activeEthAuthors.has(t.a) && !coauthors.some(function(u) { return activeEthAuthors.has(u); })) return false;
+  }
   if (activeCategory && t.cat !== activeCategory) return false;
   if (activeTag && !(t.tg || []).includes(activeTag)) return false;
   return true;
@@ -2397,7 +2953,7 @@ function restorePinnedHighlight() {
 
 function filterTimeline() {
   if (lineageActive) { applyLineageTimeline(); return; }
-  const hasFilter = activeThread || activeAuthor || activeCategory || activeTag || minInfluence > 0;
+  const hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
 
   // Compute target opacities upfront so labels/milestones can sync immediately
   var targetOp = {};
@@ -2615,18 +3171,20 @@ function buildNetwork() {
     Object.entries(DATA.magiciansTopics || {}).forEach(function(entry) {
       var mtid = entry[0];
       var mt = entry[1] || {};
+      if (showEips && isEipDiscussionMagiciansTopic(mt)) return;
       var nodeId = magiciansNodeId(mtid);
       if (nodeMap[nodeId]) return;
       nodes.push({
         id: nodeId,
-        title: mt.t || ('Magicians #' + mtid),
+        title: magiciansDisplayTitle(mt),
         isMagicians: true,
         sourceType: 'magicians',
         magiciansId: Number(mtid),
         influence: magiciansInfluenceScore(mt),
         thread: magiciansThreadFromTopic(mt),
         category: mt.cat || null,
-        date: mt.d || null
+        date: mt.d || null,
+        author: mt.a || null
       });
       nodeMap[nodeId] = nodes[nodes.length - 1];
     });
@@ -2776,7 +3334,7 @@ function buildNetwork() {
     }
 
     // If a filter is active and this node doesn't match, only show tooltip
-    var hasFilter = activeThread || activeAuthor || activeCategory || activeTag || minInfluence > 0;
+    var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
     if (hasFilter && !networkNodeMatchesFilter(d)) return;
 
     // Highlight connections
@@ -2808,7 +3366,7 @@ function buildNetwork() {
   node.on('mouseout', function(ev, d) {
     hideTooltip();
     // If we didn't change opacities (dimmed node hover), nothing to restore
-    var hasFilter = activeThread || activeAuthor || activeCategory || activeTag || minInfluence > 0;
+    var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
     if (hasFilter && !networkNodeMatchesFilter(d)) return;
     if (pinnedTopicId) {
       applyPinnedHighlightNetwork();
@@ -2831,7 +3389,7 @@ function buildNetwork() {
 
 function filterNetwork() {
   if (lineageActive) { applyLineageNetwork(); return; }
-  var hasFilter = activeThread || activeAuthor || activeCategory || activeTag || minInfluence > 0;
+  var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
   var visibleById = {};
 
   d3.selectAll('.net-node').each(function(d) {
@@ -3033,13 +3591,22 @@ function buildCoAuthorNetwork() {
 }
 
 function filterCoAuthorNetwork() {
-  var hasFilter = activeAuthor;
+  var selectedAuthors = getActiveEthAuthorSet();
+  var selectedInGraph = new Set();
+  selectedAuthors.forEach(function(authorId) {
+    if (coAuthorNodeSet.has(authorId)) selectedInGraph.add(authorId);
+  });
+  var hasFilter = hasAuthorFilter();
+  var connectedAuthors = new Set();
+  selectedInGraph.forEach(function(authorId) {
+    var connected = coAuthorEdgeIndex[authorId] || new Set();
+    connected.forEach(function(otherId) { connectedAuthors.add(otherId); });
+  });
 
   d3.selectAll('.coauthor-node circle').attr('opacity', function(d) {
     if (hasFilter) {
-      if (d.id === activeAuthor) return 1;
-      var connected = coAuthorEdgeIndex[activeAuthor] || new Set();
-      if (connected.has(d.id)) return 0.8;
+      if (selectedInGraph.has(d.id)) return 1;
+      if (connectedAuthors.has(d.id)) return 0.8;
       return 0.06;
     }
     return 0.7;
@@ -3047,9 +3614,8 @@ function filterCoAuthorNetwork() {
 
   d3.selectAll('.coauthor-label').attr('opacity', function(d) {
     if (hasFilter) {
-      if (d.id === activeAuthor) return 1;
-      var connected = coAuthorEdgeIndex[activeAuthor] || new Set();
-      if (connected.has(d.id)) return 1;
+      if (selectedInGraph.has(d.id)) return 1;
+      if (connectedAuthors.has(d.id)) return 1;
       return 0.1;
     }
     return 1;
@@ -3057,8 +3623,7 @@ function filterCoAuthorNetwork() {
 
   d3.selectAll('.coauthor-label-hover').attr('opacity', function(d) {
     if (hasFilter) {
-      var connected = coAuthorEdgeIndex[activeAuthor] || new Set();
-      return connected.has(d.id) ? 1 : 0;
+      return connectedAuthors.has(d.id) ? 1 : 0;
     }
     return 0;
   });
@@ -3069,7 +3634,7 @@ function filterCoAuthorNetwork() {
       if (!hasFilter) return 0.2;
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
-      return (sid === activeAuthor || tid === activeAuthor) ? 0.6 : 0.02;
+      return (selectedInGraph.has(sid) || selectedInGraph.has(tid)) ? 0.6 : 0.02;
     });
 }
 
@@ -3113,6 +3678,13 @@ function showAuthorDetail(username) {
   if (!a) return;
 
   var color = authorColorMap[username] || '#667';
+  var linkedEips = linkedEipAuthors(username);
+  var linkedEipStats = linkedEips.map(function(name) {
+    return (DATA.eipAuthors || {})[name];
+  }).filter(Boolean);
+  var linkedEipCount = linkedEipStats.reduce(function(sum, entry) {
+    return sum + ((entry.eips || []).length || 0);
+  }, 0);
 
   // Thread distribution bars
   var thrs = a.ths || {};
@@ -3167,7 +3739,7 @@ function showAuthorDetail(username) {
       var coColor = authorColorMap[coName] || '#667';
       return '<span style="display:inline-block;font-size:11px;margin:2px 4px 2px 0;padding:1px 6px;' +
         'background:' + coColor + '22;border:1px solid ' + coColor + '44;border-radius:3px;color:' + coColor + ';cursor:pointer" ' +
-        'onclick="showAuthorDetail(\'' + escHtml(coName) + '\')">' +
+        'onclick="openAuthor(' + jsQuote(coName) + ')">' +
         escHtml(coName) + ' <span style="color:#666;font-size:9px">(' + coCount + ')</span></span>';
     }).join('');
   }
@@ -3178,16 +3750,35 @@ function showAuthorDetail(username) {
     yearsHtml = a.yrs.join(', ');
   }
 
+  var identityTabsHtml = '';
+  if (linkedEips.length > 0) {
+    identityTabsHtml = '<div class="author-tab-wrap" style="margin-top:2px;margin-bottom:10px">' +
+      '<span class="author-tab active">ethresearch</span>' +
+      '<span class="author-tab" onclick="openEipAuthor(' + jsQuote(linkedEips[0]) + ')">EIPs</span>' +
+      '</div>';
+  }
+
+  var linkedEipHtml = '';
+  if (linkedEips.length > 0) {
+    linkedEipHtml = '<div class="detail-stat"><span class="label">Linked EIP Authors</span><span class="value">' +
+      linkedEips.map(function(name) {
+        return '<span style="cursor:pointer;color:#7788cc" onclick="openEipAuthor(' + jsQuote(name) + ')">' + escHtml(name) + '</span>';
+      }).join(', ') + '</span></div>' +
+      '<div class="detail-stat"><span class="label">Linked EIPs</span><span class="value">' + linkedEipCount + '</span></div>';
+  }
+
   content.innerHTML =
     '<h2 style="color:' + color + '">' + escHtml(username) + '</h2>' +
     '<div class="meta">Researcher &middot; <a href="https://ethresear.ch/u/' + encodeURIComponent(username) +
     '" target="_blank">View profile &rarr;</a></div>' +
+    identityTabsHtml +
     '<div class="detail-stat"><span class="label">Topics Created</span><span class="value">' + a.tc + ' influential' + (a.at && a.at.length > a.tc ? ' / ' + a.at.length + ' total' : '') + '</span></div>' +
     '<div class="detail-stat"><span class="label">Total Posts</span><span class="value">' + a.tp.toLocaleString() + '</span></div>' +
     '<div class="detail-stat"><span class="label">Total Likes</span><span class="value">' + a.lk.toLocaleString() + '</span></div>' +
     '<div class="detail-stat"><span class="label">Influence Score</span><span class="value">' + a.inf.toFixed(3) + '</span></div>' +
     '<div class="detail-stat"><span class="label">Cited by</span><span class="value">' + a.ind + ' topics</span></div>' +
     '<div class="detail-stat"><span class="label">Active Years</span><span class="value">' + yearsHtml + '</span></div>' +
+    linkedEipHtml +
     (threadBarsHtml ?
       '<div style="margin-top:12px"><strong style="font-size:11px;color:#888">Thread Distribution</strong>' +
       '<div style="margin-top:6px">' + threadBarsHtml + '</div></div>' : '') +
@@ -3782,6 +4373,14 @@ function toggleCrossForumMode() {
   btn.textContent = currentlyOpen ? 'Cross-Forum Mode' : 'Hide Cross-Forum';
 }
 
+function magiciansRefTag(mid, maxLen) {
+  var mt = (DATA.magiciansTopics || {})[String(mid)];
+  var text = mt ? magiciansLabelTitle(mt, maxLen || 34) : ('M#' + mid);
+  var full = mt ? magiciansDisplayTitle(mt) : ('M#' + mid);
+  return '<span class="eip-tag" style="border-color:#6a4a85;color:#c8b5db;cursor:pointer" ' +
+    'title="' + escHtml(full) + '" onclick="showMagiciansTopicDetailById(' + mid + ')">' + escHtml(text) + '</span>';
+}
+
 function buildCrossForumTraversalHtml(t) {
   if (!t) return '';
 
@@ -3804,7 +4403,7 @@ function buildCrossForumTraversalHtml(t) {
     var magArr = Array.from(magSet).filter(Boolean).sort(function(a, b) { return a - b; });
     var magHtml = magArr.length > 0
       ? magArr.map(function(mid) {
-          return '<span class="eip-tag" style="border-color:#6a4a85;color:#c8b5db;cursor:pointer" onclick="showMagiciansTopicDetailById(' + mid + ')">M#' + mid + '</span>';
+          return magiciansRefTag(mid, 32);
         }).join(' ')
       : '<span style="color:#666;font-size:10px">no linked Magicians thread</span>';
 
@@ -3818,7 +4417,7 @@ function buildCrossForumTraversalHtml(t) {
   var directMagArr = Array.from(directMagSet).filter(Boolean).sort(function(a, b) { return a - b; });
   var directHtml = directMagArr.length > 0
     ? directMagArr.map(function(mid) {
-        return '<span class="eip-tag" style="border-color:#6a4a85;color:#c8b5db;cursor:pointer" onclick="showMagiciansTopicDetailById(' + mid + ')">M#' + mid + '</span>';
+        return magiciansRefTag(mid, 34);
       }).join(' ')
     : '<span style="color:#666;font-size:10px">none</span>';
 
@@ -3843,7 +4442,7 @@ function buildCrossForumTraversalHtmlForEip(num, eip, relTopics) {
   var magArr = Array.from(magSet).filter(Boolean).sort(function(a, b) { return a - b; });
   var magHtml = magArr.length > 0
     ? magArr.map(function(mid) {
-        return '<span class="eip-tag" style="border-color:#6a4a85;color:#c8b5db;cursor:pointer" onclick="showMagiciansTopicDetailById(' + mid + ')">M#' + mid + '</span>';
+        return magiciansRefTag(mid, 34);
       }).join(' ')
     : '<span style="color:#666;font-size:10px">none</span>';
 
@@ -3928,17 +4527,24 @@ function showDetail(t) {
   if (t.mr && t.mr.length > 0) {
     magiciansHtml = '<div class="detail-refs"><h4>Magicians Discussions (' + t.mr.length + ')</h4>';
     t.mr.forEach(function(mtid) {
-      var eips = magiciansToEips[mtid] || [];
-      var label = '';
-      if (eips.length > 0) {
-        var e = eips[0];
-        var eipInfo = (DATA.eipCatalog || {})[e];
-        label = 'EIP-' + e + (eipInfo && eipInfo.t ? ': ' + escHtml(eipInfo.t.length > 50 ? eipInfo.t.slice(0, 50) + '...' : eipInfo.t) : '');
-      } else {
-        label = '#' + mtid;
+      var mt = (DATA.magiciansTopics || {})[String(mtid)] || null;
+      var rowTitle = mt ? magiciansDisplayTitle(mt) : ('M#' + mtid);
+      var rowLabel = mt ? magiciansLabelTitle(mt, 62) : ('M#' + mtid);
+      var linkedEips = magiciansToEips[String(mtid)] || [];
+      var eipHtml = linkedEips.slice(0, 2).map(function(e) {
+        return '<span class="eip-tag primary" onclick="showEipDetailByNum(' + e + ')">EIP-' + e + '</span>';
+      }).join(' ');
+      if (linkedEips.length > 2) {
+        eipHtml += ' <span style="color:#666;font-size:10px">+' + (linkedEips.length - 2) + '</span>';
       }
-      magiciansHtml += '<div class="ref-item"><span style="color:#bb88cc">' + label + '</span> ' +
-        '<a href="https://ethereum-magicians.org/t/' + mtid + '" target="_blank" class="magicians-link">open on magicians &#8599;</a></div>';
+      var mergedBadge = linkedEips.length > 0 && showEips
+        ? '<span style="color:#88719d;font-size:10px">merged when EIPs visible</span>'
+        : '';
+      magiciansHtml += '<div class="ref-item">' +
+        '<a onclick="showMagiciansTopicDetailById(' + mtid + ')" style="color:#bb88cc;cursor:pointer" title="' + escHtml(rowTitle) + '">' + escHtml(rowLabel) + '</a>' +
+        (eipHtml ? ' <span style="margin-left:4px">' + eipHtml + '</span>' : '') +
+        (mergedBadge ? ' <span style="margin-left:4px">' + mergedBadge + '</span>' : '') +
+        ' <a href="https://ethereum-magicians.org/t/' + mtid + '" target="_blank" class="magicians-link">open on magicians &#8599;</a></div>';
     });
     magiciansHtml += '</div>';
   }
@@ -4043,8 +4649,11 @@ function magiciansTopicUrl(mt) {
 function showMagiciansTooltip(ev, mt) {
   if (!mt) return;
   var tip = document.getElementById('tooltip');
+  var title = magiciansDisplayTitle(mt);
+  var mid = magiciansTopicId(mt);
   var eipHint = (mt.eips || []).slice(0, 3).map(function(e) { return 'EIP-' + e; }).join(', ');
-  tip.innerHTML = '<strong>Magicians #' + mt.id + ': ' + escHtml(mt.t || '') + '</strong><br>' +
+  tip.innerHTML = '<strong>' + escHtml(title) + '</strong><br>' +
+                  '<span style="color:#bfa6d6">M#' + (mid !== null ? mid : '?') + '</span> \u00b7 ' +
                   escHtml(mt.a || 'unknown') + ' \u00b7 ' + (mt.d || '') +
                   ' \u00b7 posts: ' + Number(mt.pc || 0) +
                   (eipHint ? '<br><span style="color:#bfa6d6">' + eipHint + '</span>' : '');
@@ -4078,6 +4687,12 @@ function showMagiciansTopicDetail(mt) {
   var thread = threadId ? DATA.threads[threadId] : null;
   var threadName = thread ? thread.n : 'Unassigned';
   var threadColor = threadId ? (THREAD_COLORS[threadId] || '#bb88cc') : '#bb88cc';
+  var title = magiciansDisplayTitle(mt);
+  var topicId = magiciansTopicId(mt);
+  var authorName = (mt.a || 'unknown').trim();
+  var linkedEth = linkedEthAuthorsFromMag(authorName);
+  var linkedEip = linkedEipAuthorsFromMag(authorName);
+  var mergedEips = magiciansLinkedEips(mt);
   var eips = (mt.eips || []);
   var relTopics = (mt.er || []).map(function(tid) { return DATA.topics[tid]; }).filter(Boolean)
     .sort(function(a, b) { return (b.inf || 0) - (a.inf || 0); });
@@ -4092,18 +4707,34 @@ function showMagiciansTopicDetail(mt) {
   var eipsHtml = eips.map(function(e) {
     return '<span class="eip-tag primary" onclick="showEipDetailByNum(' + e + ')">EIP-' + e + '</span>';
   }).join(' ');
+  var linkedEthHtml = linkedEth.map(function(username) {
+    return '<span style="cursor:pointer;color:#7788cc" onclick="openAuthor(' + jsQuote(username) + ')">' + escHtml(username) + '</span>';
+  }).join(', ');
+  var linkedEipHtml = linkedEip.map(function(name) {
+    return '<span style="cursor:pointer;color:#7788cc" onclick="openEipAuthor(' + jsQuote(name) + ')">' + escHtml(name) + '</span>';
+  }).join(', ');
+  var authorLinkable = linkedEth.length > 0 || linkedEip.length > 0;
+  var authorHtml = authorLinkable
+    ? '<span style="cursor:pointer;color:#7788cc" onclick="openMagiciansAuthor(' + jsQuote(authorName) + ')">' + escHtml(authorName || 'unknown') + '</span>'
+    : '<strong>' + escHtml(authorName || 'unknown') + '</strong>';
   var threadValueHtml = threadId
     ? '<span class="value" style="color:' + threadColor + ';cursor:pointer" onclick="toggleThread(\'' + escHtml(threadId) + '\')">' + threadName + '</span>'
     : '<span class="value" style="color:' + threadColor + '">' + threadName + '</span>';
+  var mergedHtml = mergedEips.length > 0
+    ? '<div class="milestone-badge"><span class="mb-icon">\u25A0</span>Merged with EIP node when EIPs are visible</div>'
+    : '';
 
   content.innerHTML =
-    '<h2>Magicians #' + mt.id + ': ' + escHtml(mt.t || '') + '</h2>' +
-    '<div class="meta">by <strong>' + escHtml(mt.a || 'unknown') + '</strong> \u00b7 ' + (mt.d || '') +
+    '<h2>' + escHtml(title) + '</h2>' +
+    '<div class="meta">M#' + (topicId !== null ? topicId : '?') + ' \u00b7 by ' + authorHtml + ' \u00b7 ' + (mt.d || '') +
     ' \u00b7 <a href="' + magiciansTopicUrl(mt) + '" target="_blank">Open on ethereum-magicians.org \u2192</a></div>' +
+    mergedHtml +
     '<div class="detail-stat"><span class="label">Thread</span>' + threadValueHtml + '</div>' +
     '<div class="detail-stat"><span class="label">Views</span><span class="value">' + Number(mt.vw || 0).toLocaleString() + '</span></div>' +
     '<div class="detail-stat"><span class="label">Likes</span><span class="value">' + Number(mt.lk || 0).toLocaleString() + '</span></div>' +
     '<div class="detail-stat"><span class="label">Posts</span><span class="value">' + Number(mt.pc || 0).toLocaleString() + '</span></div>' +
+    (linkedEthHtml ? '<div class="detail-stat"><span class="label">ethresearch</span><span class="value">' + linkedEthHtml + '</span></div>' : '') +
+    (linkedEipHtml ? '<div class="detail-stat"><span class="label">EIP Authors</span><span class="value">' + linkedEipHtml + '</span></div>' : '') +
     (mt.cat ? '<div class="detail-stat"><span class="label">Category</span><span class="value">' + escHtml(mt.cat) + '</span></div>' : '') +
     (eipsHtml ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Related EIPs</strong> ' + eipsHtml + '</div>' : '') +
     (tagsHtml ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#666">Tags</strong> ' + tagsHtml + '</div>' : '') +
@@ -4254,6 +4885,7 @@ function buildHash() {
   if (activeView && activeView !== 'timeline') parts.push('view=' + activeView);
   if (activeThread) parts.push('thread=' + encodeURIComponent(activeThread));
   if (activeAuthor) parts.push('author=' + encodeURIComponent(activeAuthor));
+  if (activeEipAuthor) parts.push('eip_author=' + encodeURIComponent(activeEipAuthor));
   if (pinnedTopicId) parts.push('topic=' + pinnedTopicId);
   if (activeMagiciansId) parts.push('mag=' + activeMagiciansId);
   if (showEips) {
@@ -4301,12 +4933,21 @@ function applyHash() {
   }
 
   // Apply author filter
-  if (params.author && params.author !== activeAuthor) {
-    if (DATA.authors[params.author]) {
-      activeAuthor = params.author;
-      document.querySelectorAll('.author-item').forEach(function(c) {
-        c.classList.toggle('active', c.dataset.author === activeAuthor);
-      });
+  if (params.author || params.eip_author) {
+    var nextEthAuthor = params.author || null;
+    var nextEipAuthor = params.eip_author || null;
+    if (nextEthAuthor && !nextEipAuthor) {
+      var linkedEips = linkedEipAuthors(nextEthAuthor);
+      if (linkedEips.length > 0) nextEipAuthor = linkedEips[0];
+    }
+    if (nextEipAuthor && !nextEthAuthor) {
+      var linkedEth = linkedEthAuthors(nextEipAuthor);
+      if (linkedEth.length > 0) nextEthAuthor = linkedEth[0];
+    }
+    if (nextEthAuthor !== activeAuthor || nextEipAuthor !== activeEipAuthor) {
+      activeAuthor = nextEthAuthor;
+      activeEipAuthor = nextEipAuthor;
+      refreshAuthorSidebarList();
       changed = true;
     }
   }
@@ -4375,10 +5016,14 @@ function updateBreadcrumb() {
     parts.push('<span class="bc-tag" style="border-color:' + color + '55;color:' + color + '">' +
       (th ? th.n : activeThread) + '<span class="bc-close" onclick="event.stopPropagation();toggleThread(\'' + activeThread + '\')">&times;</span></span>');
   }
-  if (activeAuthor) {
-    var aColor = authorColorMap[activeAuthor] || '#667';
+  if (hasAuthorFilter()) {
+    var aColor = activeAuthor ? (authorColorMap[activeAuthor] || '#667') : '#88aacc';
+    var authorLabel = activeAuthor || activeEipAuthor || '';
+    if (activeAuthor && activeEipAuthor) {
+      authorLabel = activeAuthor + ' \u2194 ' + activeEipAuthor;
+    }
     parts.push('<span class="bc-tag" style="border-color:' + aColor + '55;color:' + aColor + '">' +
-      activeAuthor + '<span class="bc-close" onclick="event.stopPropagation();toggleAuthor(\'' + activeAuthor + '\')">&times;</span></span>');
+      escHtml(authorLabel) + '<span class="bc-close" onclick="event.stopPropagation();clearAuthorFilter()">&times;</span></span>');
   }
   if (activeCategory) {
     parts.push('<span class="bc-tag">' + escHtml(activeCategory) +
@@ -4640,7 +5285,9 @@ function drawMagiciansTimeline() {
       .style('display', magiciansMatchesFilter(mt) ? null : 'none');
   });
 
-  var topMagicians = magData.slice().sort(function(a, b) { return (b._magInf || 0) - (a._magInf || 0); }).slice(0, 12);
+  var topMagicians = magData.filter(function(mt) {
+    return !(showEips && isEipDiscussionMagiciansTopic(mt));
+  }).slice().sort(function(a, b) { return (b._magInf || 0) - (a._magInf || 0); }).slice(0, 12);
   var labelG = magG.append('g');
   topMagicians.forEach(function(mt) {
     var r = magiciansRScale(mt._magInf);
@@ -4649,7 +5296,7 @@ function drawMagiciansTimeline() {
       .attr('x', tlXScale(mt._magDate) + r + 3)
       .attr('y', mt._magYPos + 3)
       .attr('fill', '#c8b5db').attr('font-size', 8).attr('pointer-events', 'none')
-      .text('M#' + mt._magId)
+      .text(magiciansLabelTitle(mt, 28))
       .datum(mt)
       .style('display', magiciansMatchesFilter(mt) ? null : 'none');
   });
@@ -4720,7 +5367,7 @@ function showEipDetail(eip, num) {
     authorsHtml = '<div class="eip-detail-stat"><span class="label">Authors</span><span class="value">' +
       eip.au.map(function(a) {
         var ea = (DATA.eipAuthors || {})[a];
-        if (ea) return '<span style="cursor:pointer;color:#7788cc" onclick="showEipAuthorDetail(\'' + escHtml(a) + '\')">' + escHtml(a) + '</span>';
+        if (ea) return '<span style="cursor:pointer;color:#7788cc" onclick="openEipAuthor(' + jsQuote(a) + ')">' + escHtml(a) + '</span>';
         return escHtml(a);
       }).join(', ') + '</span></div>';
   }
@@ -4780,6 +5427,16 @@ function showEipAuthorDetail(name) {
   var content = document.getElementById('detail-content');
   var a = (DATA.eipAuthors || {})[name];
   if (!a) return;
+  var linkedEth = linkedEthAuthors(name);
+  var linkedEthSet = new Set(linkedEth);
+  var linkedTopicCount = 0;
+  if (linkedEth.length > 0) {
+    Object.values(DATA.topics).forEach(function(t) {
+      if (linkedEthSet.has(t.a) || (t.coauth || []).some(function(u) { return linkedEthSet.has(u); })) {
+        linkedTopicCount += 1;
+      }
+    });
+  }
 
   var eipTagsHtml = function(nums, label) {
     if (!nums || nums.length === 0) return '';
@@ -4801,12 +5458,31 @@ function showEipAuthorDetail(name) {
       Object.entries(a.st).map(function(e) { return e[0] + ': ' + e[1]; }).join(', ') + '</div></div>';
   }
 
+  var identityTabsHtml = '';
+  if (linkedEth.length > 0) {
+    identityTabsHtml = '<div class="author-tab-wrap" style="margin-top:2px;margin-bottom:10px">' +
+      '<span class="author-tab" onclick="openAuthor(' + jsQuote(linkedEth[0]) + ')">ethresearch</span>' +
+      '<span class="author-tab active">EIPs</span>' +
+      '</div>';
+  }
+
+  var linkedEthHtml = '';
+  if (linkedEth.length > 0) {
+    linkedEthHtml = '<div class="eip-detail-stat"><span class="label">ethresearch</span><span class="value">' +
+      linkedEth.map(function(username) {
+        return '<span style="cursor:pointer;color:#7788cc" onclick="openAuthor(' + jsQuote(username) + ')">' + escHtml(username) + '</span>';
+      }).join(', ') + '</span></div>' +
+      '<div class="eip-detail-stat"><span class="label">Linked Topics</span><span class="value">' + linkedTopicCount + '</span></div>';
+  }
+
   content.innerHTML =
     '<h2>' + escHtml(name) + '</h2>' +
     '<div class="meta">EIP Author</div>' +
+    identityTabsHtml +
     '<div class="eip-detail-stat"><span class="label">EIPs</span><span class="value">' + (a.eips || []).length + '</span></div>' +
     '<div class="eip-detail-stat"><span class="label">Influence Score</span><span class="value">' + (a.inf || 0).toFixed(3) + '</span></div>' +
     '<div class="eip-detail-stat"><span class="label">Active Years</span><span class="value">' + yearsHtml + '</span></div>' +
+    linkedEthHtml +
     eipTagsHtml(a.eips, 'EIPs') +
     forksHtml + statusHtml;
 
@@ -4822,28 +5498,75 @@ function switchAuthorTab(isEip) {
     el.classList.toggle('active', el.dataset.tab === (isEip ? 'eip' : 'ethresearch'));
   });
   if (isEip) {
-    buildEipAuthorList();
+    buildEipAuthorList(document.getElementById('eip-author-sort').value || 'inf');
   } else {
     sortAuthorList(document.getElementById('author-sort').value || 'inf');
   }
-  // Toggle sort dropdown visibility (only relevant for ethresearch tab)
-  var sortEl = document.getElementById('author-sort');
-  if (sortEl) sortEl.style.display = isEip ? 'none' : '';
+  // Toggle sort dropdown visibility per tab
+  var ethSortEl = document.getElementById('author-sort');
+  if (ethSortEl) ethSortEl.style.display = isEip ? 'none' : '';
+  var eipSortEl = document.getElementById('eip-author-sort');
+  if (eipSortEl) eipSortEl.style.display = isEip ? '' : 'none';
 }
 
-function buildEipAuthorList() {
+function eipAuthorTotalCount(a) {
+  return (a && a.eips) ? a.eips.length : 0;
+}
+
+function eipAuthorShippedCount(a) {
+  if (!a) return 0;
+  if (a.st && a.st.Final !== undefined) return Number(a.st.Final || 0);
+  return (a.eips || []).filter(function(num) {
+    var eip = (DATA.eipCatalog || {})[String(num)];
+    return eip && eip.s === 'Final';
+  }).length;
+}
+
+function eipAuthorSortMetric(a, sortField) {
+  if (sortField === 'total') return eipAuthorTotalCount(a);
+  if (sortField === 'shipped') return eipAuthorShippedCount(a);
+  return Number(a.inf || 0);
+}
+
+function buildEipAuthorList(sortField) {
+  if (!sortField) sortField = (document.getElementById('eip-author-sort').value || 'inf');
   var list = document.getElementById('author-list');
-  var authors = Object.values(DATA.eipAuthors || {}).sort(function(a, b) { return (b.inf || 0) - (a.inf || 0); });
+  var selectedEipAuthors = getActiveEipAuthorSet();
+  var authors = Object.values(DATA.eipAuthors || {}).sort(function(a, b) {
+    var diff = eipAuthorSortMetric(b, sortField) - eipAuthorSortMetric(a, sortField);
+    if (diff !== 0) return diff;
+    return (Number(b.inf || 0) - Number(a.inf || 0));
+  });
   list.innerHTML = '';
   authors.slice(0, 25).forEach(function(a) {
     var item = document.createElement('div');
     item.className = 'author-item';
-    var eipCount = (a.eips || []).length;
+    item.dataset.eipAuthor = a.n;
+    var eipCount = eipAuthorTotalCount(a);
+    var shippedCount = eipAuthorShippedCount(a);
     var topFork = (a.fk && a.fk.length > 0) ? a.fk[0] : '';
+    var linkedEth = linkedEthAuthors(a.n);
+    var metricLabel = sortField === 'shipped'
+      ? (shippedCount + ' Final')
+      : (sortField === 'total'
+          ? (eipCount + ' total')
+          : ((Number(a.inf || 0)).toFixed(2) + ' inf'));
+    var countLabel = metricLabel + ' · ' + eipCount + ' EIPs' + (topFork ? ' · ' + topFork : '');
+    if (linkedEth.length > 0) countLabel += ' · eth: ' + linkedEth[0] + (linkedEth.length > 1 ? ' +' + (linkedEth.length - 1) : '');
     item.innerHTML = '<span class="author-dot" style="background:#88aacc"></span>' +
       '<span class="author-name">' + escHtml(a.n) + '</span>' +
-      '<span class="author-count">' + eipCount + ' EIPs' + (topFork ? ' \u00b7 ' + escHtml(topFork) : '') + '</span>';
-    item.onclick = function() { showEipAuthorDetail(a.n); };
+      '<span class="author-count">' + escHtml(countLabel) + '</span>';
+    item.onclick = (function(name) {
+      var clickTimer = null;
+      return function() {
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
+        clickTimer = setTimeout(function() { clickTimer = null; toggleEipAuthor(name); }, 250);
+      };
+    })(a.n);
+    item.ondblclick = (function(name) {
+      return function() { selectEipAuthor(name); showEipAuthorDetail(name); };
+    })(a.n);
+    if (selectedEipAuthors.has(a.n)) item.classList.add('active');
     list.appendChild(item);
   });
 }
