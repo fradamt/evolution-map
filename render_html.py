@@ -1460,8 +1460,10 @@ function buildTimeline() {
   const laneOrder = [...THREAD_ORDER.filter(t => (threadTopics[t]||[]).length > 0), '_other'];
   const laneH = swimH / laneOrder.length;
 
-  // Time scale
+  // Time scale — includes topic dates, fork dates, and EIP dates
   const allDates = Object.values(DATA.topics).map(t => new Date(t.d)).filter(d => !isNaN(d));
+  DATA.forks.forEach(f => { if (f.d) allDates.push(new Date(f.d)); });
+  Object.values(DATA.eipCatalog || {}).forEach(e => { if (e.cr) { var d = new Date(e.cr); if (!isNaN(d)) allDates.push(d); } });
   const xDomainOrig = [d3.min(allDates), d3.max(allDates)];
   const xScale = d3.scaleTime()
     .domain(xDomainOrig.slice())
@@ -1570,6 +1572,25 @@ function buildTimeline() {
       .on('click', function(ev, d) { ev.stopPropagation(); showForkPopover(ev, d.fork); });
     forkHoverLines.push(hoverLine);
   });
+
+  // "ethresear.ch live" annotation marker (Aug 17, 2017)
+  var ethresearchLiveDate = new Date('2017-08-17');
+  var ethresearchLiveX = xScale(ethresearchLiveDate);
+  var liveLineData = {date: ethresearchLiveDate};
+  var liveLine = zoomG.append('line')
+    .attr('class', 'ethresearch-live-line')
+    .attr('x1', ethresearchLiveX).attr('x2', ethresearchLiveX)
+    .attr('y1', -5).attr('y2', topicLaneY0 + swimH + histH)
+    .attr('stroke', '#5a8a5a').attr('stroke-width', 1.5)
+    .attr('stroke-dasharray', '6 3').attr('opacity', 0.6)
+    .datum(liveLineData);
+  var liveLabel = zoomG.append('text')
+    .attr('class', 'ethresearch-live-label')
+    .attr('x', ethresearchLiveX).attr('y', -12)
+    .attr('text-anchor', 'middle').attr('fill', '#6aaa6a').attr('font-size', 10).attr('font-weight', 600)
+    .attr('paint-order', 'stroke').attr('stroke', '#0a0a0f').attr('stroke-width', 3)
+    .text('ethresear.ch live')
+    .datum(liveLineData);
 
   // EIP lane label + separator (at top of plot area)
   fixedG.append('text').attr('x', -10).attr('y', eipReservedH / 2)
@@ -1821,6 +1842,11 @@ function buildTimeline() {
     forkLines.forEach(function(l) { var d = l.datum(); l.attr('x1', newX(d)).attr('x2', newX(d)); });
     forkLabels.forEach(function(l) { var d = l.datum(); l.attr('x', newX(d)); });
     forkHoverLines.forEach(function(l) { var d = l.datum(); l.attr('x1', newX(d.date)).attr('x2', newX(d.date)); });
+
+    // Update ethresear.ch live marker
+    var liveX = newX(liveLine.datum().date);
+    liveLine.attr('x1', liveX).attr('x2', liveX);
+    liveLabel.attr('x', liveX);
 
     // Update histogram bars
     var zoomedBarW = Math.max(1, (newX(new Date(2020, 1, 1)) - newX(new Date(2020, 0, 1))) * 0.85);

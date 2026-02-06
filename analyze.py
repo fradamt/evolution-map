@@ -40,6 +40,16 @@ MAGICIANS_TOPICS_DIR = SCRAPE_DIR / "magicians_topics"
 # Fork timeline (parsed from fork-history.md, with manual fallback)
 # ---------------------------------------------------------------------------
 FORKS_MANUAL = [
+    {"name": "Genesis", "date": "2015-07-30", "el": "Frontier", "cl": None,
+     "combined": None, "eips": [], "meta_eip": None},
+    {"name": "Homestead", "date": "2016-03-14", "el": "Homestead", "cl": None,
+     "combined": None, "eips": [2, 7, 8], "meta_eip": 606},
+    {"name": "DAO Fork", "date": "2016-07-20", "el": "DAO Fork", "cl": None,
+     "combined": None, "eips": [], "meta_eip": 779},
+    {"name": "Tangerine Whistle", "date": "2016-10-18", "el": "Tangerine Whistle", "cl": None,
+     "combined": None, "eips": [150], "meta_eip": 608},
+    {"name": "Spurious Dragon", "date": "2016-11-22", "el": "Spurious Dragon", "cl": None,
+     "combined": None, "eips": [155, 160, 161, 170], "meta_eip": 607},
     {"name": "Byzantium", "date": "2017-10-16", "el": "Byzantium", "cl": None,
      "combined": None, "eips": [100, 140, 196, 197, 198, 211, 214, 649, 658], "meta_eip": 609},
     {"name": "Constantinople", "date": "2019-02-28", "el": "Constantinople", "cl": None,
