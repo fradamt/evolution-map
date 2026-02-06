@@ -1386,6 +1386,15 @@ function connectIdentityNodes(aKind, aName, bKind, bName) {
   Object.keys(DATA.authors || {}).forEach(function(username) {
     ensureIdentityNode('eth', username);
   });
+  Object.values(DATA.topics || {}).forEach(function(t) {
+    if (t && t.a) ensureIdentityNode('eth', t.a);
+    (t && t.coauth ? t.coauth : []).forEach(function(username) {
+      if (username) ensureIdentityNode('eth', username);
+    });
+    (t && t.parts ? t.parts : []).forEach(function(username) {
+      if (username) ensureIdentityNode('eth', username);
+    });
+  });
   Object.keys(DATA.eipAuthors || {}).forEach(function(name) {
     ensureIdentityNode('eip', name);
   });
@@ -1503,6 +1512,132 @@ const COAUTHOR_ETH_USERNAMES = (function() {
   });
   return Array.from(out);
 })();
+
+function topCountsAsObject(counter, limit) {
+  var entries = Object.entries(counter || {}).sort(function(a, b) {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return String(a[0]).localeCompare(String(b[0]));
+  }).slice(0, limit);
+  var out = {};
+  entries.forEach(function(entry) { out[entry[0]] = entry[1]; });
+  return out;
+}
+
+function topTopicIdsByInfluence(topicIds, limit) {
+  return (topicIds || []).slice().sort(function(a, b) {
+    var ta = DATA.topics[a] || {};
+    var tb = DATA.topics[b] || {};
+    return (tb.inf || 0) - (ta.inf || 0);
+  }).slice(0, limit);
+}
+
+const ALL_ETH_AUTHORS = (function() {
+  var out = {};
+
+  Object.entries(DATA.authors || {}).forEach(function(entry) {
+    var username = entry[0];
+    var a = entry[1] || {};
+    out[username] = {
+      u: username,
+      tc: a.tc || 0,
+      tp: a.tp || 0,
+      lk: a.lk || 0,
+      ind: a.ind || 0,
+      inf: a.inf || 0,
+      yrs: (a.yrs || []).slice(),
+      cats: Object.assign({}, a.cats || {}),
+      ths: Object.assign({}, a.ths || {}),
+      tops: (a.tops || []).slice(),
+      co: Object.assign({}, a.co || {}),
+      rank: a.rank !== undefined ? a.rank : 9999,
+      at: (a.at || []).slice(),
+    };
+  });
+
+  var synth = {};
+  function ensureSynth(username) {
+    if (!synth[username]) {
+      synth[username] = {
+        tc: 0,
+        lk: 0,
+        ind: 0,
+        inf: 0,
+        years: new Set(),
+        cats: {},
+        ths: {},
+        co: {},
+        topicIds: [],
+        allTopicIds: [],
+      };
+    }
+    return synth[username];
+  }
+
+  Object.values(DATA.topics || {}).forEach(function(t) {
+    if (!t) return;
+    var topicId = t.id;
+    var authors = [];
+    if (t.a) authors.push(t.a);
+    (t.coauth || []).forEach(function(username) {
+      if (username && authors.indexOf(username) < 0) authors.push(username);
+    });
+    if (authors.length === 0) return;
+
+    authors.forEach(function(username) {
+      if (out[username]) return;
+      var a = ensureSynth(username);
+      if (topicId !== undefined && topicId !== null && a.allTopicIds.indexOf(topicId) < 0) a.allTopicIds.push(topicId);
+      if (!t.mn && topicId !== undefined && topicId !== null && a.topicIds.indexOf(topicId) < 0) a.topicIds.push(topicId);
+      if (t.d && t.d.length >= 4) {
+        var year = Number(t.d.slice(0, 4));
+        if (!isNaN(year)) a.years.add(year);
+      }
+      if (t.cat) a.cats[t.cat] = (a.cats[t.cat] || 0) + 1;
+      if (t.th) a.ths[t.th] = (a.ths[t.th] || 0) + 1;
+      if (!t.mn) {
+        a.tc += 1;
+        a.lk += Number(t.lk || 0);
+        a.ind += Number(t.ind || 0);
+        a.inf += Number(t.inf || 0);
+      }
+      authors.forEach(function(other) {
+        if (!other || other === username) return;
+        a.co[other] = (a.co[other] || 0) + 1;
+      });
+    });
+  });
+
+  Object.entries(synth).forEach(function(entry) {
+    var username = entry[0];
+    var a = entry[1];
+    var years = Array.from(a.years).sort(function(x, y) { return x - y; });
+    var topTopicIds = topTopicIdsByInfluence(
+      (a.topicIds && a.topicIds.length > 0) ? a.topicIds : a.allTopicIds,
+      5
+    );
+    out[username] = {
+      u: username,
+      tc: a.tc,
+      tp: 0,
+      lk: a.lk,
+      ind: a.ind,
+      inf: Number(a.inf.toFixed(1)),
+      yrs: years,
+      cats: topCountsAsObject(a.cats, 5),
+      ths: topCountsAsObject(a.ths, 3),
+      tops: topTopicIds,
+      co: topCountsAsObject(a.co, 5),
+      rank: 9999,
+      at: a.allTopicIds.slice().sort(function(x, y) { return x - y; }),
+    };
+  });
+
+  return out;
+})();
+
+function getAuthorProfile(username) {
+  return ALL_ETH_AUTHORS[username] || null;
+}
 
 const COAUTHOR_EIP_AUTHOR_NAMES = Object.keys(DATA.eipAuthors || {});
 
@@ -2364,7 +2499,8 @@ function selectEipAuthor(name) {
 }
 
 function openAuthor(username) {
-  if (DATA.authors[username]) {
+  if (getAuthorProfile(username)) {
+    selectAuthor(username);
     showAuthorDetail(username);
     return;
   }
@@ -2582,7 +2718,7 @@ function populateDropdown(q) {
 
   if (activeView === 'coauthor') {
     // Show matching authors
-    Object.values(DATA.authors).forEach(function(a) {
+    Object.values(ALL_ETH_AUTHORS).forEach(function(a) {
       if (a.u.toLowerCase().includes(q)) {
         results.push({type: 'author', id: a.u, inf: a.inf || 0, tc: a.tc || 0});
       }
@@ -2598,7 +2734,7 @@ function populateDropdown(q) {
   } else {
     // Show matching authors first, then topics
     var authorResults = [];
-    Object.values(DATA.authors).forEach(function(a) {
+    Object.values(ALL_ETH_AUTHORS).forEach(function(a) {
       var aliases = linkedEipAuthors(a.u);
       var aliasMatch = aliases.some(function(name) { return name.toLowerCase().includes(q); });
       if (a.u.toLowerCase().includes(q) || aliasMatch) {
@@ -4376,7 +4512,8 @@ function buildCoAuthorNetwork() {
     // Use the author color map if available (top 15 get unique colors)
     if (authorColorMap[n.id] && authorColorMap[n.id] !== '#555') return authorColorMap[n.id];
     // Otherwise, color by dominant thread
-    var thrs = n.thrs || (DATA.authors[n.id] ? DATA.authors[n.id].ths : null);
+    var profile = getAuthorProfile(n.id);
+    var thrs = n.thrs || (profile ? profile.ths : null);
     if (thrs) {
       var bestThread = null;
       var bestCount = 0;
@@ -4445,17 +4582,14 @@ function buildCoAuthorNetwork() {
     .attr('opacity', 0)
     .text(function(d) { return d.id; });
 
-  // Click -> filter by author, double-click -> show author detail sidebar
+  // Click -> select author and open detail sidebar
   var coauthorClickTimer = null;
   node.on('click', function(ev, d) {
     if (coauthorClickTimer) { clearTimeout(coauthorClickTimer); coauthorClickTimer = null; return; }
     coauthorClickTimer = setTimeout(function() {
       coauthorClickTimer = null;
-      if (!DATA.authors[d.id]) {
-        openAuthor(d.id);
-        return;
-      }
-      toggleAuthor(d.id);
+      selectAuthor(d.id);
+      showAuthorDetail(d.id);
     }, 250);
   });
   node.on('dblclick', function(ev, d) {
@@ -4561,7 +4695,7 @@ function filterCoAuthorNetwork() {
 
 function showCoAuthorTooltip(ev, d) {
   var tip = document.getElementById('tooltip');
-  var a = DATA.authors[d.id];
+  var a = getAuthorProfile(d.id);
   var topThread = '';
   if (d.thrs || (a && a.ths)) {
     var thrs = d.thrs || a.ths;
@@ -4595,9 +4729,12 @@ function showCoAuthorTooltip(ev, d) {
 function showAuthorDetail(username) {
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
-  var a = DATA.authors[username];
+  var a = getAuthorProfile(username);
   if (!a) {
-    openAuthor(username);
+    selectAuthor(username);
+    var profileUrl = 'https://ethresear.ch/u/' + encodeURIComponent(username);
+    window.open(profileUrl, '_blank');
+    showToast('Opened ethresearch profile for ' + username);
     return;
   }
 
