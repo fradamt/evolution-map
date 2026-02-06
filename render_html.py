@@ -56,11 +56,14 @@ EIP_TO_ETH_AUTHOR_OVERRIDES = {
     "Anders Elowsson": ["aelowsson"],
     "Dankrad Feist": ["dankrad"],
     "Francesco D'Amato": ["fradamt"],
+    "Danny Ryan": ["djrtwo"],
+    "Toni Wahrstätter": ["Nero_eth"],
 }
 
 # Manual aliases for Magicians handles that should map to ethresear.ch usernames.
 MAG_TO_ETH_AUTHOR_OVERRIDES = {
     "vbuterin_old": ["vbuterin"],
+    "Nerolation": ["Nero_eth"],
 }
 
 # Manual aliases for Magicians handles that should map directly to EIP author names.
@@ -68,6 +71,8 @@ MAG_TO_EIP_AUTHOR_OVERRIDES = {
     "vbuterin": ["Vitalik Buterin"],
     "JustinDrake": ["Justin Drake"],
     "CarlBeek": ["Carl Beekhuizen"],
+    "Nerolation": ["Toni Wahrstätter"],
+    "djrtwo": ["Danny Ryan"],
 }
 
 
@@ -1175,7 +1180,7 @@ function linkedMagAuthorsFromEip(eipAuthorName) {
 
 const COAUTHOR_ALIAS_OVERRIDES = {
   caspar: {kind: 'eth', target: 'casparschwa'},
-  francesco: {kind: 'eip', target: "Francesco D'Amato"},
+  francesco: {kind: 'eth', target: 'fradamt'},
   carl: {kind: 'eip', target: 'Carl Beekhuizen'},
   barnabe: {kind: 'eth', target: 'barnabe'},
   danny: {kind: 'eth', target: 'Danny'}
@@ -1228,10 +1233,10 @@ function resolveBylineCoauthorIdentity(rawName) {
   var override = COAUTHOR_ALIAS_OVERRIDES[norm];
   if (override) {
     if (override.kind === 'eth' && COAUTHOR_ETH_USERNAMES.indexOf(override.target) >= 0) {
-      return {kind: 'eth', target: override.target, label: override.target, key: 'eth:' + normalizeIdentityToken(override.target)};
+      return {kind: 'eth', target: override.target, label: raw || override.target, key: 'eth:' + normalizeIdentityToken(override.target)};
     }
     if (override.kind === 'eip' && COAUTHOR_EIP_AUTHOR_NAMES.indexOf(override.target) >= 0) {
-      return {kind: 'eip', target: override.target, label: override.target, key: 'eip:' + normalizeIdentityToken(override.target)};
+      return {kind: 'eip', target: override.target, label: raw || override.target, key: 'eip:' + normalizeIdentityToken(override.target)};
     }
   }
 
@@ -1262,11 +1267,45 @@ function resolveBylineCoauthorIdentity(rawName) {
     if (Math.abs(bestEth.score - bestEip.score) < 15) {
       return {kind: 'raw', label: raw, key: 'raw:' + norm};
     }
-    return bestEth.score > bestEip.score ? bestEth : bestEip;
+    var winner = bestEth.score > bestEip.score ? bestEth : bestEip;
+    winner.label = raw || winner.label;
+    return winner;
   }
-  if (bestEth) return bestEth;
-  if (bestEip) return bestEip;
+  if (bestEth) {
+    bestEth.label = raw || bestEth.label;
+    return bestEth;
+  }
+  if (bestEip) {
+    bestEip.label = raw || bestEip.label;
+    return bestEip;
+  }
   return {kind: 'raw', label: raw, key: 'raw:' + norm};
+}
+
+const TOPIC_COAUTHOR_IDENTITIES_CACHE = {};
+
+function topicResolvedCoauthorIdentities(t) {
+  if (!t || t.id === undefined || t.id === null) return {eth: new Set(), eip: new Set()};
+  var cacheKey = String(t.id);
+  if (TOPIC_COAUTHOR_IDENTITIES_CACHE[cacheKey]) return TOPIC_COAUTHOR_IDENTITIES_CACHE[cacheKey];
+
+  var out = {eth: new Set(), eip: new Set()};
+  (t.coauth || []).forEach(function(username) {
+    if (username) out.eth.add(username);
+  });
+
+  inferredCoauthorNamesFromExcerpt(t).forEach(function(name) {
+    var resolved = resolveBylineCoauthorIdentity(name);
+    if (!resolved) return;
+    if (resolved.kind === 'eth' && resolved.target) out.eth.add(resolved.target);
+    if (resolved.kind === 'eip' && resolved.target) {
+      out.eip.add(resolved.target);
+      linkedEthAuthors(resolved.target).forEach(function(username) { out.eth.add(username); });
+    }
+  });
+
+  TOPIC_COAUTHOR_IDENTITIES_CACHE[cacheKey] = out;
+  return out;
 }
 
 function getActiveEthAuthorSet() {
@@ -2964,10 +3003,14 @@ function topicMatchesFilter(t) {
   if (minInfluence > 0 && (t.inf || 0) < minInfluence) return false;
   if (activeThread && t.th !== activeThread) return false;
   var activeEthAuthors = getActiveEthAuthorSet();
+  var activeEipAuthors = getActiveEipAuthorSet();
   if (hasAuthorFilter()) {
-    if (activeEthAuthors.size === 0) return false;
-    var coauthors = t.coauth || [];
-    if (!activeEthAuthors.has(t.a) && !coauthors.some(function(u) { return activeEthAuthors.has(u); })) return false;
+    var resolved = topicResolvedCoauthorIdentities(t);
+    var matchesEth = activeEthAuthors.size > 0 &&
+      (activeEthAuthors.has(t.a) || Array.from(activeEthAuthors).some(function(username) { return resolved.eth.has(username); }));
+    var matchesEip = activeEipAuthors.size > 0 &&
+      Array.from(activeEipAuthors).some(function(name) { return resolved.eip.has(name); });
+    if (!matchesEth && !matchesEip) return false;
   }
   if (activeCategory && t.cat !== activeCategory) return false;
   if (activeTag && !(t.tg || []).includes(activeTag)) return false;
