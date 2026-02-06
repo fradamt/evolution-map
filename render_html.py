@@ -3835,6 +3835,37 @@ function buildCrossForumTraversalHtml(t) {
     '</div>';
 }
 
+function buildCrossForumTraversalHtmlForEip(num, eip, relTopics) {
+  var magSet = new Set();
+  if (eip && eip.mt) magSet.add(Number(eip.mt));
+  var mapped = eipToMagiciansRefs[String(num)];
+  if (mapped) mapped.forEach(function(mid) { magSet.add(Number(mid)); });
+  var magArr = Array.from(magSet).filter(Boolean).sort(function(a, b) { return a - b; });
+  var magHtml = magArr.length > 0
+    ? magArr.map(function(mid) {
+        return '<span class="eip-tag" style="border-color:#6a4a85;color:#c8b5db;cursor:pointer" onclick="showMagiciansTopicDetailById(' + mid + ')">M#' + mid + '</span>';
+      }).join(' ')
+    : '<span style="color:#666;font-size:10px">none</span>';
+
+  var topicHtml = '';
+  if (relTopics && relTopics.length > 0) {
+    var sorted = relTopics.map(function(tid) { return DATA.topics[tid]; }).filter(Boolean)
+      .sort(function(a, b) { return (b.inf || 0) - (a.inf || 0); }).slice(0, 10);
+    topicHtml = sorted.map(function(t) {
+      return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + t.id + '])" ' +
+        'onmouseenter="highlightTopicInView(' + t.id + ')" onmouseleave="restorePinnedHighlight()">' +
+        escHtml(t.t) + '</a> <span style="color:#666;font-size:10px">(' + t.inf.toFixed(2) + ')</span></div>';
+    }).join('');
+  }
+
+  return '<div id="cross-forum-panel" class="detail-refs" style="display:none">' +
+    '<h4>Cross-Forum Traversal</h4>' +
+    '<div style="font-size:10px;color:#666;margin-bottom:6px">ethresear.ch topic \u2192 EIP-' + num + ' \u2192 related Magicians threads</div>' +
+    (topicHtml ? '<div style="margin-bottom:8px"><strong style="font-size:11px;color:#888">Related ethresear.ch topics</strong>' + topicHtml + '</div>' : '') +
+    '<div><strong style="font-size:11px;color:#888">EIP \u2192 Magicians</strong><div style="margin-top:4px">' + magHtml + '</div></div>' +
+    '</div>';
+}
+
 // === DETAIL PANEL ===
 function showDetail(t) {
   var wasAlreadyPinned = pinnedTopicId !== null;
@@ -4716,6 +4747,7 @@ function showEipDetail(eip, num) {
         }).join('') + '</div>';
     }
   }
+  var traversalHtml = buildCrossForumTraversalHtmlForEip(num, eip, relTopics);
 
   content.innerHTML =
     '<h2 style="color:' + color + '">EIP-' + num + ': ' + escHtml(eip.t || '') + '</h2>' +
@@ -4730,6 +4762,9 @@ function showEipDetail(eip, num) {
     (eip.mp ? '<div class="eip-detail-stat"><span class="label">Magicians Posts</span><span class="value">' + (eip.mp || 0) + '</span></div>' : '') +
     (eip.mpc ? '<div class="eip-detail-stat"><span class="label">Magicians Participants</span><span class="value">' + (eip.mpc || 0) + '</span></div>' : '') +
     '<div class="eip-detail-stat"><span class="label">ethresearch Citations</span><span class="value">' + (eip.erc || 0) + '</span></div>' +
+    '<div style="margin:10px 0 6px;display:flex;gap:6px"><button id="cross-forum-btn" onclick="toggleCrossForumMode()" ' +
+    'style="background:#1a1a2e;border:1px solid #6a4a85;color:#c8b5db;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">Cross-Forum Mode</button></div>' +
+    traversalHtml +
     authorsHtml +
     reqHtml + reqByHtml + linksHtml + relHtml;
 
