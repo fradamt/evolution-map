@@ -356,7 +356,7 @@ def _add_unified_edge(edges, edge_keys, source, target, edge_type):
     })
 
 
-def _build_unified_graph(graph, forks, eip_graph, magicians_topics, cross_forum_edges):
+def _build_unified_graph(topics, graph, forks, eip_graph, magicians_topics, cross_forum_edges):
     nodes = []
     edges = []
     node_keys = set()
@@ -373,20 +373,22 @@ def _build_unified_graph(graph, forks, eip_graph, magicians_topics, cross_forum_
         node["id"] = node_id
         nodes.append(node)
 
-    # Ethresear.ch topic nodes + citation edges.
-    for n in graph.get("nodes", []):
-        node_id = _normalize_unified_node_id(n.get("id"))
+    # Ethresear.ch topic nodes (include both primary + minor topics).
+    for t in topics.values():
+        node_id = _normalize_unified_node_id(t.get("id"))
         add_node({
             "id": node_id,
             "sourceType": "topic",
-            "title": n.get("title"),
-            "author": n.get("author"),
-            "date": n.get("date"),
-            "influence": n.get("influence", 0),
-            "thread": n.get("thread"),
-            "era": n.get("era"),
-            "primaryEips": n.get("primary_eips", []),
+            "title": t.get("t"),
+            "author": t.get("a"),
+            "date": t.get("d"),
+            "influence": t.get("inf", 0),
+            "thread": t.get("th"),
+            "era": t.get("era"),
+            "primaryEips": t.get("peips", []),
+            "isMinor": bool(t.get("mn")),
         })
+    # Topic citation edges from the curated citation graph.
     for e in graph.get("edges", []):
         _add_unified_edge(
             edges,
@@ -674,6 +676,7 @@ def prepare_viz_data(data):
 
     author_links = _build_author_links(data)
     unified_graph = _build_unified_graph(
+        compact_topics,
         graph,
         compact_forks,
         eip_graph,
@@ -2747,7 +2750,8 @@ let tlPlotW = 0; // plot width
 let tlMarginLeft = 0; // left margin
 const TL_MIN_ZOOM = 1;
 const TL_MAX_ZOOM = 8;
-const TL_EDGE_PAD = 72;
+const TL_EDGE_PAD_MIN = 72;
+const TL_EDGE_PAD_FRACTION = 0.5;
 
 function clampTimelineTransform(t) {
   var k = t && isFinite(t.k) ? t.k : 1;
@@ -2757,8 +2761,9 @@ function clampTimelineTransform(t) {
     return d3.zoomIdentity.translate(0, 0).scale(k);
   }
 
-  var minX = tlPlotW * (1 - k) - TL_EDGE_PAD;
-  var maxX = TL_EDGE_PAD;
+  var edgePad = Math.max(TL_EDGE_PAD_MIN, tlPlotW * TL_EDGE_PAD_FRACTION);
+  var minX = tlPlotW * (1 - k) - edgePad;
+  var maxX = edgePad;
   var x = t && isFinite(t.x) ? t.x : 0;
   if (x < minX) x = minX;
   if (x > maxX) x = maxX;
