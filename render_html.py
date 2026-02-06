@@ -583,6 +583,7 @@ def generate_html(viz_json, data):
     </div>
   </div>
   <div id="sidebar">
+    <button id="sidebar-width-toggle" class="sidebar-width-toggle" onclick="toggleSidebarWidth()" title="Expand sidebar">&#9664;</button>
     <div class="sidebar-section">
       <div class="search-wrap">
         <input type="text" id="search-box" placeholder="Search topics, authors, EIPs...">
@@ -680,7 +681,8 @@ html, body {
 }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
        background: #0a0a0f; color: #e0e0e0; overflow: hidden; height: 100vh; }
-#app { display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr 300px; height: 100vh; }
+#app { --sidebar-width: 300px; display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr var(--sidebar-width); height: 100vh; }
+#app.sidebar-wide { --sidebar-width: 460px; }
 
 header { grid-column: 1 / -1; padding: 12px 20px; background: #12121a;
          border-bottom: 1px solid #2a2a3a; display: flex; align-items: center; gap: 20px; }
@@ -703,9 +705,13 @@ header .stats span { white-space: nowrap; }
 .controls button.active { background: #333366; border-color: #5555aa; color: #fff; }
 
 #main-area { grid-column: 1; overflow: hidden; position: relative; overscroll-behavior: none; }
-#sidebar { grid-column: 2; background: #12121a; border-left: 1px solid #2a2a3a; overflow-y: auto; }
+#sidebar { grid-column: 2; background: #12121a; border-left: 1px solid #2a2a3a; overflow-y: auto; position: relative; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+.sidebar-width-toggle { position: absolute; left: -14px; top: 14px; width: 14px; height: 30px; border: 1px solid #2a2a3a;
+                        border-right: none; border-radius: 4px 0 0 4px; background: #12121a; color: #7788cc;
+                        font-size: 10px; cursor: pointer; z-index: 20; line-height: 1; padding: 0; }
+.sidebar-width-toggle:hover { background: #1a1a2e; color: #aab6ff; }
 
 #timeline-view, #network-view, #coauthor-view { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
 #timeline-view { display: block; overscroll-behavior: none; }
@@ -767,7 +773,9 @@ header .stats span { white-space: nowrap; }
 .author-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .author-name { font-size: 12px; flex: 1; min-width: 0; overflow: hidden;
                text-overflow: ellipsis; white-space: nowrap; }
-.author-count { font-size: 10px; color: #666; flex-shrink: 0; }
+.author-count { font-size: 10px; color: #666; flex-shrink: 0; max-width: 145px; overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+#app.sidebar-wide .author-count { max-width: 260px; }
 .author-item.active .author-name { color: #fff; font-weight: 600; }
 
 /* Collapsible sidebar sections */
@@ -1015,6 +1023,7 @@ let showEips = false;
 let showMagicians = false;
 let eipVisibilityMode = 'connected'; // 'connected' | 'all'
 let eipAuthorTab = false; // false = ethresearch, true = EIP authors
+let sidebarWide = false;
 
 // --- Prevent macOS trackpad swipe-back/forward ---
 // On macOS, the browser compositor may detect navigation gestures from
@@ -1566,8 +1575,59 @@ function setupInfSlider() {
   });
 }
 
+function applySidebarWidthState() {
+  var app = document.getElementById('app');
+  var btn = document.getElementById('sidebar-width-toggle');
+  if (!app || !btn) return;
+  app.classList.toggle('sidebar-wide', sidebarWide);
+  btn.innerHTML = sidebarWide ? '&#9654;' : '&#9664;';
+  btn.title = sidebarWide ? 'Collapse sidebar' : 'Expand sidebar';
+}
+
+function setupSidebarWidth() {
+  try {
+    sidebarWide = localStorage.getItem('evmap.sidebarWide') === '1';
+  } catch (e) {
+    sidebarWide = false;
+  }
+  applySidebarWidthState();
+}
+
+function rerenderCurrentViewForLayout() {
+  var tl = document.querySelector('#timeline-view svg');
+  if (tl) tl.remove();
+  tlSvg = null;
+  var net = document.querySelector('#network-view svg');
+  if (net) net.remove();
+  simulation = null;
+  var co = document.querySelector('#coauthor-view svg');
+  if (co) co.remove();
+  coAuthorSimulation = null;
+
+  if (activeView === 'timeline') {
+    buildTimeline();
+    if (showEips) drawEipTimeline();
+    if (showMagicians) drawMagiciansTimeline();
+  } else if (activeView === 'network') {
+    buildNetwork();
+  } else if (activeView === 'coauthor') {
+    buildCoAuthorNetwork();
+  }
+  applyFilters();
+  if (pinnedTopicId) applyPinnedHighlight();
+}
+
+function toggleSidebarWidth() {
+  sidebarWide = !sidebarWide;
+  applySidebarWidthState();
+  try { localStorage.setItem('evmap.sidebarWide', sidebarWide ? '1' : '0'); } catch (e) {}
+  refreshAuthorSidebarList();
+  rerenderCurrentViewForLayout();
+}
+
 // === INIT ===
 document.addEventListener('DOMContentLoaded', () => {
+  setupSidebarWidth();
   buildSidebar();
   buildTimeline();
   setupSearch();
@@ -1615,6 +1675,7 @@ function showView(view) {
   document.getElementById('btn-network').classList.toggle('active', view === 'network');
   document.getElementById('btn-coauthor').classList.toggle('active', view === 'coauthor');
   if (view === 'timeline') {
+    if (!document.querySelector('#timeline-view svg')) buildTimeline();
     if (showEips && !document.querySelector('.eip-square')) drawEipTimeline();
     if (showMagicians && !document.querySelector('.magicians-triangle')) drawMagiciansTimeline();
   }
@@ -4551,14 +4612,30 @@ function showDetail(t) {
     magiciansHtml += '</div>';
   }
   var traversalHtml = buildCrossForumTraversalHtml(t);
+  var coauthorList = t.coauth || [];
+  var coauthorInline = '';
+  if (coauthorList.length > 0) {
+    var inlineLinks = coauthorList.slice(0, 3).map(function(u) {
+      return '<span onclick="openAuthor(' + jsQuote(u) + ')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>';
+    }).join(', ');
+    if (coauthorList.length > 3) {
+      inlineLinks += ' <span style="color:#666">+' + (coauthorList.length - 3) + '</span>';
+    }
+    coauthorInline = ' \u00b7 with ' + inlineLinks;
+  }
+  var coauthorRow = coauthorList.length > 3
+    ? '<div class="detail-stat"><span class="label">Coauthors</span><span class="value">' + coauthorList.map(function(u) {
+        return '<span onclick="openAuthor(' + jsQuote(u) + ')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>';
+      }).join(', ') + '</span></div>'
+    : '';
 
   content.innerHTML =
     '<h2>' + escHtml(t.t) + '</h2>' +
     minorBadge +
     msBadge +
-    '<div class="meta">by <strong onclick="openAuthor(\'' + escHtml(t.a) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(t.a) + '</strong> \u00b7 ' + (t.d || '') +
+    '<div class="meta">by <strong onclick="openAuthor(\'' + escHtml(t.a) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(t.a) + '</strong>' + coauthorInline + ' \u00b7 ' + (t.d || '') +
     ' \u00b7 <a href="https://ethresear.ch/t/' + t.id + '" target="_blank">Open on ethresear.ch \u2192</a></div>' +
-    (t.coauth && t.coauth.length > 0 ? '<div class="detail-stat"><span class="label">Coauthors</span><span class="value">' + t.coauth.map(function(u) { return '<span onclick="openAuthor(\'' + escHtml(u) + '\')" style="cursor:pointer;color:#7788cc">' + escHtml(u) + '</span>'; }).join(', ') + '</span></div>' : '') +
+    coauthorRow +
     '<div class="detail-stat"><span class="label">Thread</span><span class="value" style="color:' + threadColor + ';cursor:pointer" onclick="toggleThread(\'' + escHtml(t.th || '') + '\')">' + threadName + '</span></div>' +
     '<div class="detail-stat"><span class="label">Influence</span><span class="value">' + (t.inf || 0).toFixed(3) + '</span></div>' +
     '<div class="detail-stat"><span class="label">Views</span><span class="value">' + (t.vw || 0).toLocaleString() + '</span></div>' +
@@ -5583,8 +5660,13 @@ function buildEipAuthorList(sortField) {
       : (sortField === 'total'
           ? (eipCount + ' total')
           : ((Number(a.inf || 0)).toFixed(2) + ' inf'));
-    var countLabel = metricLabel + ' · ' + eipCount + ' EIPs' + (topFork ? ' · ' + topFork : '');
-    if (linkedEth.length > 0) countLabel += ' · eth: ' + linkedEth[0] + (linkedEth.length > 1 ? ' +' + (linkedEth.length - 1) : '');
+    var countLabel = metricLabel + ' · ' + eipCount + ' EIPs';
+    if (sidebarWide) {
+      if (topFork) countLabel += ' · ' + topFork;
+      if (linkedEth.length > 0) {
+        countLabel += ' · eth: ' + linkedEth[0] + (linkedEth.length > 1 ? ' +' + (linkedEth.length - 1) : '');
+      }
+    }
     item.innerHTML = '<span class="author-dot" style="background:#88aacc"></span>' +
       '<span class="author-name">' + escHtml(a.n) + '</span>' +
       '<span class="author-count">' + escHtml(countLabel) + '</span>';
