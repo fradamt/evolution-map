@@ -189,7 +189,30 @@ def prepare_viz_data(data):
             "rq": e.get("requires", []),
             "mt": e.get("magicians_topic_id"),
             "et": e.get("ethresearch_topic_id"),
+            "inf": e.get("influence_score", 0),
+            "th": e.get("research_thread"),
+            "mv": e.get("magicians_views", 0),
+            "ml": e.get("magicians_likes", 0),
+            "mp": e.get("magicians_posts", 0),
+            "mpc": e.get("magicians_participants", 0),
+            "erc": e.get("ethresearch_citation_count", 0),
         }
+
+    # Compact EIP authors
+    compact_eip_authors = {}
+    for name, a in data.get("eip_authors", {}).items():
+        compact_eip_authors[name] = {
+            "n": name,
+            "ea": a.get("eips_authored", []),
+            "ec": a.get("eips_coauthored", []),
+            "st": a.get("statuses", {}),
+            "fk": a.get("forks_contributed", []),
+            "inf": a.get("influence_score", 0),
+            "yrs": a.get("active_years", []),
+        }
+
+    # Compact EIP graph
+    eip_graph = data.get("eip_graph", {"nodes": [], "edges": []})
 
     return {
         "meta": data["metadata"],
@@ -200,6 +223,8 @@ def prepare_viz_data(data):
         "forks": compact_forks,
         "eras": data["eras"],
         "eipCatalog": compact_eips,
+        "eipAuthors": compact_eip_authors,
+        "eipGraph": eip_graph,
         "graph": {
             "nodes": graph["nodes"],
             "edges": graph["edges"],
@@ -240,6 +265,10 @@ def generate_html(viz_json, data):
       <span>{meta['included_edges']} citations</span>
       <span>2017\u20132026</span>
       <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
+    </div>
+    <div class="content-toggles">
+      <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresearch posts">\u25CF Posts</button>
+      <button id="toggle-eips" class="content-toggle" onclick="toggleContent('eips')" title="Toggle EIP nodes">\u25A0 EIPs</button>
     </div>
     <div id="filter-breadcrumb" class="breadcrumb"></div>
     <div class="inf-slider-wrap">
@@ -302,6 +331,10 @@ def generate_html(viz_json, data):
           <option value="tp">Posts</option>
         </select>
       </h3>
+      <div class="author-tab-wrap">
+        <span class="author-tab active" data-tab="ethresearch" onclick="switchAuthorTab(false)">ethresearch</span>
+        <span class="author-tab" data-tab="eip" onclick="switchAuthorTab(true)">EIP Authors</span>
+      </div>
       <div id="author-list"></div>
     </div>
   </div>
@@ -602,6 +635,48 @@ header .stats span { white-space: nowrap; }
 /* Minor topics */
 .minor-ref a { color: #889 !important; font-style: italic; }
 .minor-ref a:hover { color: #aab !important; }
+
+/* Content toggle buttons */
+.content-toggles { display: flex; gap: 4px; flex-shrink: 0; }
+.content-toggle { background: #1e1e2e; border: 1px solid #333; color: #888; padding: 2px 8px;
+                  border-radius: 3px; cursor: pointer; font-size: 10px; }
+.content-toggle:hover { background: #2a2a3e; }
+.content-toggle.active { background: #2a3a2a; border-color: #4a6a4a; color: #88cc88; }
+
+/* EIP squares on timeline */
+.eip-square { cursor: pointer; pointer-events: all; }
+
+/* Cross-reference edges (EIP ↔ topic) */
+.cross-ref-edge { stroke-dasharray: 4 3; pointer-events: none; }
+
+/* EIP status colors */
+.eip-color-final { fill: #4caf50; stroke: #4caf50; }
+.eip-color-living { fill: #26c6da; stroke: #26c6da; }
+.eip-color-review { fill: #fdd835; stroke: #fdd835; }
+.eip-color-lastcall { fill: #fdd835; stroke: #fdd835; }
+.eip-color-draft { fill: #42a5f5; stroke: #42a5f5; }
+.eip-color-stagnant { fill: #666; stroke: #666; }
+.eip-color-withdrawn { fill: #555; stroke: #555; }
+.eip-color-moved { fill: #555; stroke: #555; }
+
+/* EIP detail panel additions */
+.eip-detail-stat { display: flex; justify-content: space-between; padding: 4px 0;
+                   font-size: 12px; border-bottom: 1px solid #1a1a2a; }
+.eip-detail-stat .label { color: #888; }
+.eip-detail-stat .value { color: #ccc; }
+.eip-requires-tag { display: inline-block; font-size: 10px; padding: 1px 5px; background: #1e2a3a;
+                    border: 1px solid #2a3a5a; border-radius: 3px; margin: 1px; color: #88aacc; cursor: pointer; }
+.eip-requires-tag:hover { border-color: #4a6a9a; background: #2a3a4a; }
+
+/* EIP author sidebar tab */
+.author-tab-wrap { display: flex; gap: 0; margin-bottom: 8px; }
+.author-tab { flex: 1; text-align: center; font-size: 10px; padding: 3px 6px; cursor: pointer;
+              color: #888; border-bottom: 2px solid transparent; }
+.author-tab:hover { color: #ccc; }
+.author-tab.active { color: #fff; border-bottom-color: #88aaff; }
+
+/* EIP network node */
+.eip-net-node { cursor: pointer; pointer-events: all; }
 """
 
 
@@ -628,6 +703,9 @@ let pathMode = false;
 let pathStart = null;
 let pathSet = new Set();
 let pathEdgeSet = new Set();
+let showPosts = true;
+let showEips = false;
+let eipAuthorTab = false; // false = ethresearch, true = EIP authors
 
 // Build milestone index: topic_id -> {threadId, threadName, note, human}
 const MILESTONE_LABELS = {
@@ -685,6 +763,32 @@ Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
   }
 });
 
+// EIP status → color
+var EIP_STATUS_COLORS = {
+  'Final': '#4caf50', 'Living': '#26c6da', 'Review': '#fdd835', 'Last Call': '#fdd835',
+  'Draft': '#42a5f5', 'Stagnant': '#666', 'Withdrawn': '#555', 'Moved': '#555'
+};
+function eipColor(eip) { return EIP_STATUS_COLORS[eip.s] || '#555'; }
+
+// Build reverse lookup: eip_num -> set of topic IDs mentioning it (for cross-ref edges)
+var eipToTopicIds = {};
+Object.values(DATA.topics).forEach(function(t) {
+  (t.eips || []).forEach(function(e) {
+    if (!eipToTopicIds[e]) eipToTopicIds[e] = [];
+    eipToTopicIds[e].push(t.id);
+  });
+});
+
+// Build reverse lookup: eip_num -> list of EIPs that require it
+var eipRequiredBy = {};
+Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
+  var eipNum = entry[0], eip = entry[1];
+  (eip.rq || []).forEach(function(req) {
+    if (!eipRequiredBy[req]) eipRequiredBy[req] = [];
+    eipRequiredBy[req].push(Number(eipNum));
+  });
+});
+
 // Build co-author edge index: author_id -> set of connected author_ids
 const coAuthorEdgeIndex = {};
 (DATA.coGraph.edges || []).forEach(e => {
@@ -738,6 +842,7 @@ document.addEventListener('DOMContentLoaded', () => {
   buildTimeline();
   setupSearch();
   setupInfSlider();
+  patchZoomForEips();
   // Click outside dismisses EIP popover
   document.addEventListener('click', function(ev) {
     var pop = document.getElementById('eip-popover');
@@ -957,6 +1062,11 @@ function clearFilters() {
   lineageSet = new Set();
   lineageEdgeSet = new Set();
   pathMode = false; pathStart = null; pathSet = new Set(); pathEdgeSet = new Set();
+  // Reset content toggles to defaults
+  showPosts = true; showEips = false;
+  document.getElementById('toggle-posts').classList.add('active');
+  document.getElementById('toggle-eips').classList.remove('active');
+  applyContentVisibility();
   if (similarActive) clearSimilar();
   document.querySelectorAll('.thread-chip').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.author-item').forEach(c => c.classList.remove('active'));
@@ -1036,6 +1146,41 @@ function toggleMilestones() {
     .style('display', milestonesVisible ? null : 'none');
   var btn = document.getElementById('milestone-toggle');
   if (btn) btn.classList.toggle('active', milestonesVisible);
+}
+
+function toggleContent(type) {
+  if (type === 'posts') {
+    showPosts = !showPosts;
+    document.getElementById('toggle-posts').classList.toggle('active', showPosts);
+  } else if (type === 'eips') {
+    showEips = !showEips;
+    document.getElementById('toggle-eips').classList.toggle('active', showEips);
+    // Draw EIP nodes on timeline if first time
+    if (showEips && activeView === 'timeline' && !document.querySelector('.eip-square')) {
+      drawEipTimeline();
+    }
+    // Rebuild network if EIP toggle changes and network is visible
+    if (activeView === 'network') {
+      var netSvg = document.querySelector('#network-view svg');
+      if (netSvg) { netSvg.remove(); simulation = null; }
+      buildNetwork();
+    }
+  }
+  applyContentVisibility();
+  applyFilters();
+}
+
+function applyContentVisibility() {
+  d3.selectAll('.topic-circle').style('display', showPosts ? null : 'none');
+  d3.selectAll('.topic-label').style('display', showPosts ? null : 'none');
+  d3.selectAll('.edge-line').style('display', showPosts ? null : 'none');
+  d3.selectAll('.milestone-marker').style('display', function(d) {
+    return showPosts && milestonesVisible ? null : 'none';
+  });
+  d3.selectAll('.eip-square').style('display', showEips ? null : 'none');
+  d3.selectAll('.eip-label').style('display', showEips ? null : 'none');
+  // Cross-ref edges: only when both posts and EIPs are visible
+  d3.selectAll('.cross-ref-edge').style('display', (showPosts && showEips) ? null : 'none');
 }
 
 function toggleCollapse(id) {
@@ -1206,7 +1351,7 @@ function populateDropdown(q) {
       var authorId = el.dataset.author;
       var eipId = el.dataset.eip;
       if (eipId) {
-        showEipPopover(Number(eipId), ev);
+        showEipDetailByNum(Number(eipId));
       } else if (topicId) {
         var t = DATA.topics[Number(topicId)];
         if (t) showDetail(t);
@@ -1877,6 +2022,18 @@ function filterTimeline() {
     })
     .attr('marker-end', 'url(#arrow-default)');
   syncLabelsFromMap(targetOp);
+
+  // Filter EIP squares
+  if (showEips) {
+    d3.selectAll('.eip-square')
+      .transition().duration(200)
+      .attr('opacity', function(d) {
+        if (!d) return 0.7;
+        if (minInfluence > 0 && (d.inf || 0) < minInfluence) return 0.08;
+        if (activeThread && d.th !== activeThread) return 0.08;
+        return 0.7;
+      });
+  }
 }
 
 // Sync topic labels and milestones to match circle opacity.
@@ -1972,6 +2129,28 @@ function buildNetwork() {
     });
   });
 
+  // Add EIP nodes when toggle is on
+  if (showEips) {
+    var eipGraphNodes = (DATA.eipGraph || {}).nodes || [];
+    var eipGraphEdges = (DATA.eipGraph || {}).edges || [];
+    eipGraphNodes.forEach(function(en) {
+      if (nodeMap[en.id]) return; // skip duplicates
+      var eipNum = en.eip_num;
+      var eip = DATA.eipCatalog[String(eipNum)];
+      nodes.push({id: en.id, title: 'EIP-' + eipNum + ': ' + en.title, isEip: true, eipNum: eipNum,
+                   influence: en.influence, thread: en.thread, status: en.status});
+      nodeMap[en.id] = nodes[nodes.length - 1];
+    });
+    eipGraphEdges.forEach(function(edge) {
+      var src = nodeMap[edge.source];
+      var tgt = nodeMap[typeof edge.target === 'number' ? edge.target : edge.target];
+      if (src && tgt) {
+        links.push({source: edge.source, target: edge.target, isEipEdge: true,
+                     eipEdgeType: edge.type});
+      }
+    });
+  }
+
   const maxInf = d3.max(nodes, function(n) { return n.influence || 0; }) || 1;
   const rScale = d3.scaleSqrt().domain([0, maxInf]).range([3, 16]);
 
@@ -1987,6 +2166,7 @@ function buildNetwork() {
     .data(links).join('line')
     .attr('class', 'net-link')
     .attr('stroke-opacity', 0.12)
+    .attr('stroke-dasharray', function(d) { return d.eipEdgeType === 'eip_requires' ? '4 3' : null; })
     .attr('marker-end', 'url(#net-arrow-default)');
 
   const node = g.append('g').selectAll('g')
@@ -2011,13 +2191,25 @@ function buildNetwork() {
     .attr('transform', 'rotate(45)')
     .attr('x', -6).attr('y', -6);
 
-  // Topic circles
-  node.filter(function(d) { return !d.isFork; }).append('circle')
+  // Topic circles (not EIP nodes)
+  node.filter(function(d) { return !d.isFork && !d.isEip; }).append('circle')
     .attr('r', function(d) { return rScale(d.influence || 0); })
     .attr('fill', function(d) { return THREAD_COLORS[d.thread] || '#555'; })
     .attr('stroke', function(d) { return THREAD_COLORS[d.thread] || '#555'; })
     .attr('stroke-width', 0.5)
     .attr('opacity', 0.65);
+
+  // EIP squares in network
+  node.filter(function(d) { return d.isEip; }).append('rect')
+    .attr('width', function(d) { return rScale(d.influence || 0) * 1.4; })
+    .attr('height', function(d) { return rScale(d.influence || 0) * 1.4; })
+    .attr('x', function(d) { return -rScale(d.influence || 0) * 0.7; })
+    .attr('y', function(d) { return -rScale(d.influence || 0) * 0.7; })
+    .attr('rx', 3)
+    .attr('fill', function(d) { return EIP_STATUS_COLORS[d.status] || '#555'; })
+    .attr('stroke', function(d) { return EIP_STATUS_COLORS[d.status] || '#555'; })
+    .attr('stroke-width', 0.5)
+    .attr('opacity', 0.7);
 
   // Network node labels for top 20 by influence
   var netTopNodes = nodes.filter(function(n) { return !n.isFork && n.influence; })
@@ -2035,6 +2227,7 @@ function buildNetwork() {
   // Events
   node.on('click', function(ev, d) {
     if (d.isFork) return;
+    if (d.isEip && d.eipNum) { showEipDetailByNum(d.eipNum); return; }
     var t = DATA.topics[d.id];
     if (t) handleTopicClick(ev, t);
   });
@@ -3331,6 +3524,7 @@ function buildHash() {
   if (activeThread) parts.push('thread=' + encodeURIComponent(activeThread));
   if (activeAuthor) parts.push('author=' + encodeURIComponent(activeAuthor));
   if (pinnedTopicId) parts.push('topic=' + pinnedTopicId);
+  if (showEips) parts.push('eips=1');
   return parts.length > 0 ? '#' + parts.join('&') : '';
 }
 
@@ -3380,6 +3574,12 @@ function applyHash() {
     }
   }
 
+  // Apply EIP toggle from hash
+  if (params.eips === '1' && !showEips) {
+    toggleContent('eips');
+    changed = true;
+  }
+
   if (changed) applyFilters();
 
   // Open topic detail
@@ -3390,6 +3590,12 @@ function applyHash() {
       showDetail(t);
       changed = true;
     }
+  }
+
+  // Open EIP detail from hash
+  if (params.eip) {
+    showEipDetailByNum(Number(params.eip));
+    changed = true;
   }
 }
 
@@ -3445,6 +3651,344 @@ function starPoints(cx, cy, outerR, innerR, nPoints) {
     pts.push((cx + r * Math.cos(angle)).toFixed(1) + ',' + (cy + r * Math.sin(angle)).toFixed(1));
   }
   return pts.join(' ');
+}
+
+// ========================================================================
+// EIP TIMELINE NODES
+// ========================================================================
+var eipRScale = null;
+var eipLaneY0 = 0; // top of the EIPs lane
+var eipLaneH = 0;
+
+function drawEipTimeline() {
+  // Find the timeline's zoom group
+  var zoomG = d3.select('#timeline-view svg g g[clip-path] g');
+  if (zoomG.empty()) return;
+
+  // Get current dimensions from the existing timeline
+  var svgEl = d3.select('#timeline-view svg');
+  var height = +svgEl.attr('height') || 700;
+  // We'll place the EIP lane above the swim lanes (y < 0 in the plot group's coordinate system)
+  // Actually, let's use the top 40px of the plot area
+  eipLaneH = 36;
+  eipLaneY0 = -eipLaneH - 8; // above the plot area
+
+  // EIP influence scale (squares are sized by influence)
+  var maxEipInf = 0;
+  Object.values(DATA.eipCatalog || {}).forEach(function(e) {
+    if ((e.inf || 0) > maxEipInf) maxEipInf = e.inf;
+  });
+  eipRScale = d3.scaleSqrt().domain([0, maxEipInf || 1]).range([3, 12]);
+
+  // Prepare EIP data with positions
+  var eipData = [];
+  Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
+    var num = entry[0], e = entry[1];
+    if ((e.inf || 0) < 0.05 || !e.cr) return;
+    var d = new Date(e.cr);
+    if (isNaN(d)) return;
+    e._eipDate = d;
+    e._eipNum = Number(num);
+    e._eipYPos = eipLaneY0 + eipLaneH * 0.15 + (hashCode(Number(num)) % 100) / 100 * eipLaneH * 0.7;
+    eipData.push(e);
+  });
+
+  // Add EIP lane label (fixed group - need to find it)
+  var fixedG = d3.select('#timeline-view svg > g > g:first-child');
+  if (!fixedG.empty()) {
+    fixedG.append('text').attr('x', -10).attr('y', eipLaneY0 + eipLaneH / 2)
+      .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
+      .attr('fill', '#88aacc').attr('font-size', 11).attr('font-weight', 500)
+      .attr('class', 'eip-lane-label')
+      .text('EIPs');
+    // Separator line
+    fixedG.append('line').attr('x1', 0).attr('x2', tlPlotW)
+      .attr('y1', eipLaneY0 + eipLaneH + 4).attr('y2', eipLaneY0 + eipLaneH + 4)
+      .attr('stroke', '#2a3a4a').attr('stroke-width', 0.5)
+      .attr('class', 'eip-lane-label');
+  }
+
+  // Draw EIP squares
+  var eipG = zoomG.append('g').attr('class', 'eip-layer');
+
+  // Cross-reference edges (EIP → related topic)
+  var crossRefG = eipG.append('g');
+  var eipGraphEdges = (DATA.eipGraph || {}).edges || [];
+  eipGraphEdges.forEach(function(edge) {
+    if (edge.type !== 'eip_topic') return;
+    var eipNum = edge.source.replace('eip_', '');
+    var eip = DATA.eipCatalog[eipNum];
+    var topic = DATA.topics[edge.target];
+    if (!eip || !eip._eipDate || !topic || topic._yPos === undefined) return;
+    crossRefG.append('line')
+      .attr('class', 'cross-ref-edge')
+      .attr('x1', tlXScale(eip._eipDate)).attr('y1', eip._eipYPos)
+      .attr('x2', tlXScale(topic._date)).attr('y2', topic._yPos)
+      .attr('stroke', '#5566aa').attr('stroke-opacity', 0.08).attr('stroke-width', 0.5)
+      .datum({eipDate: eip._eipDate, topicDate: topic._date, eipY: eip._eipYPos, topicY: topic._yPos})
+      .style('display', (showPosts && showEips) ? null : 'none');
+  });
+
+  // Squares
+  var squareG = eipG.append('g');
+  eipData.forEach(function(e) {
+    var sz = eipRScale(e.inf) * 1.4;
+    var color = eipColor(e);
+    squareG.append('rect')
+      .attr('class', 'eip-square')
+      .attr('x', tlXScale(e._eipDate) - sz/2)
+      .attr('y', e._eipYPos - sz/2)
+      .attr('width', sz).attr('height', sz)
+      .attr('rx', 3)
+      .attr('fill', color).attr('stroke', color).attr('stroke-width', 0.5)
+      .attr('opacity', 0.7)
+      .datum(e)
+      .on('click', function(ev, d) { showEipDetailByNum(d._eipNum); })
+      .on('mouseover', function(ev, d) { showEipTooltip(ev, d); })
+      .on('mouseout', function() { hideTooltip(); })
+      .style('display', showEips ? null : 'none');
+  });
+
+  // Labels for top EIPs
+  var topEips = eipData.slice().sort(function(a, b) { return b.inf - a.inf; }).slice(0, 15);
+  var labelG = eipG.append('g');
+  topEips.forEach(function(e) {
+    var sz = eipRScale(e.inf) * 1.4;
+    labelG.append('text')
+      .attr('class', 'eip-label')
+      .attr('x', tlXScale(e._eipDate) + sz/2 + 3)
+      .attr('y', e._eipYPos + 3)
+      .attr('fill', '#99aabb').attr('font-size', 8).attr('pointer-events', 'none')
+      .text('EIP-' + e._eipNum)
+      .datum(e)
+      .style('display', showEips ? null : 'none');
+  });
+
+  // Hook into zoom handler to update EIP positions
+  var origOnZoom = d3.select('#timeline-view svg').on('zoom.eip');
+  d3.select('#timeline-view svg').on('zoom.eip', null); // will re-register below
+}
+
+function showEipTooltip(ev, e) {
+  var tip = document.getElementById('tooltip');
+  tip.innerHTML = '<strong>EIP-' + e._eipNum + ': ' + escHtml(e.t || '') + '</strong><br>' +
+    '<span class="eip-status eip-status-' + (e.s || '').toLowerCase().replace(/\s+/g, '') + '">' + escHtml(e.s || '') + '</span>' +
+    (e.fk ? ' <span class="fork-tag">' + escHtml(e.fk) + '</span>' : '') +
+    '<br>Influence: ' + (e.inf || 0).toFixed(3) +
+    (e.erc ? ' \u00b7 Citations: ' + e.erc : '') +
+    (e.ml ? ' \u00b7 Mag likes: ' + e.ml : '');
+  tip.style.display = 'block';
+  var x = ev.clientX + 14;
+  var y = ev.clientY - 10;
+  var tw = tip.offsetWidth;
+  var th = tip.offsetHeight;
+  if (x + tw > window.innerWidth - 10) x = ev.clientX - tw - 14;
+  if (y + th > window.innerHeight - 10) y = window.innerHeight - th - 10;
+  if (y < 5) y = 5;
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
+}
+
+// ========================================================================
+// EIP DETAIL PANEL
+// ========================================================================
+function showEipDetailByNum(num) {
+  var eipStr = String(num);
+  var eip = (DATA.eipCatalog || {})[eipStr];
+  if (!eip) return;
+  showEipDetail(eip, num);
+}
+
+function showEipDetail(eip, num) {
+  var panel = document.getElementById('detail-panel');
+  var content = document.getElementById('detail-content');
+  var color = eipColor(eip);
+  var statusClass = 'eip-status eip-status-' + (eip.s || '').toLowerCase().replace(/\s+/g, '');
+
+  // Type / Category
+  var typeCatParts = [];
+  if (eip.ty) typeCatParts.push(escHtml(eip.ty));
+  if (eip.c) typeCatParts.push(escHtml(eip.c));
+
+  // Requires
+  var reqHtml = '';
+  if (eip.rq && eip.rq.length > 0) {
+    reqHtml = '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Requires</strong> ' +
+      eip.rq.map(function(r) { return '<span class="eip-requires-tag" onclick="showEipDetailByNum(' + r + ')">EIP-' + r + '</span>'; }).join(' ') +
+      '</div>';
+  }
+
+  // Required by (reverse)
+  var reqByList = eipRequiredBy[num] || eipRequiredBy[String(num)] || [];
+  var reqByHtml = '';
+  if (reqByList.length > 0) {
+    reqByHtml = '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Required by</strong> ' +
+      reqByList.map(function(r) { return '<span class="eip-requires-tag" onclick="showEipDetailByNum(' + r + ')">EIP-' + r + '</span>'; }).join(' ') +
+      '</div>';
+  }
+
+  // Authors
+  var authorsHtml = '';
+  if (eip.au && eip.au.length > 0) {
+    authorsHtml = '<div class="eip-detail-stat"><span class="label">Authors</span><span class="value">' +
+      eip.au.map(function(a) {
+        var ea = (DATA.eipAuthors || {})[a];
+        if (ea) return '<span style="cursor:pointer;color:#7788cc" onclick="showEipAuthorDetail(\'' + escHtml(a) + '\')">' + escHtml(a) + '</span>';
+        return escHtml(a);
+      }).join(', ') + '</span></div>';
+  }
+
+  // External links
+  var linksHtml = '<div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">' +
+    '<a href="https://eips.ethereum.org/EIPS/eip-' + num + '" target="_blank" class="magicians-link">eips.ethereum.org &#8599;</a>';
+  if (eip.mt) linksHtml += '<a href="https://ethereum-magicians.org/t/' + eip.mt + '" target="_blank" class="magicians-link">Magicians discussion &#8599;</a>';
+  if (eip.et) linksHtml += '<a href="https://ethresear.ch/t/' + eip.et + '" target="_blank" class="magicians-link">ethresear.ch discussion &#8599;</a>';
+  linksHtml += '</div>';
+
+  // Related ethresearch topics
+  var relTopics = eipToTopicIds[num] || eipToTopicIds[String(num)] || [];
+  var relHtml = '';
+  if (relTopics.length > 0) {
+    var sorted = relTopics.map(function(tid) { return DATA.topics[tid]; }).filter(Boolean)
+      .sort(function(a, b) { return (b.inf || 0) - (a.inf || 0); }).slice(0, 10);
+    if (sorted.length > 0) {
+      relHtml = '<div class="detail-refs" style="margin-top:12px"><h4>Related ethresearch topics (' + relTopics.length + ')</h4>' +
+        sorted.map(function(t) {
+          return '<div class="ref-item"><a onclick="showDetail(DATA.topics[' + t.id + '])" ' +
+            'onmouseenter="highlightTopicInView(' + t.id + ')" onmouseleave="restorePinnedHighlight()">' +
+            escHtml(t.t) + '</a> <span style="color:#666;font-size:10px">(' + t.inf.toFixed(2) + ')</span></div>';
+        }).join('') + '</div>';
+    }
+  }
+
+  content.innerHTML =
+    '<h2 style="color:' + color + '">EIP-' + num + ': ' + escHtml(eip.t || '') + '</h2>' +
+    '<div class="meta"><span class="' + statusClass + '">' + escHtml(eip.s || '') + '</span>' +
+    (typeCatParts.length ? ' \u00b7 ' + typeCatParts.join(' \u00b7 ') : '') +
+    (eip.fk ? ' <span class="fork-tag">' + escHtml(eip.fk) + '</span>' : '') +
+    '</div>' +
+    '<div class="eip-detail-stat"><span class="label">Created</span><span class="value">' + escHtml(eip.cr || '') + '</span></div>' +
+    '<div class="eip-detail-stat"><span class="label">Influence</span><span class="value">' + (eip.inf || 0).toFixed(3) + '</span></div>' +
+    (eip.mv ? '<div class="eip-detail-stat"><span class="label">Magicians Views</span><span class="value">' + (eip.mv || 0).toLocaleString() + '</span></div>' : '') +
+    (eip.ml ? '<div class="eip-detail-stat"><span class="label">Magicians Likes</span><span class="value">' + (eip.ml || 0) + '</span></div>' : '') +
+    (eip.mp ? '<div class="eip-detail-stat"><span class="label">Magicians Posts</span><span class="value">' + (eip.mp || 0) + '</span></div>' : '') +
+    (eip.mpc ? '<div class="eip-detail-stat"><span class="label">Magicians Participants</span><span class="value">' + (eip.mpc || 0) + '</span></div>' : '') +
+    '<div class="eip-detail-stat"><span class="label">ethresearch Citations</span><span class="value">' + (eip.erc || 0) + '</span></div>' +
+    authorsHtml +
+    reqHtml + reqByHtml + linksHtml + relHtml;
+
+  panel.classList.add('open');
+  updateHash();
+}
+
+// ========================================================================
+// EIP AUTHOR DETAIL
+// ========================================================================
+function showEipAuthorDetail(name) {
+  var panel = document.getElementById('detail-panel');
+  var content = document.getElementById('detail-content');
+  var a = (DATA.eipAuthors || {})[name];
+  if (!a) return;
+
+  var eipTagsHtml = function(nums, label) {
+    if (!nums || nums.length === 0) return '';
+    return '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">' + label + ' (' + nums.length + ')</strong><div style="margin-top:4px">' +
+      nums.map(function(n) { return '<span class="eip-requires-tag" onclick="showEipDetailByNum(' + n + ')">EIP-' + n + '</span>'; }).join(' ') +
+      '</div></div>';
+  };
+
+  var forksHtml = '';
+  if (a.fk && a.fk.length > 0) {
+    forksHtml = '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Forks Contributed</strong><div style="margin-top:4px">' +
+      a.fk.map(function(f) { return '<span class="fork-tag">' + escHtml(f) + '</span>'; }).join(' ') + '</div></div>';
+  }
+
+  var yearsHtml = (a.yrs && a.yrs.length > 0) ? a.yrs.join(', ') : '';
+  var statusHtml = '';
+  if (a.st && Object.keys(a.st).length > 0) {
+    statusHtml = '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">EIP Statuses</strong><div style="margin-top:4px;font-size:11px;color:#aaa">' +
+      Object.entries(a.st).map(function(e) { return e[0] + ': ' + e[1]; }).join(', ') + '</div></div>';
+  }
+
+  content.innerHTML =
+    '<h2>' + escHtml(name) + '</h2>' +
+    '<div class="meta">EIP Author</div>' +
+    '<div class="eip-detail-stat"><span class="label">EIPs Authored</span><span class="value">' + (a.ea || []).length + '</span></div>' +
+    '<div class="eip-detail-stat"><span class="label">EIPs Co-authored</span><span class="value">' + (a.ec || []).length + '</span></div>' +
+    '<div class="eip-detail-stat"><span class="label">Influence Score</span><span class="value">' + (a.inf || 0).toFixed(3) + '</span></div>' +
+    '<div class="eip-detail-stat"><span class="label">Active Years</span><span class="value">' + yearsHtml + '</span></div>' +
+    eipTagsHtml(a.ea, 'Authored') +
+    eipTagsHtml(a.ec, 'Co-authored') +
+    forksHtml + statusHtml;
+
+  panel.classList.add('open');
+}
+
+// ========================================================================
+// EIP AUTHOR TAB IN SIDEBAR
+// ========================================================================
+function switchAuthorTab(isEip) {
+  eipAuthorTab = isEip;
+  document.querySelectorAll('.author-tab').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.tab === (isEip ? 'eip' : 'ethresearch'));
+  });
+  if (isEip) {
+    buildEipAuthorList();
+  } else {
+    sortAuthorList(document.getElementById('author-sort').value || 'inf');
+  }
+  // Toggle sort dropdown visibility (only relevant for ethresearch tab)
+  var sortEl = document.getElementById('author-sort');
+  if (sortEl) sortEl.style.display = isEip ? 'none' : '';
+}
+
+function buildEipAuthorList() {
+  var list = document.getElementById('author-list');
+  var authors = Object.values(DATA.eipAuthors || {}).sort(function(a, b) { return (b.inf || 0) - (a.inf || 0); });
+  list.innerHTML = '';
+  authors.slice(0, 25).forEach(function(a) {
+    var item = document.createElement('div');
+    item.className = 'author-item';
+    var eipCount = (a.ea || []).length + (a.ec || []).length;
+    var topFork = (a.fk && a.fk.length > 0) ? a.fk[0] : '';
+    item.innerHTML = '<span class="author-dot" style="background:#88aacc"></span>' +
+      '<span class="author-name">' + escHtml(a.n) + '</span>' +
+      '<span class="author-count">' + eipCount + ' EIPs' + (topFork ? ' \u00b7 ' + escHtml(topFork) : '') + '</span>';
+    item.onclick = function() { showEipAuthorDetail(a.n); };
+    list.appendChild(item);
+  });
+}
+
+// ========================================================================
+// ZOOM HANDLER UPDATE FOR EIP NODES
+// ========================================================================
+// Patch the zoom handler to also move EIP nodes
+var _origZoomPatch = false;
+function patchZoomForEips() {
+  if (_origZoomPatch) return;
+  _origZoomPatch = true;
+  // We hook into the D3 zoom event by adding an extra handler
+  var svg = d3.select('#timeline-view svg');
+  svg.on('zoom.eip-patch', function(ev) {
+    if (!ev || !ev.transform) return;
+    var newX = ev.transform.rescaleX(tlXScaleOrig);
+    // Update EIP squares
+    d3.selectAll('.eip-square').attr('x', function(d) {
+      if (!d || !d._eipDate) return 0;
+      var sz = eipRScale ? eipRScale(d.inf) * 1.4 : 6;
+      return newX(d._eipDate) - sz/2;
+    });
+    // Update EIP labels
+    d3.selectAll('.eip-label').attr('x', function(d) {
+      if (!d || !d._eipDate) return 0;
+      var sz = eipRScale ? eipRScale(d.inf) * 1.4 : 6;
+      return newX(d._eipDate) + sz/2 + 3;
+    });
+    // Update cross-ref edges
+    d3.selectAll('.cross-ref-edge')
+      .attr('x1', function(d) { return d && d.eipDate ? newX(d.eipDate) : 0; })
+      .attr('x2', function(d) { return d && d.topicDate ? newX(d.topicDate) : 0; });
+  });
 }
 """
 
