@@ -862,13 +862,50 @@ function eipMatchesFilter(node) {
   return true;
 }
 
+function networkNodeSourceType(node) {
+  if (!node) return null;
+  if (node.sourceType) return node.sourceType;
+  if (node.isFork) return 'fork';
+  if (node.isEip) return 'eip';
+  if (node.id && typeof node.id === 'string' && node.id.indexOf('eip_') === 0) return 'eip';
+  return 'topic';
+}
+
+function genericNodeThread(node) {
+  if (!node) return null;
+  if (node.thread !== undefined && node.thread !== null) return node.thread;
+  if (node.th !== undefined && node.th !== null) return node.th;
+  return null;
+}
+
+function genericNodeInfluence(node) {
+  if (!node) return 0;
+  if (node.influence !== undefined && node.influence !== null) return node.influence;
+  if (node.inf !== undefined && node.inf !== null) return node.inf;
+  return 0;
+}
+
+function genericNetworkNodeMatchesFilter(node) {
+  if (!node) return false;
+  if (minInfluence > 0 && genericNodeInfluence(node) < minInfluence) return false;
+  var th = genericNodeThread(node);
+  if (activeThread && th && th !== activeThread) return false;
+  return true;
+}
+
 function networkNodeMatchesFilter(node) {
   if (!node) return false;
-  if (node.isFork) return true;
-  if (node.isEip) return showEips && eipMatchesFilter(node);
-  var t = DATA.topics[node.id];
-  if (!t) return false;
-  return topicMatchesFilter(t);
+  var sourceType = networkNodeSourceType(node);
+  if (sourceType === 'fork') return true;
+  if (sourceType === 'eip') return showEips && eipMatchesFilter(node);
+  if (sourceType === 'topic') {
+    if (!showPosts) return false;
+    var t = DATA.topics[node.id];
+    if (t) return topicMatchesFilter(t);
+  }
+  // Generic fallback so future source types (e.g., Magicians nodes) participate
+  // in network filtering/highlighting without needing source-specific branches.
+  return genericNetworkNodeMatchesFilter(node);
 }
 
 function updateEipVisibilityUi() {
@@ -2340,7 +2377,9 @@ function buildNetwork() {
   }));
 
   // Prepare data
-  const nodes = DATA.graph.nodes.map(function(n) { return Object.assign({}, n); });
+  const nodes = DATA.graph.nodes.map(function(n) {
+    return Object.assign({sourceType: 'topic'}, n);
+  });
   const nodeMap = {};
   nodes.forEach(function(n) { nodeMap[n.id] = n; });
 
@@ -2351,7 +2390,13 @@ function buildNetwork() {
   // Add fork nodes as diamonds
   DATA.forks.forEach(function(f) {
     if (!f.d) return;
-    var forkNode = {id: 'fork_' + f.n, title: f.cn || f.n, isFork: true, date: f.d};
+    var forkNode = {
+      id: 'fork_' + f.n,
+      title: f.cn || f.n,
+      isFork: true,
+      sourceType: 'fork',
+      date: f.d
+    };
     nodes.push(forkNode);
     nodeMap[forkNode.id] = forkNode;
     (f.rt || []).forEach(function(tid) {
@@ -2369,8 +2414,16 @@ function buildNetwork() {
       if (includeConnectedOnly && !connectedEipNodeIds.has(en.id)) return;
       var eipNum = en.eip_num;
       var eip = DATA.eipCatalog[String(eipNum)];
-      nodes.push({id: en.id, title: 'EIP-' + eipNum + ': ' + en.title, isEip: true, eipNum: eipNum,
-                   influence: en.influence, thread: en.thread, status: en.status});
+      nodes.push({
+        id: en.id,
+        title: 'EIP-' + eipNum + ': ' + en.title,
+        isEip: true,
+        sourceType: 'eip',
+        eipNum: eipNum,
+        influence: en.influence,
+        thread: en.thread,
+        status: en.status
+      });
       nodeMap[en.id] = nodes[nodes.length - 1];
     });
     eipGraphEdges.forEach(function(edge) {
