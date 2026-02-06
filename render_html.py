@@ -93,6 +93,7 @@ def prepare_viz_data(data):
             "inc": t.get("incoming_refs", []),
             "parts": t.get("authors", [t["author"]])[:3],
             "coauth": [u for u in t.get("coauthors", []) if u != t["author"]],
+            "mr": t.get("magicians_refs", []),
         }
 
     # Minor topics (below influence threshold) — merged into compact_topics
@@ -120,6 +121,7 @@ def prepare_viz_data(data):
             "outd": mt.get("out_degree", 0),
             "out": [],
             "inc": [],
+            "mr": mt.get("magicians_refs", []),
         }
 
     compact_authors = {}
@@ -170,9 +172,24 @@ def prepare_viz_data(data):
             "el": f.get("el_name"),
             "cl": f.get("cl_name"),
             "cn": f.get("combined_name"),
-            "eips": f["eips"][:8],
+            "eips": f["eips"],
             "rt": f.get("related_topics", [])[:10],
         })
+
+    compact_eips = {}
+    for eip_str, e in data.get("eip_catalog", {}).items():
+        compact_eips[eip_str] = {
+            "t": e.get("title"),
+            "s": e.get("status"),
+            "ty": e.get("type"),
+            "c": e.get("category"),
+            "cr": e.get("created"),
+            "fk": e.get("fork"),
+            "au": e.get("authors", [])[:5],
+            "rq": e.get("requires", []),
+            "mt": e.get("magicians_topic_id"),
+            "et": e.get("ethresearch_topic_id"),
+        }
 
     return {
         "meta": data["metadata"],
@@ -182,6 +199,7 @@ def prepare_viz_data(data):
         "threads": compact_threads,
         "forks": compact_forks,
         "eras": data["eras"],
+        "eipCatalog": compact_eips,
         "graph": {
             "nodes": graph["nodes"],
             "edges": graph["edges"],
@@ -289,6 +307,7 @@ def generate_html(viz_json, data):
   </div>
 </div>
 <div class="tooltip" id="tooltip"></div>
+<div id="eip-popover"></div>
 <div class="toast" id="toast"></div>
 <div id="help-overlay" class="help-overlay" onclick="toggleHelp()">
   <div class="help-card" onclick="event.stopPropagation()">
@@ -471,8 +490,22 @@ header .stats span { white-space: nowrap; }
 .detail-refs .ref-item a { color: #7788cc; text-decoration: none; cursor: pointer; }
 .detail-refs .ref-item a:hover { text-decoration: underline; }
 .eip-tag { display: inline-block; font-size: 10px; padding: 1px 5px; background: #1e2a3a;
-           border: 1px solid #2a3a5a; border-radius: 3px; margin: 1px; color: #88aacc; }
+           border: 1px solid #2a3a5a; border-radius: 3px; margin: 1px; color: #88aacc; cursor: pointer; }
+.eip-tag:hover { border-color: #4a6a9a; }
 .eip-tag.primary { background: #1a3a1a; border-color: #2a5a2a; color: #88cc88; }
+.eip-tag.primary:hover { border-color: #4a8a4a; }
+#eip-popover { position: fixed; z-index: 300; background: #1a1a2e; border: 1px solid #444;
+               border-radius: 6px; padding: 12px 16px; max-width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+               font-size: 12px; color: #ccc; display: none; }
+#eip-popover h3 { margin: 0 0 8px; font-size: 14px; color: #eee; }
+.eip-status { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: 6px; }
+.eip-status-final { background: #1a3a1a; color: #88cc88; }
+.eip-status-draft { background: #1a2a3a; color: #88aadd; }
+.eip-status-review { background: #3a3a1a; color: #cccc88; }
+.eip-status-stagnant, .eip-status-withdrawn { background: #2a2a2a; color: #888; }
+.eip-status-living { background: #1a3a3a; color: #88cccc; }
+.magicians-link { color: #bb88cc; text-decoration: none; font-size: 11px; }
+.magicians-link:hover { text-decoration: underline; }
 .fork-tag { display: inline-block; font-size: 10px; padding: 1px 5px; background: #3a3a1a;
             border: 1px solid #5a5a2a; border-radius: 3px; margin: 1px; color: #cccc88; }
 
@@ -641,6 +674,16 @@ Object.values(DATA.topics).forEach(function(t) {
   });
 });
 
+// Reverse lookup: magicians_topic_id -> [eip_number_strings]
+var magiciansToEips = {};
+Object.entries(DATA.eipCatalog || {}).forEach(function(entry) {
+  var eipNum = entry[0], eip = entry[1];
+  if (eip.mt) {
+    if (!magiciansToEips[eip.mt]) magiciansToEips[eip.mt] = [];
+    magiciansToEips[eip.mt].push(eipNum);
+  }
+});
+
 // Build co-author edge index: author_id -> set of connected author_ids
 const coAuthorEdgeIndex = {};
 (DATA.coGraph.edges || []).forEach(e => {
@@ -694,8 +737,17 @@ document.addEventListener('DOMContentLoaded', () => {
   buildTimeline();
   setupSearch();
   setupInfSlider();
+  // Click outside dismisses EIP popover
+  document.addEventListener('click', function(ev) {
+    var pop = document.getElementById('eip-popover');
+    if (pop.style.display === 'block' && !pop.contains(ev.target) && !ev.target.classList.contains('eip-tag')) {
+      pop.style.display = 'none';
+    }
+  });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      var pop = document.getElementById('eip-popover');
+      if (pop.style.display === 'block') { pop.style.display = 'none'; return; }
       var helpEl = document.getElementById('help-overlay');
       if (helpEl.classList.contains('open')) { helpEl.classList.remove('open'); return; }
       closeDetail(); clearFilters();
@@ -2473,7 +2525,7 @@ function showThreadDetail(tid) {
   var eipsHtml = '';
   if (th.te && th.te.length > 0) {
     eipsHtml = '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">Top EIPs</strong> ';
-    eipsHtml += th.te.map(function(e) { return '<span class="eip-tag primary">EIP-' + e + '</span>'; }).join(' ');
+    eipsHtml += th.te.map(function(e) { return '<span class="eip-tag primary" onclick="showEipPopover(' + e + ', event)">EIP-' + e + '</span>'; }).join(' ');
     eipsHtml += '</div>';
   }
 
@@ -3005,6 +3057,26 @@ function showDetail(t) {
   var minorBadge = t.mn ? '<div style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:3px;margin:4px 0 8px;' +
     'background:#1a1a2a;border:1px solid #333;color:#889">Minor Topic</div>' : '';
 
+  // Magicians cross-references
+  var magiciansHtml = '';
+  if (t.mr && t.mr.length > 0) {
+    magiciansHtml = '<div class="detail-refs"><h4>Magicians Discussions (' + t.mr.length + ')</h4>';
+    t.mr.forEach(function(mtid) {
+      var eips = magiciansToEips[mtid] || [];
+      var label = '';
+      if (eips.length > 0) {
+        var e = eips[0];
+        var eipInfo = (DATA.eipCatalog || {})[e];
+        label = 'EIP-' + e + (eipInfo && eipInfo.t ? ': ' + escHtml(eipInfo.t.length > 50 ? eipInfo.t.slice(0, 50) + '...' : eipInfo.t) : '');
+      } else {
+        label = '#' + mtid;
+      }
+      magiciansHtml += '<div class="ref-item"><span style="color:#bb88cc">' + label + '</span> ' +
+        '<a href="https://ethereum-magicians.org/t/' + mtid + '" target="_blank" class="magicians-link">open on magicians &#8599;</a></div>';
+    });
+    magiciansHtml += '</div>';
+  }
+
   content.innerHTML =
     '<h2>' + escHtml(t.t) + '</h2>' +
     minorBadge +
@@ -3036,12 +3108,13 @@ function showDetail(t) {
       (t.exc.length > 300 ? ' <span onclick="toggleExcerpt()" style="color:#66bbaa;cursor:pointer;font-size:10px;font-style:normal" id="excerpt-toggle">show more</span>' : '') +
       '</div>' : '') +
     (t.peips && t.peips.length > 0 ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">EIPs discussed:</strong> ' +
-      t.peips.map(function(e) { return '<span class="eip-tag primary">EIP-' + e + '</span>'; }).join(' ') + '</div>' : '') +
+      t.peips.map(function(e) { return '<span class="eip-tag primary" onclick="showEipPopover(' + e + ', event)">EIP-' + e + '</span>'; }).join(' ') + '</div>' : '') +
     (t.eips && t.eips.length > (t.peips||[]).length ?
       '<div style="margin:4px 0"><strong style="font-size:11px;color:#666">Also mentions:</strong> ' +
       (t.eips || []).filter(function(e) { return !primarySet.has(e); }).map(function(e) {
-        return '<span class="eip-tag">EIP-' + e + '</span>';
+        return '<span class="eip-tag" onclick="showEipPopover(' + e + ', event)">EIP-' + e + '</span>';
       }).join(' ') + '</div>' : '') +
+    magiciansHtml +
     (outRefs ? '<div class="detail-refs"><h4>References (' + t.out.length + ') <span onclick="exportRefsMarkdown(' + t.id + ',\'out\')" ' +
       'style="font-size:9px;color:#66bbaa;cursor:pointer;text-transform:none;font-weight:400;margin-left:6px">copy md</span></h4>' + outRefs + '</div>' : '') +
     (incRefs ? '<div class="detail-refs"><h4>Cited by (' + t.inc.length + ') <span onclick="exportRefsMarkdown(' + t.id + ',\'inc\')" ' +
@@ -3087,6 +3160,96 @@ function showTooltip(ev, t) {
 
 function hideTooltip() {
   document.getElementById('tooltip').style.display = 'none';
+}
+
+// === EIP POPOVER ===
+function showEipPopover(eipNum, ev) {
+  ev.stopPropagation();
+  var pop = document.getElementById('eip-popover');
+  var eipStr = String(eipNum);
+  var eip = (DATA.eipCatalog || {})[eipStr];
+
+  if (!eip) {
+    // No catalog entry — show minimal popover
+    pop.innerHTML = '<h3>EIP-' + eipNum + '</h3><div style="color:#888">No metadata available</div>' +
+      '<div style="margin-top:8px"><a href="https://eips.ethereum.org/EIPS/eip-' + eipNum + '" target="_blank" class="magicians-link">View on eips.ethereum.org &#8599;</a></div>';
+    positionPopover(pop, ev);
+    return;
+  }
+
+  var statusClass = 'eip-status eip-status-' + (eip.s || '').toLowerCase().replace(/\s+/g, '');
+  var html = '<h3>EIP-' + eipNum + ': ' + escHtml(eip.t || '') + '</h3>';
+  html += '<span class="' + statusClass + '">' + escHtml(eip.s || 'Unknown') + '</span>';
+
+  // Type / Category
+  var typeCat = [];
+  if (eip.ty) typeCat.push(escHtml(eip.ty));
+  if (eip.c) typeCat.push(escHtml(eip.c));
+  if (typeCat.length) html += '<div style="margin-top:6px;color:#aaa;font-size:11px">' + typeCat.join(' &middot; ') + '</div>';
+
+  // Fork
+  if (eip.fk) html += '<div style="margin-top:4px"><span class="fork-tag">' + escHtml(eip.fk) + '</span></div>';
+
+  // Created
+  if (eip.cr) html += '<div style="margin-top:4px;color:#888;font-size:11px">Created: ' + escHtml(eip.cr) + '</div>';
+
+  // Authors
+  if (eip.au && eip.au.length > 0) {
+    html += '<div style="margin-top:4px;color:#888;font-size:11px">Authors: ' + eip.au.map(function(a) { return escHtml(a); }).join(', ') + '</div>';
+  }
+
+  // Requires
+  if (eip.rq && eip.rq.length > 0) {
+    html += '<div style="margin-top:6px;font-size:11px;color:#888">Requires: ' +
+      eip.rq.map(function(r) { return '<span class="eip-tag" onclick="showEipPopover(' + r + ', event)">EIP-' + r + '</span>'; }).join(' ') + '</div>';
+  }
+
+  // External links
+  html += '<div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">';
+  html += '<a href="https://eips.ethereum.org/EIPS/eip-' + eipNum + '" target="_blank" class="magicians-link">View on eips.ethereum.org &#8599;</a>';
+  if (eip.mt) {
+    html += '<a href="https://ethereum-magicians.org/t/' + eip.mt + '" target="_blank" class="magicians-link">Magicians discussion &#8599;</a>';
+  }
+  if (eip.et) {
+    html += '<a href="https://ethresear.ch/t/' + eip.et + '" target="_blank" class="magicians-link">ethresear.ch discussion &#8599;</a>';
+  }
+  html += '</div>';
+
+  // Related topics (from eipToTopics index)
+  var relTopics = eipToTopics[eipNum] || eipToTopics[eipStr];
+  if (relTopics && relTopics.size > 0) {
+    var sorted = Array.from(relTopics).map(function(tid) { return DATA.topics[tid]; }).filter(Boolean)
+      .sort(function(a, b) { return (b.inf || 0) - (a.inf || 0); }).slice(0, 5);
+    if (sorted.length > 0) {
+      html += '<div style="margin-top:8px;border-top:1px solid #333;padding-top:6px">' +
+        '<div style="font-size:10px;color:#666;margin-bottom:4px">Related topics (' + relTopics.size + ')</div>';
+      sorted.forEach(function(rt) {
+        html += '<div style="font-size:11px;padding:2px 0"><a onclick="closeEipPopover();showDetail(DATA.topics[' + rt.id + '])" ' +
+          'style="color:#7788cc;cursor:pointer;text-decoration:none">' + escHtml(rt.t) + '</a></div>';
+      });
+      html += '</div>';
+    }
+  }
+
+  pop.innerHTML = html;
+  positionPopover(pop, ev);
+}
+
+function positionPopover(pop, ev) {
+  pop.style.display = 'block';
+  var x = ev.clientX + 14;
+  var y = ev.clientY - 10;
+  var pw = pop.offsetWidth;
+  var ph = pop.offsetHeight;
+  if (x + pw > window.innerWidth - 10) x = ev.clientX - pw - 14;
+  if (y + ph > window.innerHeight - 10) y = window.innerHeight - ph - 10;
+  if (y < 5) y = 5;
+  pop.style.left = x + 'px';
+  pop.style.top = y + 'px';
+}
+
+function closeEipPopover() {
+  document.getElementById('eip-popover').style.display = 'none';
 }
 
 // === URL HASH ROUTING ===
