@@ -3064,8 +3064,20 @@ function paperNodeId(paperId) {
 
 function paperIdFromNode(node) {
   if (!node) return null;
-  if (node.paperId) return String(node.paperId);
-  if (typeof node.id === 'string' && node.id.indexOf('paper_') === 0) return String(node.id.slice(6));
+  if (node._paperId !== undefined && node._paperId !== null) {
+    var innerPid = String(node._paperId).trim();
+    if (innerPid) return innerPid;
+  }
+  if (node.paperId !== undefined && node.paperId !== null) {
+    var explicitPid = String(node.paperId).trim();
+    if (explicitPid) return explicitPid;
+  }
+  if (node.id !== undefined && node.id !== null) {
+    var idStr = String(node.id).trim();
+    if (!idStr) return null;
+    if (idStr.indexOf('paper_') === 0) return String(idStr.slice(6));
+    if ((DATA.papers || {})[idStr]) return idStr;
+  }
   return null;
 }
 
@@ -5523,8 +5535,14 @@ function buildTimeline() {
     clearFocusedEntityState({keepDetailOpen: false});
   });
 
-  // Double-click to reset zoom
-  svg.on('dblclick.zoom', function() {
+  // Double-click resets zoom only when the click lands on empty canvas.
+  svg.on('dblclick.zoom', function(ev) {
+    var target = ev && ev.target ? ev.target : null;
+    if (target && target.closest && target.closest(
+      '.topic-circle,.milestone-marker,.eip-square,.magicians-triangle,.paper-diamond,.fork-hover-line,.eip-label,.magicians-label,.paper-label,.eip-tag,.histogram-bar'
+    )) {
+      return;
+    }
     svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
   });
 
@@ -6173,8 +6191,7 @@ function onTimelineEntityHover(ev, node, kind, entering) {
         showMagiciansTooltip(ev, mt);
       } else showMagiciansTooltip(ev, node);
     } else if (kind === 'paper') {
-      var pid = String((node && (node._paperId || node.id)) || '').replace(/^paper_/, '');
-      var paper = (DATA.papers || {})[pid] || node;
+      var paper = paperFromNode(node) || node;
       showPaperTooltip(ev, paper, node);
     } else {
       return;
