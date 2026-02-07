@@ -855,6 +855,7 @@ def generate_html(viz_json, data):
     <h1>Ethereum Evolution</h1>
     <div class="stats">
       <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
+      <button id="paper-match-toggle" class="paper-match-toggle" onclick="cyclePaperMatchMode()" title="Cycle paper matching strictness">Papers: balanced</button>
     </div>
     <div class="content-toggles">
       <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresear.ch topics">\u25CF EthResearch</button>
@@ -1202,6 +1203,12 @@ header .stats span { white-space: nowrap; }
                     padding: 2px 8px !important; border-radius: 3px !important; font-size: 10px !important;
                     cursor: pointer; margin-left: 6px; }
 .milestone-toggle.active { border-color: #ffcc44 !important; color: #ffcc44; }
+.paper-match-toggle { background: none !important; border: 1px solid #334a66 !important; color: #88aadd;
+                      padding: 2px 8px !important; border-radius: 3px !important; font-size: 10px !important;
+                      cursor: pointer; margin-left: 6px; }
+.paper-match-toggle:hover { border-color: #446a99 !important; color: #aaccff; }
+.paper-match-toggle.mode-strict { border-color: #5a5a2a !important; color: #d9cc88; }
+.paper-match-toggle.mode-loose { border-color: #2a5a3a !important; color: #8ad0a0; }
 
 /* Thread detail stats */
 .thread-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 10px 0; }
@@ -1350,6 +1357,7 @@ let showMagicians = false;
 let eipVisibilityMode = 'connected'; // 'connected' | 'all'
 let eipAuthorTab = false; // false = ethresearch, true = EIP authors
 let sidebarWide = false;
+let paperMatchMode = 'balanced'; // 'strict' | 'balanced' | 'loose'
 
 // --- Prevent macOS trackpad swipe-back/forward ---
 // On macOS, the browser compositor may detect navigation gestures from
@@ -1621,6 +1629,117 @@ function linkedMagAuthorsFromEip(eipAuthorName) {
   return identityMembers('eip', eipAuthorName).mag;
 }
 
+const PAPER_MATCH_MODES = {
+  strict: {
+    label: 'strict',
+    limit: 12,
+    relevanceWeight: 0.75,
+    minTopic: 3.9,
+    minEip: 4.5,
+    minFork: 3.9,
+    minAuthor: 3.8,
+    minEipAuthor: 3.8,
+  },
+  balanced: {
+    label: 'balanced',
+    limit: 18,
+    relevanceWeight: 1.0,
+    minTopic: 2.9,
+    minEip: 3.4,
+    minFork: 3.0,
+    minAuthor: 3.0,
+    minEipAuthor: 3.0,
+  },
+  loose: {
+    label: 'loose',
+    limit: 28,
+    relevanceWeight: 1.2,
+    minTopic: 2.1,
+    minEip: 2.6,
+    minFork: 2.3,
+    minAuthor: 2.2,
+    minEipAuthor: 2.2,
+  },
+};
+
+function getPaperMatchConfig() {
+  return PAPER_MATCH_MODES[paperMatchMode] || PAPER_MATCH_MODES.balanced;
+}
+
+function clearRelatedPapersCache() {
+  Object.keys(RELATED_PAPERS_CACHE).forEach(function(kind) {
+    RELATED_PAPERS_CACHE[kind] = {};
+  });
+}
+
+function refreshOpenDetailPanel() {
+  var panel = document.getElementById('detail-panel');
+  if (!panel || !panel.classList.contains('open')) return;
+
+  if (pinnedTopicId && DATA.topics[pinnedTopicId]) {
+    showDetail(DATA.topics[pinnedTopicId]);
+    return;
+  }
+  if (activeEipNum !== null && activeEipNum !== undefined) {
+    showEipDetailByNum(activeEipNum);
+    return;
+  }
+  if (activeMagiciansId !== null && activeMagiciansId !== undefined) {
+    showMagiciansTopicDetailById(activeMagiciansId);
+    return;
+  }
+  if (activeEipAuthor) {
+    showEipAuthorDetail(activeEipAuthor);
+    return;
+  }
+  if (activeAuthor) {
+    showAuthorDetail(activeAuthor);
+  }
+}
+
+function updatePaperMatchToggleUi() {
+  var btn = document.getElementById('paper-match-toggle');
+  if (!btn) return;
+  var mode = paperMatchMode || 'balanced';
+  btn.textContent = 'Papers: ' + mode;
+  btn.classList.remove('mode-strict', 'mode-loose');
+  if (mode === 'strict') btn.classList.add('mode-strict');
+  if (mode === 'loose') btn.classList.add('mode-loose');
+}
+
+function setPaperMatchMode(mode, persist) {
+  var next = PAPER_MATCH_MODES[mode] ? mode : 'balanced';
+  if (paperMatchMode === next) {
+    updatePaperMatchToggleUi();
+    return;
+  }
+  paperMatchMode = next;
+  clearRelatedPapersCache();
+  updatePaperMatchToggleUi();
+  if (persist !== false) {
+    try { localStorage.setItem('evmap.paperMatchMode', next); } catch (e) {}
+  }
+  refreshOpenDetailPanel();
+}
+
+function cyclePaperMatchMode() {
+  var order = ['strict', 'balanced', 'loose'];
+  var idx = order.indexOf(paperMatchMode);
+  if (idx < 0) idx = 1;
+  var next = order[(idx + 1) % order.length];
+  setPaperMatchMode(next, true);
+}
+
+function setupPaperMatchMode() {
+  var mode = 'balanced';
+  try {
+    var saved = localStorage.getItem('evmap.paperMatchMode');
+    if (saved && PAPER_MATCH_MODES[saved]) mode = saved;
+  } catch (e) {}
+  paperMatchMode = mode;
+  updatePaperMatchToggleUi();
+}
+
 const THREAD_PAPER_TAG_HINTS = {
   pos_casper: ['consensus', 'proof-of-stake', 'finality'],
   sharding_da: ['rollups_da', 'data-availability', 'ethereum'],
@@ -1799,8 +1918,9 @@ const RELATED_PAPERS_CACHE = {
   eipAuthor: {},
 };
 
-function paperRelevanceBonus(pidx) {
-  return Math.min(1.2, Math.max(0, Number((pidx && pidx.relevance) || 0)) / 12);
+function paperRelevanceBonus(pidx, cfg) {
+  var weight = Number((cfg && cfg.relevanceWeight) || 1.0);
+  return Math.min(1.4 * weight, (Math.max(0, Number((pidx && pidx.relevance) || 0)) / 12) * weight);
 }
 
 function rankRelatedPapers(scoreFn, minScore, limit) {
@@ -1828,9 +1948,11 @@ function rankRelatedPapers(scoreFn, minScore, limit) {
 
 function relatedPapersForTopic(topicId) {
   var key = String(topicId);
-  if (RELATED_PAPERS_CACHE.topic[key]) return RELATED_PAPERS_CACHE.topic[key];
+  var cacheKey = key + '|' + paperMatchMode;
+  if (RELATED_PAPERS_CACHE.topic[cacheKey]) return RELATED_PAPERS_CACHE.topic[cacheKey];
   var t = DATA.topics[topicId];
   if (!t) return [];
+  var cfg = getPaperMatchConfig();
 
   var topicEips = new Set(uniqueSortedNumbers((t.eips || []).concat(t.peips || [])));
   var primaryEips = new Set(uniqueSortedNumbers(t.peips || []));
@@ -1847,7 +1969,7 @@ function relatedPapersForTopic(topicId) {
   var aliasRows = buildAliasRows(Array.from(aliasNames));
 
   var rows = rankRelatedPapers(function(pidx) {
-    var score = paperRelevanceBonus(pidx);
+    var score = paperRelevanceBonus(pidx, cfg);
     var reasons = [];
 
     var eipOverlap = setOverlapArray(topicEips, pidx.eipSet);
@@ -1879,24 +2001,26 @@ function relatedPapersForTopic(topicId) {
       reasons.push('thread/domain match');
     }
 
-    if (score < 2.9) return null;
+    if (score < cfg.minTopic) return null;
     return {paper: pidx.p, score: Number(score.toFixed(3)), reasons: reasons};
-  }, 2.9, 18);
+  }, cfg.minTopic, cfg.limit);
 
-  RELATED_PAPERS_CACHE.topic[key] = rows;
+  RELATED_PAPERS_CACHE.topic[cacheKey] = rows;
   return rows;
 }
 
 function relatedPapersForEip(num, eip) {
   var key = String(num);
-  if (RELATED_PAPERS_CACHE.eip[key]) return RELATED_PAPERS_CACHE.eip[key];
+  var cacheKey = key + '|' + paperMatchMode;
+  if (RELATED_PAPERS_CACHE.eip[cacheKey]) return RELATED_PAPERS_CACHE.eip[cacheKey];
   var eipNum = Number(num);
+  var cfg = getPaperMatchConfig();
   var threadTags = new Set(threadPaperTags(eip && eip.th));
   var titleTokens = new Set(keywordTokenList((eip && eip.t) || ''));
   var aliasRows = buildAliasRows((eip && eip.au) || []);
 
   var rows = rankRelatedPapers(function(pidx) {
-    var score = paperRelevanceBonus(pidx);
+    var score = paperRelevanceBonus(pidx, cfg);
     var reasons = [];
 
     if (pidx.eipSet.has(eipNum)) {
@@ -1922,18 +2046,20 @@ function relatedPapersForEip(num, eip) {
       reasons.push('thread/domain match');
     }
 
-    if (score < 3.4) return null;
+    if (score < cfg.minEip) return null;
     return {paper: pidx.p, score: Number(score.toFixed(3)), reasons: reasons};
-  }, 3.4, 18);
+  }, cfg.minEip, cfg.limit);
 
-  RELATED_PAPERS_CACHE.eip[key] = rows;
+  RELATED_PAPERS_CACHE.eip[cacheKey] = rows;
   return rows;
 }
 
 function relatedPapersForFork(forkObj) {
   var key = String((forkObj && (forkObj.cn || forkObj.n)) || '');
   if (!key) return [];
-  if (RELATED_PAPERS_CACHE.fork[key]) return RELATED_PAPERS_CACHE.fork[key];
+  var cacheKey = key + '|' + paperMatchMode;
+  if (RELATED_PAPERS_CACHE.fork[cacheKey]) return RELATED_PAPERS_CACHE.fork[cacheKey];
+  var cfg = getPaperMatchConfig();
 
   var forkEips = new Set(uniqueSortedNumbers((forkObj && forkObj.eips) || []));
   var threadTagSet = new Set();
@@ -1943,7 +2069,7 @@ function relatedPapersForFork(forkObj) {
   });
 
   var rows = rankRelatedPapers(function(pidx) {
-    var score = paperRelevanceBonus(pidx);
+    var score = paperRelevanceBonus(pidx, cfg);
     var reasons = [];
 
     var overlap = setOverlapArray(forkEips, pidx.eipSet);
@@ -1958,11 +2084,11 @@ function relatedPapersForFork(forkObj) {
       reasons.push('domain match');
     }
 
-    if (score < 3.0) return null;
+    if (score < cfg.minFork) return null;
     return {paper: pidx.p, score: Number(score.toFixed(3)), reasons: reasons};
-  }, 3.0, 18);
+  }, cfg.minFork, cfg.limit);
 
-  RELATED_PAPERS_CACHE.fork[key] = rows;
+  RELATED_PAPERS_CACHE.fork[cacheKey] = rows;
   return rows;
 }
 
@@ -1978,7 +2104,9 @@ function topAuthorThreads(username) {
 function relatedPapersForEthAuthor(username) {
   var key = String(username || '');
   if (!key) return [];
-  if (RELATED_PAPERS_CACHE.author[key]) return RELATED_PAPERS_CACHE.author[key];
+  var cacheKey = key + '|' + paperMatchMode;
+  if (RELATED_PAPERS_CACHE.author[cacheKey]) return RELATED_PAPERS_CACHE.author[cacheKey];
+  var cfg = getPaperMatchConfig();
 
   var aliasNames = new Set([username]);
   linkedEipAuthors(username).forEach(function(name) { aliasNames.add(name); });
@@ -1990,7 +2118,7 @@ function relatedPapersForEthAuthor(username) {
   });
 
   var rows = rankRelatedPapers(function(pidx) {
-    var score = paperRelevanceBonus(pidx);
+    var score = paperRelevanceBonus(pidx, cfg);
     var reasons = [];
     var match = bestAliasMatch(aliasRows, pidx.authorRows);
     if (match.score < 2.0) return null;
@@ -2003,18 +2131,20 @@ function relatedPapersForEthAuthor(username) {
       reasons.push('thread/domain match');
     }
 
-    if (score < 3.0) return null;
+    if (score < cfg.minAuthor) return null;
     return {paper: pidx.p, score: Number(score.toFixed(3)), reasons: reasons};
-  }, 3.0, 18);
+  }, cfg.minAuthor, cfg.limit);
 
-  RELATED_PAPERS_CACHE.author[key] = rows;
+  RELATED_PAPERS_CACHE.author[cacheKey] = rows;
   return rows;
 }
 
 function relatedPapersForEipAuthor(name) {
   var key = String(name || '');
   if (!key) return [];
-  if (RELATED_PAPERS_CACHE.eipAuthor[key]) return RELATED_PAPERS_CACHE.eipAuthor[key];
+  var cacheKey = key + '|' + paperMatchMode;
+  if (RELATED_PAPERS_CACHE.eipAuthor[cacheKey]) return RELATED_PAPERS_CACHE.eipAuthor[cacheKey];
+  var cfg = getPaperMatchConfig();
 
   var aliasNames = new Set([name]);
   linkedEthAuthors(name).forEach(function(username) {
@@ -2033,7 +2163,7 @@ function relatedPapersForEipAuthor(name) {
   }
 
   var rows = rankRelatedPapers(function(pidx) {
-    var score = paperRelevanceBonus(pidx);
+    var score = paperRelevanceBonus(pidx, cfg);
     var reasons = [];
     var match = bestAliasMatch(aliasRows, pidx.authorRows);
     if (match.score < 2.0) return null;
@@ -2046,11 +2176,11 @@ function relatedPapersForEipAuthor(name) {
       reasons.push('thread/domain match');
     }
 
-    if (score < 3.0) return null;
+    if (score < cfg.minEipAuthor) return null;
     return {paper: pidx.p, score: Number(score.toFixed(3)), reasons: reasons};
-  }, 3.0, 18);
+  }, cfg.minEipAuthor, cfg.limit);
 
-  RELATED_PAPERS_CACHE.eipAuthor[key] = rows;
+  RELATED_PAPERS_CACHE.eipAuthor[cacheKey] = rows;
   return rows;
 }
 
@@ -2823,6 +2953,7 @@ function toggleSidebarWidth() {
 // === INIT ===
 document.addEventListener('DOMContentLoaded', () => {
   setupSidebarWidth();
+  setupPaperMatchMode();
   buildSidebar();
   buildTimeline();
   setupSearch();
