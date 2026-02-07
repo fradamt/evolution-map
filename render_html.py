@@ -3878,8 +3878,8 @@ function canApplyFocusedHighlightInView() {
 
 function rebuildActiveViewLayout() {
   if (activeView === 'timeline') {
-    var tlExisting = document.querySelector('#timeline-view svg');
-    if (tlExisting) tlExisting.remove();
+    var tlContainer = document.getElementById('timeline-view');
+    if (tlContainer) tlContainer.innerHTML = '';
     tlSvg = null;
     tlZoom = null;
     tlXScale = null;
@@ -3888,14 +3888,14 @@ function rebuildActiveViewLayout() {
     if (showEips && !document.querySelector('.eip-square')) drawEipTimeline();
     if (showMagicians && !document.querySelector('.magicians-triangle')) drawMagiciansTimeline();
   } else if (activeView === 'network') {
-    var netExisting = document.querySelector('#network-view svg');
-    if (netExisting) netExisting.remove();
+    var netContainer = document.getElementById('network-view');
+    if (netContainer) netContainer.innerHTML = '';
     if (simulation) simulation.stop();
     simulation = null;
     buildNetwork();
   } else if (activeView === 'coauthor') {
-    var coExisting = document.querySelector('#coauthor-view svg');
-    if (coExisting) coExisting.remove();
+    var coContainer = document.getElementById('coauthor-view');
+    if (coContainer) coContainer.innerHTML = '';
     if (coAuthorSimulation) coAuthorSimulation.stop();
     coAuthorSimulation = null;
     buildCoAuthorNetwork();
