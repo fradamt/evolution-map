@@ -3603,6 +3603,15 @@ function setupInfSlider() {
   });
 }
 
+function canApplyFocusedHighlightInView() {
+  if (pinnedTopicId !== null) return true;
+  if (activeView === 'timeline' || activeView === 'network') {
+    if (activeEipNum !== null && !showEips) return false;
+    if (activeMagiciansId !== null && !showMagicians) return false;
+  }
+  return hasFocusedEntity();
+}
+
 function rebuildActiveViewLayout() {
   if (activeView === 'timeline') {
     var tlExisting = document.querySelector('#timeline-view svg');
@@ -3628,7 +3637,7 @@ function rebuildActiveViewLayout() {
     buildCoAuthorNetwork();
   }
   applyFilters();
-  if (hasFocusedEntity()) applyFocusedEntityHighlight();
+  if (canApplyFocusedHighlightInView()) applyFocusedEntityHighlight();
 }
 
 function positionSidebarToggle() {
@@ -5269,6 +5278,11 @@ function applyFocusedEntityHighlightTimeline() {
     return;
   }
   if (activeEipNum !== null) {
+    if (!showEips) {
+      clearFocusedTimelineExtraEdges();
+      filterTimeline();
+      return;
+    }
     var eipNum = Number(activeEipNum);
     if (!isNaN(eipNum)) {
       var eipMeta = (DATA.eipCatalog || {})[String(eipNum)] || {};
@@ -5283,6 +5297,11 @@ function applyFocusedEntityHighlightTimeline() {
     return;
   }
   if (activeMagiciansId !== null) {
+    if (!showMagicians) {
+      clearFocusedTimelineExtraEdges();
+      filterTimeline();
+      return;
+    }
     var mid = Number(activeMagiciansId);
     if (!isNaN(mid)) {
       var mt = (DATA.magiciansTopics || {})[String(mid)] || {id: mid};
@@ -5306,6 +5325,8 @@ function applyFocusedEntityHighlightNetwork() {
     applyPinnedHighlightNetwork();
     return;
   }
+  if (activeEipNum !== null && !showEips) return;
+  if (activeMagiciansId !== null && !showMagicians) return;
   var focusId = focusedNetworkNodeId();
   if (focusId === null || focusId === undefined) return;
 
