@@ -1203,6 +1203,42 @@ def generate_html(viz_json, data):
       </div>
     </div>
     <div class="sidebar-section">
+      <div class="sidebar-collapse-hdr" onclick="toggleCollapse('papers')">
+        <span class="toggle-arrow open" id="papers-arrow">&#9662;</span>
+        <h3>Papers</h3>
+      </div>
+      <div class="sidebar-collapse-body open" id="papers-body">
+        <div class="paper-filter-grid">
+          <div class="paper-filter-row">
+            <span class="pf-label">Year</span>
+            <input id="paper-year-min" class="pf-input" type="number" step="1">
+            <span class="pf-sep">&#8211;</span>
+            <input id="paper-year-max" class="pf-input" type="number" step="1">
+          </div>
+          <div class="paper-filter-row">
+            <span class="pf-label">Min citations</span>
+            <input id="paper-min-cites" class="pf-range" type="range" min="0" max="1000" step="1" value="0">
+            <span id="paper-min-cites-label" class="pf-value">0</span>
+          </div>
+          <div class="paper-filter-row">
+            <span class="pf-label">Tag</span>
+            <select id="paper-tag-filter" class="pf-select"></select>
+          </div>
+          <div class="paper-filter-row">
+            <span class="pf-label">Sort</span>
+            <select id="paper-sort-filter" class="pf-select">
+              <option value="relevance">Relevance</option>
+              <option value="citations">Citations</option>
+              <option value="recent">Recent</option>
+            </select>
+            <button id="paper-filter-reset" class="pf-reset-btn" type="button">Reset</button>
+          </div>
+        </div>
+        <div id="paper-sidebar-summary" class="paper-sidebar-summary"></div>
+        <div id="paper-sidebar-list" class="paper-sidebar-list"></div>
+      </div>
+    </div>
+    <div class="sidebar-section">
       <h3 style="display:flex;align-items:center;justify-content:space-between">Top Authors
         <select id="author-sort" onchange="sortAuthorList(this.value)" style="font-size:10px;background:#1a1a2e;color:#aaa;border:1px solid #333;border-radius:3px;padding:1px 4px;cursor:pointer">
           <option value="inf">Influence</option>
@@ -1449,6 +1485,24 @@ header .stats span { white-space: nowrap; }
 .paper-reasons { color: #6f8a6f; font-size: 10px; margin-top: 2px; }
 .paper-expand { margin-top: 6px; font-size: 10px; color: #88aadd; cursor: pointer; user-select: none; display: inline-block; }
 .paper-expand:hover { text-decoration: underline; }
+.paper-filter-grid { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.paper-filter-row { display: flex; align-items: center; gap: 6px; }
+.paper-filter-row .pf-label { width: 74px; flex-shrink: 0; font-size: 10px; color: #8b8ba3; text-transform: uppercase; letter-spacing: 0.4px; }
+.paper-filter-row .pf-sep { color: #666; font-size: 10px; }
+.pf-input, .pf-select { background: #1a1a2e; border: 1px solid #333; color: #bbb; border-radius: 4px; font-size: 10px; padding: 2px 6px; min-width: 0; }
+.pf-input { width: 62px; }
+.pf-select { flex: 1; }
+.pf-range { flex: 1; min-width: 0; accent-color: #6c8fb6; }
+.pf-value { width: 36px; text-align: right; color: #8a8aa0; font-size: 10px; }
+.pf-reset-btn { margin-left: auto; background: #1a1a2a; border: 1px solid #334; color: #88aadd; border-radius: 4px; padding: 2px 7px; font-size: 10px; cursor: pointer; }
+.pf-reset-btn:hover { border-color: #446a99; color: #aaccff; }
+.paper-sidebar-summary { color: #6f6f86; font-size: 10px; margin: 4px 0 6px; }
+.paper-sidebar-list { max-height: 300px; overflow-y: auto; border-top: 1px solid #1a1a2a; }
+.paper-sidebar-list::-webkit-scrollbar { width: 6px; }
+.paper-sidebar-list::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+.paper-sidebar-item { padding: 7px 0; border-bottom: 1px solid #1a1a2a; cursor: pointer; }
+.paper-sidebar-item:last-child { border-bottom: none; }
+.paper-sidebar-item:hover .paper-title { text-decoration: underline; }
 .eip-tag { display: inline-block; font-size: 10px; padding: 1px 5px; background: #1e2a3a;
            border: 1px solid #2a3a5a; border-radius: 3px; margin: 1px; color: #88aacc; cursor: pointer; }
 .eip-tag:hover { border-color: #4a6a9a; }
@@ -1676,6 +1730,11 @@ let eipAuthorTab = false; // false = ethresearch, true = EIP authors
 let sidebarWide = false;
 let sidebarHidden = false;
 let paperMatchMode = 'balanced'; // 'strict' | 'balanced' | 'loose'
+let paperFilterYearMin = null;
+let paperFilterYearMax = null;
+let paperFilterMinCitations = 0;
+let paperFilterTag = '';
+let paperSidebarSort = 'relevance'; // 'relevance' | 'citations' | 'recent'
 
 // --- Prevent macOS trackpad swipe-back/forward ---
 // On macOS, the browser compositor may detect navigation gestures from
@@ -2102,6 +2161,208 @@ const PAPER_STOPWORDS = new Set([
 
 const PAPER_LIST = Object.values(DATA.papers || {});
 
+function paperYearValue(paper) {
+  var y = Number((paper || {}).y || 0);
+  if (!isFinite(y) || y <= 0) return null;
+  return y;
+}
+
+function paperCitationValue(paper) {
+  var c = Number((paper || {}).cb || 0);
+  if (!isFinite(c) || c < 0) return 0;
+  return c;
+}
+
+function paperPassesSidebarFilters(paper) {
+  if (!paper) return false;
+  var year = paperYearValue(paper);
+  if (paperFilterYearMin !== null && year !== null && year < paperFilterYearMin) return false;
+  if (paperFilterYearMax !== null && year !== null && year > paperFilterYearMax) return false;
+  if (paperFilterMinCitations > 0 && paperCitationValue(paper) < paperFilterMinCitations) return false;
+  if (paperFilterTag) {
+    var tags = (paper.tg || []).map(function(t) { return String(t); });
+    if (tags.indexOf(paperFilterTag) < 0) return false;
+  }
+  return true;
+}
+
+function paperSidebarRankScore(paper) {
+  var rel = Number((paper || {}).rs || 0);
+  var cites = paperCitationValue(paper);
+  var year = paperYearValue(paper) || 0;
+  if (paperSidebarSort === 'citations') return cites * 100 + rel * 10 + year * 0.001;
+  if (paperSidebarSort === 'recent') return year * 100 + rel * 10 + Math.log1p(cites);
+  return rel * 160 + Math.log1p(cites) * 18 + year * 0.01;
+}
+
+function filteredAndSortedPapersForSidebar() {
+  var rows = PAPER_LIST.filter(function(p) { return paperPassesSidebarFilters(p); });
+  rows.sort(function(a, b) {
+    var diff = paperSidebarRankScore(b) - paperSidebarRankScore(a);
+    if (diff !== 0) return diff;
+    return String(a.t || '').localeCompare(String(b.t || ''));
+  });
+  return rows;
+}
+
+function renderPaperSidebarList() {
+  var listEl = document.getElementById('paper-sidebar-list');
+  var summaryEl = document.getElementById('paper-sidebar-summary');
+  if (!listEl || !summaryEl) return;
+  var rows = filteredAndSortedPapersForSidebar();
+  var total = PAPER_LIST.length;
+  summaryEl.textContent = rows.length + ' / ' + total + ' papers';
+  var topRows = rows.slice(0, 40);
+  listEl.innerHTML = topRows.map(function(paper) {
+    var title = escHtml(paper.t || 'Untitled paper');
+    var year = paperYearValue(paper);
+    var cites = paperCitationValue(paper);
+    var rel = Number((paper || {}).rs || 0);
+    var authors = paperAuthorsShort(paper, 2);
+    var metaParts = [];
+    if (year) metaParts.push(String(year));
+    if (authors) metaParts.push(authors);
+    metaParts.push('cited ' + cites.toLocaleString());
+    metaParts.push('rel ' + rel.toFixed(2));
+    return '<div class="paper-sidebar-item" data-paper-id="' + escHtml(String(paper.id || '')) + '">' +
+      '<div class="paper-title">' + title + '</div>' +
+      '<div class="paper-meta">' + escHtml(metaParts.join(' - ')) + '</div>' +
+      '</div>';
+  }).join('');
+  listEl.querySelectorAll('.paper-sidebar-item').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var pid = el.getAttribute('data-paper-id') || '';
+      var paper = (DATA.papers || {})[pid];
+      if (!paper) return;
+      if (!showPapers) toggleContent('papers', 'on');
+      showPaperDetail(paper, null);
+    });
+  });
+}
+
+function refreshNetworkForPaperFilterChange() {
+  var netSvg = document.querySelector('#network-view svg');
+  if (netSvg) {
+    netSvg.remove();
+    simulation = null;
+  }
+  if (activeView === 'network') buildNetwork();
+}
+
+function applyPaperSidebarFilters(refreshNetwork) {
+  clearRelatedPapersCache();
+  renderPaperSidebarList();
+  refreshOpenDetailPanel();
+  if (refreshNetwork !== false) refreshNetworkForPaperFilterChange();
+  applyFilters();
+}
+
+function setupPaperSidebarPanel() {
+  var minYearInput = document.getElementById('paper-year-min');
+  var maxYearInput = document.getElementById('paper-year-max');
+  var minCitesInput = document.getElementById('paper-min-cites');
+  var minCitesLabel = document.getElementById('paper-min-cites-label');
+  var tagSelect = document.getElementById('paper-tag-filter');
+  var sortSelect = document.getElementById('paper-sort-filter');
+  var resetBtn = document.getElementById('paper-filter-reset');
+  if (!minYearInput || !maxYearInput || !minCitesInput || !minCitesLabel || !tagSelect || !sortSelect || !resetBtn) return;
+
+  var years = PAPER_LIST.map(function(p) { return paperYearValue(p); }).filter(function(y) { return y !== null; });
+  var minYear = years.length > 0 ? d3.min(years) : 2014;
+  var maxYear = years.length > 0 ? d3.max(years) : (new Date().getFullYear());
+  minYearInput.min = String(minYear);
+  minYearInput.max = String(maxYear);
+  maxYearInput.min = String(minYear);
+  maxYearInput.max = String(maxYear);
+  minYearInput.value = String(minYear);
+  maxYearInput.value = String(maxYear);
+  paperFilterYearMin = minYear;
+  paperFilterYearMax = maxYear;
+
+  var maxCites = d3.max(PAPER_LIST, function(p) { return paperCitationValue(p); }) || 0;
+  var sliderMax = Math.max(50, Math.ceil(maxCites / 50) * 50);
+  minCitesInput.min = '0';
+  minCitesInput.max = String(sliderMax);
+  minCitesInput.value = '0';
+  paperFilterMinCitations = 0;
+  minCitesLabel.textContent = '0';
+
+  var tagCounts = {};
+  PAPER_LIST.forEach(function(paper) {
+    (paper.tg || []).forEach(function(tag) {
+      var key = String(tag || '').trim();
+      if (!key) return;
+      tagCounts[key] = (tagCounts[key] || 0) + 1;
+    });
+  });
+  var tagEntries = Object.entries(tagCounts).sort(function(a, b) {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return a[0].localeCompare(b[0]);
+  });
+  tagSelect.innerHTML = '<option value="">All tags</option>' + tagEntries.slice(0, 40).map(function(entry) {
+    return '<option value="' + escHtml(entry[0]) + '">' + escHtml(entry[0] + ' (' + entry[1] + ')') + '</option>';
+  }).join('');
+  paperFilterTag = '';
+
+  sortSelect.value = paperSidebarSort;
+
+  function commitYearFilters() {
+    var minVal = Number(minYearInput.value || minYear);
+    var maxVal = Number(maxYearInput.value || maxYear);
+    if (!isFinite(minVal)) minVal = minYear;
+    if (!isFinite(maxVal)) maxVal = maxYear;
+    minVal = Math.max(minYear, Math.min(maxYear, Math.round(minVal)));
+    maxVal = Math.max(minYear, Math.min(maxYear, Math.round(maxVal)));
+    if (minVal > maxVal) {
+      var swap = minVal;
+      minVal = maxVal;
+      maxVal = swap;
+    }
+    minYearInput.value = String(minVal);
+    maxYearInput.value = String(maxVal);
+    paperFilterYearMin = minVal;
+    paperFilterYearMax = maxVal;
+    applyPaperSidebarFilters(true);
+  }
+
+  minYearInput.addEventListener('change', commitYearFilters);
+  maxYearInput.addEventListener('change', commitYearFilters);
+
+  minCitesInput.addEventListener('input', function() {
+    minCitesLabel.textContent = String(Math.round(Number(minCitesInput.value || 0)));
+  });
+  minCitesInput.addEventListener('change', function() {
+    paperFilterMinCitations = Math.max(0, Math.round(Number(minCitesInput.value || 0)));
+    minCitesLabel.textContent = String(paperFilterMinCitations);
+    applyPaperSidebarFilters(true);
+  });
+
+  tagSelect.addEventListener('change', function() {
+    paperFilterTag = String(tagSelect.value || '');
+    applyPaperSidebarFilters(true);
+  });
+
+  sortSelect.addEventListener('change', function() {
+    paperSidebarSort = String(sortSelect.value || 'relevance');
+    renderPaperSidebarList();
+  });
+
+  resetBtn.addEventListener('click', function() {
+    minYearInput.value = String(minYear);
+    maxYearInput.value = String(maxYear);
+    minCitesInput.value = '0';
+    minCitesLabel.textContent = '0';
+    tagSelect.value = '';
+    paperFilterYearMin = minYear;
+    paperFilterYearMax = maxYear;
+    paperFilterMinCitations = 0;
+    paperFilterTag = '';
+    applyPaperSidebarFilters(true);
+  });
+
+  renderPaperSidebarList();
+}
+
 function normalizeSearchText(value) {
   return String(value || '')
     .toLowerCase()
@@ -2267,6 +2528,7 @@ function paperRelevanceBonus(pidx, cfg) {
 function rankRelatedPapers(scoreFn, minScore, limit) {
   var rows = [];
   PAPER_INDEX.forEach(function(pidx) {
+    if (!paperPassesSidebarFilters(pidx.p)) return;
     var result = scoreFn(pidx);
     if (!result || !isFinite(result.score) || result.score < minScore) return;
     rows.push(result);
@@ -2653,6 +2915,7 @@ function buildNetworkPaperAugment(baseNodeMap) {
     if (!targetId || !baseNodeMap[targetId]) return;
     var paper = (DATA.papers || {})[pid];
     if (!paper) return;
+    if (!paperPassesSidebarFilters(paper)) return;
 
     var relScore = Math.max(0.15, Number(score || 0));
     var sourceId = paperNodeId(pid);
@@ -3469,6 +3732,7 @@ function networkNodeMatchesFilter(node) {
   if (sourceType === 'magicians') return magiciansMatchesFilter(node);
   if (sourceType === 'paper') {
     if (!showPapers) return false;
+    if (!paperPassesSidebarFilters(paperFromNode(node))) return false;
     if (minInfluence > 0 && genericNodeInfluence(node) < minInfluence) return false;
     return true;
   }
@@ -3640,6 +3904,27 @@ function rebuildActiveViewLayout() {
   if (canApplyFocusedHighlightInView()) applyFocusedEntityHighlight();
 }
 
+function activeViewContainerElement() {
+  if (activeView === 'timeline') return document.getElementById('timeline-view');
+  if (activeView === 'network') return document.getElementById('network-view');
+  if (activeView === 'coauthor') return document.getElementById('coauthor-view');
+  return null;
+}
+
+function scheduleActiveViewRebuild(attempt) {
+  var tries = Number(attempt) || 0;
+  requestAnimationFrame(function() {
+    var container = activeViewContainerElement();
+    var cw = container ? Number(container.clientWidth || 0) : 0;
+    var ch = container ? Number(container.clientHeight || 0) : 0;
+    if ((cw < 40 || ch < 40) && tries < 8) {
+      scheduleActiveViewRebuild(tries + 1);
+      return;
+    }
+    rebuildActiveViewLayout();
+  });
+}
+
 function positionSidebarToggle() {
   var sidebar = document.getElementById('sidebar');
   var widthBtn = document.getElementById('sidebar-width-toggle');
@@ -3686,7 +3971,7 @@ function toggleSidebarWidth() {
   sidebarWide = !sidebarWide;
   applySidebarWidthState();
   try { localStorage.setItem('evmap.sidebarWide', sidebarWide ? '1' : '0'); } catch (e) {}
-  requestAnimationFrame(function() { rebuildActiveViewLayout(); });
+  scheduleActiveViewRebuild(0);
   refreshAuthorSidebarList();
 }
 
@@ -3695,7 +3980,7 @@ function toggleSidebarHidden() {
   if (!sidebarHidden) sidebarWide = false;
   applySidebarWidthState();
   try { localStorage.setItem('evmap.sidebarHidden', sidebarHidden ? '1' : '0'); } catch (e) {}
-  requestAnimationFrame(function() { rebuildActiveViewLayout(); });
+  scheduleActiveViewRebuild(0);
   if (!sidebarHidden) {
     refreshAuthorSidebarList();
   }
@@ -3707,6 +3992,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPaperMatchMode();
   setupPaperLayerMode();
   buildSidebar();
+  setupPaperSidebarPanel();
   buildTimeline();
   setupSearch();
   setupInfSlider();
@@ -3964,6 +4250,27 @@ function clearFilters() {
   document.getElementById('search-box').value = '';
   var dd = document.getElementById('search-dropdown');
   if (dd) { dd.style.display = 'none'; searchDropdownIdx = -1; }
+  var pyMin = document.getElementById('paper-year-min');
+  var pyMax = document.getElementById('paper-year-max');
+  var pcMin = document.getElementById('paper-min-cites');
+  var pcLabel = document.getElementById('paper-min-cites-label');
+  var ptSel = document.getElementById('paper-tag-filter');
+  var psSel = document.getElementById('paper-sort-filter');
+  if (pyMin && pyMax) {
+    pyMin.value = String(pyMin.min || pyMin.value || '');
+    pyMax.value = String(pyMax.max || pyMax.value || '');
+    paperFilterYearMin = Number(pyMin.value || 0);
+    paperFilterYearMax = Number(pyMax.value || 0);
+  }
+  if (pcMin) pcMin.value = '0';
+  if (pcLabel) pcLabel.textContent = '0';
+  paperFilterMinCitations = 0;
+  if (ptSel) ptSel.value = '';
+  paperFilterTag = '';
+  paperSidebarSort = 'relevance';
+  if (psSel) psSel.value = 'relevance';
+  clearRelatedPapersCache();
+  renderPaperSidebarList();
   var btn = document.getElementById('lineage-btn');
   if (btn) { btn.textContent = 'Trace Lineage'; btn.style.borderColor = '#5566aa'; btn.style.color = '#8899cc'; }
   refreshAuthorSidebarList();
@@ -4348,6 +4655,7 @@ function populateDropdown(q) {
     // Match papers by title, author, tag, and referenced EIP numbers.
     var paperResults = [];
     Object.values(DATA.papers || {}).forEach(function(paper) {
+      if (!paperPassesSidebarFilters(paper)) return;
       var score = 0;
       var title = String(paper.t || '').toLowerCase();
       if (title.includes(q)) score += 3;
@@ -4931,6 +5239,15 @@ function buildTimeline() {
   tlSvg = svg;
   tlZoom = zoom;
 
+  svg.on('click.clearFocus', function(ev) {
+    if (!hasFocusedEntity() || ev.defaultPrevented) return;
+    var target = ev && ev.target ? ev.target : null;
+    if (target && target.closest && target.closest(
+      '.topic-circle,.milestone-marker,.eip-square,.magicians-triangle,.fork-hover-line,.eip-label,.magicians-label,.eip-tag'
+    )) return;
+    clearFocusedEntityState({keepDetailOpen: false});
+  });
+
   // Double-click to reset zoom
   svg.on('dblclick.zoom', function() {
     svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
@@ -5037,6 +5354,19 @@ function buildTimeline() {
 
 function hasFocusedEntity() {
   return pinnedTopicId !== null || activeEipNum !== null || activeMagiciansId !== null;
+}
+
+function clearFocusedEntityState(options) {
+  var opts = options || {};
+  var panel = document.getElementById('detail-panel');
+  if (!opts.keepDetailOpen && panel) panel.classList.remove('open');
+  pinnedTopicId = null;
+  activeEipNum = null;
+  activeMagiciansId = null;
+  if (similarActive) clearSimilar();
+  else applyFilters();
+  if (showPapers) refreshNetworkForFocusChange();
+  if (!opts.skipHash) updateHash();
 }
 
 function focusedEntityDescriptor() {
@@ -5280,7 +5610,7 @@ function applyFocusedEntityHighlightTimeline() {
   if (activeEipNum !== null) {
     if (!showEips) {
       clearFocusedTimelineExtraEdges();
-      filterTimeline();
+      filterTimeline(true);
       return;
     }
     var eipNum = Number(activeEipNum);
@@ -5299,7 +5629,7 @@ function applyFocusedEntityHighlightTimeline() {
   if (activeMagiciansId !== null) {
     if (!showMagicians) {
       clearFocusedTimelineExtraEdges();
-      filterTimeline();
+      filterTimeline(true);
       return;
     }
     var mid = Number(activeMagiciansId);
@@ -5624,7 +5954,7 @@ function restorePinnedHighlight() {
   }
 }
 
-function filterTimeline() {
+function filterTimeline(skipFocusedHighlight) {
   if (lineageActive) { applyLineageTimeline(); return; }
   const hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
 
@@ -5717,8 +6047,11 @@ function filterTimeline() {
       });
   }
 
-  if (hasFocusedEntity()) applyFocusedEntityHighlightTimeline();
-  else clearFocusedTimelineExtraEdges();
+  if (!skipFocusedHighlight && hasFocusedEntity() && canApplyFocusedHighlightInView()) {
+    applyFocusedEntityHighlightTimeline();
+  } else {
+    clearFocusedTimelineExtraEdges();
+  }
 }
 
 // Sync topic labels and milestones to match circle opacity.
@@ -5793,6 +6126,13 @@ function buildNetwork() {
   svg.call(d3.zoom().scaleExtent([0.15, 5]).on('zoom', function(ev) {
     g.attr('transform', ev.transform);
   }));
+
+  svg.on('click.clearFocus', function(ev) {
+    if (!hasFocusedEntity() || ev.defaultPrevented) return;
+    var target = ev && ev.target ? ev.target : null;
+    if (target && target.closest && target.closest('.net-node,.net-label,.fork-diamond')) return;
+    clearFocusedEntityState({keepDetailOpen: false});
+  });
 
   // Prepare data from canonical unified graph payload.
   const unifiedGraph = DATA.unifiedGraph || {nodes: [], edges: []};
@@ -7614,23 +7954,7 @@ function showDetail(t) {
 }
 
 function closeDetail() {
-  document.getElementById('detail-panel').classList.remove('open');
-  pinnedTopicId = null;
-  activeEipNum = null;
-  activeMagiciansId = null;
-  if (similarActive) clearSimilar();
-  applyFilters();
-  if (showPapers) {
-    var netSvgClose = document.querySelector('#network-view svg');
-    if (activeView === 'network') {
-      if (netSvgClose) { netSvgClose.remove(); simulation = null; }
-      buildNetwork();
-    } else if (netSvgClose) {
-      netSvgClose.remove();
-      simulation = null;
-    }
-  }
-  updateHash();
+  clearFocusedEntityState({keepDetailOpen: false});
 }
 
 // === TOOLTIP ===
