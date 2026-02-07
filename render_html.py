@@ -1657,7 +1657,7 @@ header .stats span { white-space: nowrap; }
 .eip-square { cursor: pointer; pointer-events: all; }
 .magicians-triangle { cursor: pointer; pointer-events: all; }
 .paper-diamond { cursor: pointer; pointer-events: all; }
-.paper-hit { cursor: pointer; pointer-events: all; fill: transparent; stroke: transparent; stroke-width: 8; }
+.paper-hit { cursor: pointer; pointer-events: all; fill: transparent; stroke: transparent; stroke-width: 12; }
 .magicians-label { fill: #c8b5db; font-size: 8px; pointer-events: none; }
 .paper-label { fill: #9ec6ff; font-size: 8px; pointer-events: none; }
 
@@ -1666,7 +1666,8 @@ header .stats span { white-space: nowrap; }
 .magicians-ref-edge { pointer-events: none; }
 .paper-topic-ref-edge { stroke-dasharray: 2 3; pointer-events: none; }
 .paper-eip-ref-edge { stroke-dasharray: 3 2; pointer-events: none; }
-.cross-ref-edge, .magicians-ref-edge, .paper-topic-ref-edge, .paper-eip-ref-edge, .focus-eip-topic-edge {
+.paper-paper-edge { stroke-dasharray: 1 0; pointer-events: none; }
+.cross-ref-edge, .magicians-ref-edge, .paper-topic-ref-edge, .paper-eip-ref-edge, .paper-paper-edge, .focus-eip-topic-edge {
   stroke-linecap: round; pointer-events: none;
 }
 
@@ -2237,7 +2238,7 @@ function renderPaperSidebarList() {
     var metaParts = [];
     if (year) metaParts.push(String(year));
     if (authors) metaParts.push(authors);
-    metaParts.push('cited ' + cites.toLocaleString());
+    metaParts.push('OpenAlex cites ' + cites.toLocaleString());
     metaParts.push('rel ' + rel.toFixed(2));
     return '<div class="paper-sidebar-item" data-paper-id="' + escHtml(String(paper.id || '')) + '">' +
       '<div class="paper-title">' + title + '</div>' +
@@ -2426,6 +2427,17 @@ function setOverlapArray(aSet, bSet) {
   return out;
 }
 
+function setIntersectionCount(aSet, bSet) {
+  if (!aSet || !bSet || aSet.size === 0 || bSet.size === 0) return 0;
+  var small = aSet.size <= bSet.size ? aSet : bSet;
+  var big = aSet.size <= bSet.size ? bSet : aSet;
+  var count = 0;
+  small.forEach(function(v) {
+    if (big.has(v)) count += 1;
+  });
+  return count;
+}
+
 function buildAliasRows(names) {
   var out = [];
   var seen = new Set();
@@ -2528,6 +2540,207 @@ const EIP_TO_PAPER_IDS = {};
 const PAPER_TO_EIP_IDS = {};
 const PAPER_TO_TOPIC_IDS = {};
 const PAPER_TO_MAGICIANS_IDS = {};
+const TOPIC_TITLE_TOKEN_SET = {};
+const TOPIC_TAG_SET = {};
+const TOPIC_EIP_SET = {};
+const TOPIC_IDS_BY_THREAD = {};
+const TOPIC_IDS_BY_TITLE_TOKEN = {};
+const TOPIC_TO_MAG_IDS = {};
+
+(function buildPaperTopicIndices() {
+  Object.values(DATA.topics || {}).forEach(function(topic) {
+    if (!topic || topic.id === undefined || topic.id === null) return;
+    var tid = Number(topic.id);
+    if (!isFinite(tid)) return;
+
+    var titleTokens = new Set(keywordTokenList(topic.t || ''));
+    TOPIC_TITLE_TOKEN_SET[tid] = titleTokens;
+    titleTokens.forEach(function(tok) {
+      if (!TOPIC_IDS_BY_TITLE_TOKEN[tok]) TOPIC_IDS_BY_TITLE_TOKEN[tok] = [];
+      TOPIC_IDS_BY_TITLE_TOKEN[tok].push(tid);
+    });
+
+    var tagSet = new Set((topic.tg || []).map(function(tag) {
+      return String(tag || '').toLowerCase();
+    }).filter(Boolean));
+    TOPIC_TAG_SET[tid] = tagSet;
+
+    TOPIC_EIP_SET[tid] = new Set(uniqueSortedNumbers((topic.eips || []).concat(topic.peips || [])));
+
+    var th = topic.th || '_other';
+    if (!TOPIC_IDS_BY_THREAD[th]) TOPIC_IDS_BY_THREAD[th] = [];
+    TOPIC_IDS_BY_THREAD[th].push(tid);
+  });
+
+  Object.keys(TOPIC_IDS_BY_TITLE_TOKEN).forEach(function(tok) {
+    TOPIC_IDS_BY_TITLE_TOKEN[tok].sort(function(a, b) {
+      var ta = DATA.topics[a] || {};
+      var tb = DATA.topics[b] || {};
+      return Number(tb.inf || 0) - Number(ta.inf || 0);
+    });
+  });
+
+  Object.keys(TOPIC_IDS_BY_THREAD).forEach(function(th) {
+    TOPIC_IDS_BY_THREAD[th].sort(function(a, b) {
+      var ta = DATA.topics[a] || {};
+      var tb = DATA.topics[b] || {};
+      return Number(tb.inf || 0) - Number(ta.inf || 0);
+    });
+  });
+
+  Object.entries(DATA.magiciansTopics || {}).forEach(function(entry) {
+    var mid = Number(entry[0]);
+    if (!isFinite(mid)) return;
+    var mt = entry[1] || {};
+    (mt.er || []).forEach(function(tidRaw) {
+      var tid = Number(tidRaw);
+      if (!isFinite(tid)) return;
+      if (!TOPIC_TO_MAG_IDS[tid]) TOPIC_TO_MAG_IDS[tid] = new Set();
+      TOPIC_TO_MAG_IDS[tid].add(mid);
+    });
+  });
+})();
+
+function paperPairMeta(paperId, paperObj) {
+  var pid = String(paperId || '').trim();
+  var paper = paperObj || (DATA.papers || {})[pid] || {};
+  return {
+    eipSet: new Set(PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(paper.eq || [])),
+    topicSet: new Set(PAPER_TO_TOPIC_IDS[pid] || []),
+    tagSet: new Set((paper.tg || []).map(function(t) { return String(t || '').toLowerCase(); }).filter(Boolean)),
+    authorSet: new Set((paper.a || []).map(function(a) { return normalizeIdentityToken(a); }).filter(Boolean)),
+    titleTokenSet: new Set(keywordTokenList(paper.t || '')),
+    thread: inferPaperThread(paper),
+    year: Number(paper.y || 0),
+  };
+}
+
+function paperPairSimilarity(metaA, metaB) {
+  var score = 0;
+  var reasons = [];
+
+  var sharedEips = setIntersectionCount(metaA.eipSet, metaB.eipSet);
+  if (sharedEips > 0) {
+    score += 2.2 + Math.min(2.1, (sharedEips - 1) * 0.8);
+    reasons.push('shared EIP');
+  }
+
+  var sharedTopics = setIntersectionCount(metaA.topicSet, metaB.topicSet);
+  if (sharedTopics > 0) {
+    score += 1.35 + Math.min(1.7, (sharedTopics - 1) * 0.45);
+    reasons.push('shared topic');
+  }
+
+  var sharedAuthors = setIntersectionCount(metaA.authorSet, metaB.authorSet);
+  if (sharedAuthors > 0) {
+    score += 2.0 + Math.min(1.4, (sharedAuthors - 1) * 0.45);
+    reasons.push('shared author');
+  }
+
+  var sharedTags = setIntersectionCount(metaA.tagSet, metaB.tagSet);
+  if (sharedTags >= 2) {
+    score += 1.0 + Math.min(0.9, (sharedTags - 2) * 0.2);
+    reasons.push('shared tags');
+  } else if (sharedTags === 1) {
+    score += 0.35;
+  }
+
+  var sharedTitleTokens = setIntersectionCount(metaA.titleTokenSet, metaB.titleTokenSet);
+  if (sharedTitleTokens >= 2) score += Math.min(0.8, 0.3 + (sharedTitleTokens - 2) * 0.1);
+
+  if (metaA.thread && metaB.thread && metaA.thread === metaB.thread) score += 0.45;
+  if (metaA.year > 0 && metaB.year > 0 && Math.abs(metaA.year - metaB.year) <= 2) score += 0.2;
+
+  return {
+    score: Number(score.toFixed(3)),
+    reason: reasons.join(' + ') || 'paper similarity',
+  };
+}
+
+function buildPaperPairRows(paperRows, options) {
+  var opts = options || {};
+  var candidateMin = Math.max(0, Number(opts.candidateMin || 1.15));
+  var minScore = Math.max(candidateMin, Number(opts.minScore || 2.0));
+  var limit = Math.max(0, Number(opts.limit || 0));
+  var ensurePerPaper = Math.max(0, Number(opts.ensurePerPaper || 0));
+  var extraBudget = Math.max(0, Number(opts.extraBudget || 0));
+
+  var rows = (paperRows || []).filter(function(row) {
+    return !!(row && row.id);
+  }).map(function(row) {
+    var pid = String(row.id || '').trim();
+    var paper = row.paper || (DATA.papers || {})[pid] || {};
+    return {
+      id: pid,
+      paper: paper,
+      date: row.date || null,
+      yPos: row.yPos,
+      meta: row.meta || paperPairMeta(pid, paper),
+    };
+  });
+
+  var candidates = [];
+  for (var i = 0; i < rows.length; i++) {
+    for (var j = i + 1; j < rows.length; j++) {
+      var a = rows[i];
+      var b = rows[j];
+      var sim = paperPairSimilarity(a.meta, b.meta);
+      if (sim.score < candidateMin) continue;
+      candidates.push({
+        key: a.id < b.id ? (a.id + '|' + b.id) : (b.id + '|' + a.id),
+        paperA: a.id,
+        paperB: b.id,
+        paperDateA: a.date,
+        paperDateB: b.date,
+        paperYA: a.yPos,
+        paperYB: b.yPos,
+        score: sim.score,
+        reason: sim.reason,
+      });
+    }
+  }
+
+  candidates.sort(function(a, b) {
+    if (Number(b.score || 0) !== Number(a.score || 0)) return Number(b.score || 0) - Number(a.score || 0);
+    return String(a.key || '').localeCompare(String(b.key || ''));
+  });
+
+  var selected = [];
+  var maxInitial = limit > 0 ? limit : candidates.length;
+  for (var c = 0; c < candidates.length && selected.length < maxInitial; c++) {
+    if (Number(candidates[c].score || 0) < minScore) continue;
+    selected.push(candidates[c]);
+  }
+
+  if (ensurePerPaper > 0 && rows.length > 0 && candidates.length > 0) {
+    var degree = {};
+    rows.forEach(function(row) { degree[row.id] = 0; });
+    selected.forEach(function(ed) {
+      degree[ed.paperA] = (degree[ed.paperA] || 0) + 1;
+      degree[ed.paperB] = (degree[ed.paperB] || 0) + 1;
+    });
+    var selectedKeys = new Set(selected.map(function(ed) { return ed.key; }));
+    var unresolved = function() {
+      return rows.some(function(row) { return (degree[row.id] || 0) < ensurePerPaper; });
+    };
+    for (var k = 0; k < candidates.length && unresolved(); k++) {
+      if (extraBudget <= 0) break;
+      var edge = candidates[k];
+      if (selectedKeys.has(edge.key)) continue;
+      var leftNeeds = (degree[edge.paperA] || 0) < ensurePerPaper;
+      var rightNeeds = (degree[edge.paperB] || 0) < ensurePerPaper;
+      if (!leftNeeds && !rightNeeds) continue;
+      if (Number(edge.score || 0) < candidateMin) continue;
+      selected.push(edge);
+      selectedKeys.add(edge.key);
+      degree[edge.paperA] = (degree[edge.paperA] || 0) + 1;
+      degree[edge.paperB] = (degree[edge.paperB] || 0) + 1;
+      extraBudget -= 1;
+    }
+  }
+
+  return selected;
+}
 
 (function buildPaperRelationIndices() {
   PAPER_INDEX.forEach(function(pidx) {
@@ -2542,6 +2755,7 @@ const PAPER_TO_MAGICIANS_IDS = {};
 
     var topicSet = new Set();
     var magSet = new Set();
+    var paperEipSet = new Set(eips);
     eips.forEach(function(num) {
       var eipKey = String(num);
       if (!EIP_TO_PAPER_IDS[eipKey]) EIP_TO_PAPER_IDS[eipKey] = new Set();
@@ -2554,7 +2768,113 @@ const PAPER_TO_MAGICIANS_IDS = {};
         magSet.add(Number(eMeta.mt));
       }
     });
-    PAPER_TO_TOPIC_IDS[pid] = Array.from(topicSet);
+
+    // Expand paper-to-topic links beyond explicit EIP refs so papers without direct EIP
+    // citations still anchor to the most relevant research lanes.
+    var titleTokenSet = new Set(keywordTokenList(p.t || ''));
+    var paperTagSet = new Set((p.tg || []).map(function(tag) {
+      return String(tag || '').toLowerCase();
+    }).filter(Boolean));
+    var threadCounts = {};
+    topicSet.forEach(function(tid) {
+      var topic = DATA.topics[tid];
+      if (!topic || !topic.th) return;
+      threadCounts[topic.th] = (threadCounts[topic.th] || 0) + 2;
+    });
+    eips.forEach(function(num) {
+      var eMeta = (DATA.eipCatalog || {})[String(num)];
+      if (!eMeta || !eMeta.th) return;
+      threadCounts[eMeta.th] = (threadCounts[eMeta.th] || 0) + 1;
+    });
+    Object.entries(THREAD_PAPER_TAG_HINTS || {}).forEach(function(entry) {
+      var th = entry[0];
+      var tags = entry[1] || [];
+      var matched = tags.some(function(tag) {
+        return paperTagSet.has(String(tag || '').toLowerCase());
+      });
+      if (matched) threadCounts[th] = (threadCounts[th] || 0) + 1;
+    });
+    var paperThread = null;
+    var bestThreadCount = 0;
+    Object.keys(threadCounts).forEach(function(th) {
+      if (threadCounts[th] > bestThreadCount) {
+        bestThreadCount = threadCounts[th];
+        paperThread = th;
+      }
+    });
+    var candidateTopicIds = new Set(Array.from(topicSet));
+
+    if (paperThread && TOPIC_IDS_BY_THREAD[paperThread]) {
+      TOPIC_IDS_BY_THREAD[paperThread].slice(0, 140).forEach(function(tid) {
+        candidateTopicIds.add(Number(tid));
+      });
+    }
+    titleTokenSet.forEach(function(tok) {
+      (TOPIC_IDS_BY_TITLE_TOKEN[tok] || []).slice(0, 40).forEach(function(tid) {
+        candidateTopicIds.add(Number(tid));
+      });
+    });
+
+    var scoredTopics = [];
+    candidateTopicIds.forEach(function(tid) {
+      var topic = DATA.topics[tid];
+      if (!topic) return;
+      var score = 0;
+
+      var topicEipSet = TOPIC_EIP_SET[tid] || new Set();
+      var sharedEips = setIntersectionCount(paperEipSet, topicEipSet);
+      if (sharedEips > 0) score += 2.2 + Math.min(1.6, (sharedEips - 1) * 0.7);
+
+      if (paperThread && topic.th === paperThread) score += 1.05;
+
+      var topicTitleTokenSet = TOPIC_TITLE_TOKEN_SET[tid] || new Set();
+      var titleOverlap = setIntersectionCount(titleTokenSet, topicTitleTokenSet);
+      if (titleOverlap > 0) score += Math.min(1.45, 0.45 * titleOverlap);
+
+      var topicTagSet = TOPIC_TAG_SET[tid] || new Set();
+      var tagOverlap = setIntersectionCount(paperTagSet, topicTagSet);
+      if (tagOverlap > 0) score += Math.min(1.05, 0.45 + tagOverlap * 0.22);
+
+      score += Math.min(0.45, Math.max(0, Number(topic.inf || 0)) / 220);
+      if (topic.mn) score -= 0.2;
+
+      var minScore = eips.length > 0 ? 1.2 : 1.6;
+      if (score < minScore) return;
+      scoredTopics.push({tid: Number(tid), score: Number(score.toFixed(3))});
+    });
+
+    scoredTopics.sort(function(a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      var ta = DATA.topics[a.tid] || {};
+      var tb = DATA.topics[b.tid] || {};
+      return Number(tb.inf || 0) - Number(ta.inf || 0);
+    });
+
+    var augmentBudget = eips.length > 0 ? 6 : 8;
+    for (var i = 0; i < scoredTopics.length && augmentBudget > 0; i++) {
+      var tid = Number(scoredTopics[i].tid);
+      if (topicSet.has(tid)) continue;
+      topicSet.add(tid);
+      augmentBudget -= 1;
+    }
+
+    if (topicSet.size === 0 && paperThread && TOPIC_IDS_BY_THREAD[paperThread]) {
+      TOPIC_IDS_BY_THREAD[paperThread].slice(0, 3).forEach(function(tid) {
+        topicSet.add(Number(tid));
+      });
+    }
+
+    topicSet.forEach(function(tid) {
+      (TOPIC_TO_MAG_IDS[tid] || new Set()).forEach(function(mid) {
+        magSet.add(Number(mid));
+      });
+    });
+
+    PAPER_TO_TOPIC_IDS[pid] = Array.from(topicSet).sort(function(a, b) {
+      var ta = DATA.topics[a] || {};
+      var tb = DATA.topics[b] || {};
+      return Number(tb.inf || 0) - Number(ta.inf || 0);
+    });
     PAPER_TO_MAGICIANS_IDS[pid] = Array.from(magSet);
   });
 })();
@@ -2952,6 +3272,17 @@ function relatedPapersForEthAuthor(username) {
   topAuthorThreads(username).forEach(function(tid) {
     threadPaperTags(tid).forEach(function(tag) { threadTagSet.add(tag); });
   });
+  var authorTopicEips = new Set();
+  var authorTopicTitleTokens = new Set();
+  Object.values(DATA.topics || {}).forEach(function(topic) {
+    if (!topic) return;
+    var participants = new Set([topic.a].concat(topic.coauth || []).concat(topic.parts || []));
+    if (!participants.has(username)) return;
+    uniqueSortedNumbers((topic.eips || []).concat(topic.peips || [])).forEach(function(num) {
+      authorTopicEips.add(Number(num));
+    });
+    keywordTokenList(topic.t || '').forEach(function(tok) { authorTopicTitleTokens.add(tok); });
+  });
 
   var rows = rankRelatedPapers(function(pidx) {
     var score = paperRelevanceBonus(pidx, cfg);
@@ -2970,6 +3301,90 @@ function relatedPapersForEthAuthor(username) {
     if (score < cfg.minAuthor) return null;
     return {paper: pidx.p, score: Number(score.toFixed(3)), reasons: reasons};
   }, cfg.minAuthor, cfg.limit);
+
+  if (rows.length < Math.min(5, cfg.limit)) {
+    var authorEips = new Set();
+    linkedEipAuthors(username).forEach(function(name) {
+      var ea = (DATA.eipAuthors || {})[name];
+      (ea && ea.eips ? ea.eips : []).forEach(function(num) { authorEips.add(Number(num)); });
+    });
+    authorTopicEips.forEach(function(num) { authorEips.add(Number(num)); });
+
+    var fallbackRows = rankRelatedPapers(function(pidx) {
+      var score = paperRelevanceBonus(pidx, cfg);
+      var reasons = [];
+
+      var match = bestAliasMatch(aliasRows, pidx.authorRows);
+      if (match.score >= 1.6) {
+        score += 1.2 + Math.min(1.8, match.score * 0.7);
+        reasons.push('author-adjacent: ' + match.alias);
+      }
+
+      var eipOverlap = setOverlapArray(authorEips, pidx.eipSet);
+      if (eipOverlap.length > 0) {
+        score += Math.min(3.1, 1.6 + eipOverlap.length * 0.75);
+        reasons.push('EIP overlap: ' + eipOverlap.slice(0, 3).map(function(n) { return 'EIP-' + n; }).join(', '));
+      }
+
+      var tagOverlap = setOverlapArray(threadTagSet, pidx.tagSet);
+      if (tagOverlap.length > 0) {
+        score += Math.min(1.6, 0.9 + tagOverlap.length * 0.35);
+        reasons.push('thread/domain match');
+      }
+      var titleOverlap = setOverlapArray(authorTopicTitleTokens, pidx.titleTokenSet);
+      if (titleOverlap.length >= 2) {
+        score += Math.min(1.4, 0.7 + titleOverlap.length * 0.2);
+        reasons.push('title/domain overlap');
+      }
+
+      if ((pidx.p.tg || []).indexOf('known-authors') >= 0) score += 0.45;
+      if (reasons.length === 0) return null;
+      var fallbackMin = Math.max(1.9, cfg.minAuthor - 0.9);
+      if (score < fallbackMin) return null;
+      return {paper: pidx.p, score: Number(score.toFixed(3)), reasons: reasons};
+    }, Math.max(1.9, cfg.minAuthor - 0.9), cfg.limit);
+
+    if (fallbackRows.length > 0) {
+      var seenIds = new Set(rows.map(function(r) { return String((r.paper || {}).id || ''); }));
+      fallbackRows.forEach(function(r) {
+        var pid = String((r.paper || {}).id || '');
+        if (!pid || seenIds.has(pid)) return;
+        rows.push(r);
+        seenIds.add(pid);
+      });
+      rows.sort(function(a, b) {
+        if (b.score !== a.score) return b.score - a.score;
+        return Number((b.paper || {}).cb || 0) - Number((a.paper || {}).cb || 0);
+      });
+      rows = rows.slice(0, Math.max(1, cfg.limit));
+    }
+  }
+
+  // Last-resort fallback: keep author pages useful even when strict/alias matching is sparse.
+  if (rows.length === 0) {
+    rows = rankRelatedPapers(function(pidx) {
+      var score = paperRelevanceBonus(pidx, cfg) * 0.7;
+      var reasons = [];
+      var eipOverlap = setOverlapArray(authorTopicEips, pidx.eipSet);
+      if (eipOverlap.length > 0) {
+        score += Math.min(2.7, 1.4 + eipOverlap.length * 0.65);
+        reasons.push('EIP overlap: ' + eipOverlap.slice(0, 3).map(function(n) { return 'EIP-' + n; }).join(', '));
+      }
+      var tagOverlap = setOverlapArray(threadTagSet, pidx.tagSet);
+      if (tagOverlap.length > 0) {
+        score += Math.min(1.4, 0.8 + tagOverlap.length * 0.3);
+        reasons.push('thread/domain match');
+      }
+      var titleOverlap = setOverlapArray(authorTopicTitleTokens, pidx.titleTokenSet);
+      if (titleOverlap.length >= 2) {
+        score += Math.min(1.25, 0.65 + titleOverlap.length * 0.18);
+        reasons.push('title/domain overlap');
+      }
+      if (reasons.length === 0) return null;
+      if (score < Math.max(1.45, cfg.minAuthor - 1.35)) return null;
+      return {paper: pidx.p, score: Number(score.toFixed(3)), reasons: reasons};
+    }, Math.max(1.45, cfg.minAuthor - 1.35), Math.min(cfg.limit, 10));
+  }
 
   RELATED_PAPERS_CACHE.author[cacheKey] = rows;
   return rows;
@@ -3029,6 +3444,7 @@ const NETWORK_PAPER_LIMITS = {
     perEip: 2,
     perMagicians: 1,
     maxPapers: 40,
+    maxPaperPaperEdges: 50,
     topicWeight: 0.7,
     eipWeight: 1.0,
     magiciansWeight: 0.8,
@@ -3041,6 +3457,7 @@ const NETWORK_PAPER_LIMITS = {
     perEip: 2,
     perMagicians: 2,
     maxPapers: 90,
+    maxPaperPaperEdges: 120,
     topicWeight: 0.72,
     eipWeight: 1.0,
     magiciansWeight: 0.85,
@@ -3053,6 +3470,7 @@ const NETWORK_PAPER_LIMITS = {
     perEip: 3,
     perMagicians: 2,
     maxPapers: 150,
+    maxPaperPaperEdges: 220,
     topicWeight: 0.75,
     eipWeight: 1.02,
     magiciansWeight: 0.9,
@@ -3247,6 +3665,26 @@ function buildNetworkPaperAugment(baseNodeMap) {
       };
     });
 
+  var paperPairLimit = Math.max(0, Number(modeCfg.maxPaperPaperEdges || 0));
+  var paperPairRows = buildPaperPairRows(rankedPaperIds.map(function(pid) {
+    return {id: pid, paper: (DATA.papers || {})[pid] || null};
+  }), {
+    candidateMin: 1.2,
+    minScore: 2.0,
+    limit: paperPairLimit,
+    ensurePerPaper: 1,
+    extraBudget: Math.max(12, Math.round(paperPairLimit * 0.35)),
+  }).map(function(ed) {
+    return {
+      source: paperNodeId(ed.paperA),
+      target: paperNodeId(ed.paperB),
+      edgeType: 'paper_paper',
+      score: Number(ed.score || 0),
+      reason: ed.reason || 'paper similarity',
+    };
+  });
+  paperLinks = paperLinks.concat(paperPairRows);
+
   return {nodes: paperNodes, links: paperLinks};
 }
 
@@ -3306,7 +3744,7 @@ function buildRelatedPapersHtml(rows, sectionId, heading) {
     var authorsShort = paperAuthorsShort(paper, 3);
     if (authorsShort) metaParts.push(authorsShort);
     if (paper.v) metaParts.push(String(paper.v));
-    if (paper.cb) metaParts.push('cited ' + Number(paper.cb).toLocaleString());
+    if (paper.cb) metaParts.push('OpenAlex cites ' + Number(paper.cb).toLocaleString());
     var reasons = (row.reasons || []).slice(0, 2).join(' - ');
     return '<div class="paper-item ' + (hidden ? rowClass : '') + '"' + (hidden ? ' style="display:none"' : '') + '>' +
       titleHtml +
@@ -4702,6 +5140,13 @@ function applyContentVisibility() {
     if (!e) return 'none';
     return eipMatchesFilter(e) ? null : 'none';
   });
+  d3.selectAll('.paper-paper-edge').style('display', function(d) {
+    if (!showPapers || !d) return 'none';
+    var pa = (DATA.papers || {})[String(d.paperA)] || null;
+    var pb = (DATA.papers || {})[String(d.paperB)] || null;
+    if (!pa || !pb) return 'none';
+    return (paperMatchesTimelineFilter(pa) && paperMatchesTimelineFilter(pb)) ? null : 'none';
+  });
   d3.selectAll('.magicians-ref-edge').style('display', function(d) {
     if (!(showPosts && showMagicians)) return 'none';
     if (!d || !d.magTopic || !magiciansMatchesFilter(d.magTopic)) return 'none';
@@ -4971,7 +5416,7 @@ function populateDropdown(q) {
       var authorShort = paperAuthorsShort(p, 2);
       var meta = year +
         (authorShort ? ' \u00b7 ' + authorShort : '') +
-        (p.cb ? ' \u00b7 cited ' + Number(p.cb).toLocaleString() : '');
+        (p.cb ? ' \u00b7 OpenAlex cites ' + Number(p.cb).toLocaleString() : '');
       if (entry.matchedAuthor) meta += ' \u00b7 author match: ' + entry.matchedAuthor;
       return '<div class="search-item search-item-paper" data-paper-id="' + escHtml(String(p.id || '')) + '">' +
         '<div class="si-title"><span style="color:#9cc8ff">\u25C6</span> ' + escHtml(p.t || '') + '</div>' +
@@ -5656,6 +6101,9 @@ function buildTimeline() {
     d3.selectAll('.paper-eip-ref-edge')
       .attr('x1', function(d) { return d && d.paperDate ? newX(d.paperDate) : 0; })
       .attr('x2', function(d) { return d && d.eipDate ? newX(d.eipDate) : 0; });
+    d3.selectAll('.paper-paper-edge')
+      .attr('x1', function(d) { return d && d.paperDateA ? newX(d.paperDateA) : 0; })
+      .attr('x2', function(d) { return d && d.paperDateB ? newX(d.paperDateB) : 0; });
 
     // Update x-axis with adaptive tick density
     var axisFn;
@@ -5954,6 +6402,29 @@ function applyEntityFocusTimeline(context) {
       return context.linkedPapers.has(String(ed.paperId)) ? 1.3 : 0.6;
     });
 
+  d3.selectAll('.paper-paper-edge')
+    .attr('stroke', '#8fb7ef')
+    .attr('stroke-opacity', function(ed) {
+      if (!showPapers || !ed) return 0.01;
+      var pa = (DATA.papers || {})[String(ed.paperA)] || null;
+      var pb = (DATA.papers || {})[String(ed.paperB)] || null;
+      if (!pa || !pb) return 0.02;
+      if (!paperMatchesTimelineFilter(pa) || !paperMatchesTimelineFilter(pb)) return 0.02;
+      if (context.kind === 'paper') {
+        var pid = String(context.entityPaperId || '');
+        return (String(ed.paperA) === pid || String(ed.paperB) === pid) ? 0.72 : 0.03;
+      }
+      return (context.linkedPapers.has(String(ed.paperA)) && context.linkedPapers.has(String(ed.paperB))) ? 0.40 : 0.03;
+    })
+    .attr('stroke-width', function(ed) {
+      if (!showPapers || !ed) return 0.5;
+      if (context.kind === 'paper') {
+        var pid = String(context.entityPaperId || '');
+        return (String(ed.paperA) === pid || String(ed.paperB) === pid) ? 1.45 : 0.6;
+      }
+      return (context.linkedPapers.has(String(ed.paperA)) && context.linkedPapers.has(String(ed.paperB))) ? 1.1 : 0.6;
+    });
+
   updateFocusedTimelineExtraEdges(context, hasFilter);
 }
 
@@ -6123,6 +6594,7 @@ function applyFocusedEntityHighlightNetwork() {
   }).attr('marker-end', function(l) {
     var sid = typeof l.source === 'object' ? l.source.id : l.source;
     var tid = typeof l.target === 'object' ? l.target.id : l.target;
+    if (l.edgeType === 'paper_paper') return null;
     return (sid === focusId || tid === focusId) ? 'url(#net-arrow-highlight)' : 'url(#net-arrow-default)';
   });
 }
@@ -6538,6 +7010,29 @@ function filterTimeline(skipFocusedHighlight) {
         if (!p || !eMeta) return 0.6;
         return (paperMatchesTimelineFilter(p) && eipMatchesFilter(eMeta)) ? 0.9 : 0.6;
       });
+    d3.selectAll('.paper-paper-edge')
+      .style('display', function(d) {
+        if (!showPapers || !d) return 'none';
+        var pa = (DATA.papers || {})[String(d.paperA)];
+        var pb = (DATA.papers || {})[String(d.paperB)];
+        if (!pa || !pb) return 'none';
+        if (!paperMatchesTimelineFilter(pa) || !paperMatchesTimelineFilter(pb)) return 'none';
+        return null;
+      })
+      .attr('stroke-opacity', function(d) {
+        if (!d) return 0.02;
+        var pa = (DATA.papers || {})[String(d.paperA)];
+        var pb = (DATA.papers || {})[String(d.paperB)];
+        if (!pa || !pb) return 0.02;
+        return (paperMatchesTimelineFilter(pa) && paperMatchesTimelineFilter(pb)) ? 0.10 : 0.02;
+      })
+      .attr('stroke-width', function(d) {
+        if (!d) return 0.5;
+        var pa = (DATA.papers || {})[String(d.paperA)];
+        var pb = (DATA.papers || {})[String(d.paperB)];
+        if (!pa || !pb) return 0.5;
+        return (paperMatchesTimelineFilter(pa) && paperMatchesTimelineFilter(pb)) ? 0.85 : 0.5;
+      });
   }
 
   if (!skipFocusedHighlight && hasFocusedEntity() && canApplyFocusedHighlightInView()) {
@@ -6759,6 +7254,7 @@ function buildNetwork() {
     .attr('class', 'net-link')
     .attr('stroke-opacity', function(d) {
       if (d.edgeType === 'paper_related') return 0.09;
+      if (d.edgeType === 'paper_paper') return 0.075;
       return 0.12;
     })
     .attr('stroke-dasharray', function(d) {
@@ -6766,9 +7262,12 @@ function buildNetwork() {
       if (d.edgeType === 'topic_magicians') return '2 3';
       if (d.edgeType === 'eip_magicians' || d.edgeType === 'topic_eip' || d.edgeType === 'eip_ethresearch') return '5 3';
       if (d.edgeType === 'paper_related') return '2 2';
+      if (d.edgeType === 'paper_paper') return null;
       return null;
     })
-    .attr('marker-end', 'url(#net-arrow-default)');
+    .attr('marker-end', function(d) {
+      return d.edgeType === 'paper_paper' ? null : 'url(#net-arrow-default)';
+    });
 
   const node = g.append('g').selectAll('g')
     .data(nodes).join('g')
@@ -6973,6 +7472,7 @@ function buildNetwork() {
     }).attr('marker-end', function(l) {
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
+      if (l.edgeType === 'paper_paper') return null;
       return (connected.has(sid) && connected.has(tid)) ? 'url(#net-arrow-highlight)' : 'url(#net-arrow-default)';
     });
   });
@@ -7045,11 +7545,13 @@ function filterNetwork() {
       var sid = typeof l.source === 'object' ? l.source.id : l.source;
       var tid = typeof l.target === 'object' ? l.target.id : l.target;
       if (!visibleById[sid] || !visibleById[tid]) return 0;
-      var isPaperEdge = l.edgeType === 'paper_related';
+      var isPaperEdge = (l.edgeType === 'paper_related' || l.edgeType === 'paper_paper');
       if (hasFilter) return isPaperEdge ? 0.13 : 0.16;
       return isPaperEdge ? 0.10 : 0.12;
     })
-    .attr('marker-end', 'url(#net-arrow-default)');
+    .attr('marker-end', function(l) {
+      return l.edgeType === 'paper_paper' ? null : 'url(#net-arrow-default)';
+    });
 
   if (hasFocusedEntity()) applyFocusedEntityHighlightNetwork();
 }
@@ -8495,6 +8997,7 @@ function showTooltip(ev, t) {
 function showPaperTooltip(ev, paper, node) {
   if (!paper) return;
   var tip = document.getElementById('tooltip');
+  var pid = String((paper.id || (node && (node.paperId || node._paperId || node.id)) || '')).replace(/^paper_/, '').trim();
   var year = paper.y ? String(paper.y) : '?';
   var authors = paperAuthorsShort(paper, 2);
   var eips = PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(paper.eq || []);
@@ -8505,7 +9008,7 @@ function showPaperTooltip(ev, paper, node) {
     '<strong>' + escHtml(paper.t || 'Untitled paper') + '</strong><br>' +
     year +
     (authors ? ' · ' + escHtml(authors) : '') +
-    (paper.cb ? ' · cited ' + Number(paper.cb).toLocaleString() : '') +
+    (paper.cb ? ' · OpenAlex cites ' + Number(paper.cb).toLocaleString() : '') +
     (node && node.paperScore ? ' · score ' + Number(node.paperScore).toFixed(2) : '') +
     eipHint;
   tip.style.display = 'block';
@@ -8539,7 +9042,7 @@ function showPaperDetail(paper, node) {
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
   var url = paperUrl(paper);
-  var eips = uniqueSortedNumbers(paper.eq || []);
+  var eips = PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(paper.eq || []);
   var authors = (paper.a || []);
   var tagChips = (paper.tg || []).slice(0, 8).map(function(tag) {
     return '<span class="eip-tag" style="border-color:#3a4f6c;color:#9cc8ff">' + escHtml(tag) + '</span>';
@@ -8607,7 +9110,7 @@ function showPaperDetail(paper, node) {
     '</div>' +
     (node && node.paperScore ? '<div class="detail-stat"><span class="label">Network Score</span><span class="value">' + Number(node.paperScore).toFixed(3) + '</span></div>' : '') +
     '<div class="detail-stat"><span class="label">Relevance</span><span class="value">' + Number(paper.rs || 0).toFixed(3) + '</span></div>' +
-    '<div class="detail-stat"><span class="label">Citations</span><span class="value">' + Number(paper.cb || 0).toLocaleString() + '</span></div>' +
+    '<div class="detail-stat"><span class="label">Citations (OpenAlex)</span><span class="value">' + Number(paper.cb || 0).toLocaleString() + '</span></div>' +
     (paper.doi ? '<div class="detail-stat"><span class="label">DOI</span><span class="value">' + escHtml(paper.doi) + '</span></div>' : '') +
     (paper.ax ? '<div class="detail-stat"><span class="label">ArXiv/ePrint</span><span class="value">' + escHtml(paper.ax) + '</span></div>' : '') +
     (eipChips ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">EIP Mentions</strong> ' + eipChips + '</div>' : '') +
@@ -9476,6 +9979,35 @@ function drawPaperTimeline() {
 
   var topicRefG = paperG.append('g');
   var eipRefG = paperG.append('g');
+  var paperRefG = paperG.append('g');
+  var paperPairRows = buildPaperPairRows(paperData.map(function(paper) {
+    return {
+      id: String(paper._paperId || ''),
+      paper: paper,
+      date: paper._paperDate,
+      yPos: paper._paperYPos,
+      meta: paperPairMeta(String(paper._paperId || ''), paper),
+    };
+  }), {
+    candidateMin: 1.2,
+    minScore: 1.95,
+    limit: 280,
+    ensurePerPaper: 1,
+    extraBudget: 80,
+  });
+
+  paperPairRows.forEach(function(ed) {
+    paperRefG.append('line')
+      .attr('class', 'paper-paper-edge')
+      .attr('x1', tlXScale(ed.paperDateA)).attr('y1', ed.paperYA)
+      .attr('x2', tlXScale(ed.paperDateB)).attr('y2', ed.paperYB)
+      .attr('stroke', '#8fb7ef').attr('stroke-opacity', 0.10).attr('stroke-width', 0.85)
+      .datum(ed)
+      .style('display', (showPapers &&
+        paperMatchesTimelineFilter((DATA.papers || {})[String(ed.paperA)] || {}) &&
+        paperMatchesTimelineFilter((DATA.papers || {})[String(ed.paperB)] || {})) ? null : 'none');
+  });
+
   paperData.forEach(function(paper) {
     var pid = String(paper._paperId || '');
     var pDate = paper._paperDate;
@@ -9570,6 +10102,7 @@ function drawPaperTimeline() {
     }
     function onPaperOver(ev, d) { onTimelineEntityHover(ev, d, 'paper', true); }
     function onPaperOut(ev, d) { onTimelineEntityHover(ev, d, 'paper', false); }
+    function onPaperMove(ev, d) { showPaperTooltip(ev, paperFromNode(d) || d, d); }
 
     shapeG.append('path')
       .attr('class', 'paper-diamond')
@@ -9581,6 +10114,7 @@ function drawPaperTimeline() {
       .datum(paper)
       .on('click', onPaperClick)
       .on('mouseover', onPaperOver)
+      .on('mousemove', onPaperMove)
       .on('mouseout', onPaperOut)
       .style('display', paperMatchesTimelineFilter(paper) ? null : 'none');
 
@@ -9590,6 +10124,7 @@ function drawPaperTimeline() {
       .datum(paper)
       .on('click', onPaperClick)
       .on('mouseover', onPaperOver)
+      .on('mousemove', onPaperMove)
       .on('mouseout', onPaperOut)
       .style('display', paperMatchesTimelineFilter(paper) ? null : 'none');
   });
