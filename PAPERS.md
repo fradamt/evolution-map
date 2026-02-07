@@ -4,6 +4,7 @@ This repo now includes a broad, filterable Ethereum-adjacent paper corpus:
 
 - `papers-db.json`: generated database
 - `build_papers_db.py`: reproducible builder
+- `search_papers.py`: fuzzy title/author search utility
 
 ## Rebuild
 
@@ -53,3 +54,23 @@ Each paper row includes:
 - Discovery source is OpenAlex plus the curated `papers-seed.json`.
 - Rows are deduped by normalized `title + year`.
 - The goal is broad coverage with an explicit minimum relevance floor, not final curation.
+
+## Quick search
+
+Search by author:
+
+```bash
+python3 search_papers.py "tim roughgarden" --author
+```
+
+Search by title:
+
+```bash
+python3 search_papers.py "eip-4844" --title
+```
+
+Search both fields (default):
+
+```bash
+python3 search_papers.py "loss versus rebalancing" --limit 15
+```
