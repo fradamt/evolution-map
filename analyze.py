@@ -33,6 +33,7 @@ OUTPUT_PATH = SCRIPT_DIR / "analysis.json"
 COAUTHOR_REPORT_PATH = SCRIPT_DIR / "coauthor-report.json"
 COAUTHOR_REPORT_MD_PATH = SCRIPT_DIR / "coauthor-report.md"
 EIP_METADATA_PATH = SCRIPT_DIR / "eip-metadata.json"
+PAPERS_SEED_PATH = SCRIPT_DIR / "papers-seed.json"
 MAGICIANS_INDEX_PATH = SCRAPE_DIR / "magicians_index.json"
 MAGICIANS_TOPICS_DIR = SCRAPE_DIR / "magicians_topics"
 
@@ -837,6 +838,95 @@ def extract_reflection_links(posts):
     return targets
 
 
+def normalize_papers_seed(raw):
+    """Normalize papers seed payload into an id-keyed dictionary."""
+    if isinstance(raw, dict):
+        rows = raw.get("papers", [])
+    elif isinstance(raw, list):
+        rows = raw
+    else:
+        rows = []
+
+    papers = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        pid = str(row.get("id", "")).strip()
+        doi = str(row.get("doi", "")).strip() or None
+        arxiv_id = str(row.get("arxiv_id", "")).strip() or None
+        eprint_id = str(row.get("eprint_id", "")).strip() or None
+        if not pid:
+            if doi:
+                pid = "doi:" + doi.lower()
+            elif arxiv_id:
+                pid = "arxiv:" + arxiv_id.lower()
+            elif eprint_id:
+                pid = "eprint:" + eprint_id
+            else:
+                continue
+
+        title = str(row.get("title", "")).strip()
+        if not title:
+            continue
+
+        year = row.get("year")
+        if year is not None:
+            try:
+                year = int(year)
+            except (ValueError, TypeError):
+                year = None
+
+        authors = []
+        for a in row.get("authors", []) or []:
+            if not a:
+                continue
+            name = str(a).strip()
+            if name:
+                authors.append(name)
+
+        tags = []
+        for t in row.get("tags", []) or []:
+            if not t:
+                continue
+            tag = str(t).strip().lower()
+            if tag and tag not in tags:
+                tags.append(tag)
+
+        cited_by = row.get("cited_by_count")
+        if cited_by is not None:
+            try:
+                cited_by = int(cited_by)
+            except (ValueError, TypeError):
+                cited_by = None
+
+        papers[pid] = {
+            "id": pid,
+            "title": title,
+            "year": year,
+            "authors": authors,
+            "venue": str(row.get("venue", "")).strip() or None,
+            "doi": doi,
+            "arxiv_id": arxiv_id,
+            "eprint_id": eprint_id,
+            "url": str(row.get("url", "")).strip() or None,
+            "openalex_id": str(row.get("openalex_id", "")).strip() or None,
+            "cited_by_count": cited_by,
+            "source": str(row.get("source", "")).strip() or "seed",
+            "tags": tags,
+        }
+
+    # Stable deterministic order by year desc then title.
+    sorted_items = sorted(
+        papers.items(),
+        key=lambda kv: (
+            -(kv[1]["year"] if kv[1]["year"] is not None else -1),
+            kv[1]["title"].lower(),
+            kv[0],
+        ),
+    )
+    return {k: v for k, v in sorted_items}
+
+
 # ---------------------------------------------------------------------------
 # Main analysis
 # ---------------------------------------------------------------------------
@@ -865,6 +955,19 @@ def main():
     else:
         print(f"  Warning: {EIP_METADATA_PATH} not found — run extract_eips.py first")
         print("  Continuing without EIP catalog")
+
+    # -----------------------------------------------------------------------
+    # Load curated research papers seed
+    # -----------------------------------------------------------------------
+    papers_output = {}
+    if PAPERS_SEED_PATH.exists():
+        print("Loading papers seed...")
+        with open(PAPERS_SEED_PATH) as f:
+            papers_seed = json.load(f)
+        papers_output = normalize_papers_seed(papers_seed)
+        print(f"  {len(papers_output)} papers loaded")
+    else:
+        print(f"  Warning: {PAPERS_SEED_PATH} not found — continuing without papers")
 
     # Build reverse lookups from EIP catalog
     # magicians_topic_id → list of EIP numbers that point to it
@@ -2299,11 +2402,13 @@ def main():
             "eip_edges": len(eip_graph_edges),
             "magicians_topics": len(magicians_topics_output),
             "cross_forum_edges": len(cross_forum_edges),
+            "papers_count": len(papers_output),
             "generated_at": datetime.now().isoformat()[:19],
         },
         "eras": ERAS,
         "forks": forks_output,
         "eip_catalog": eip_catalog_output,
+        "papers": papers_output,
         "magicians_topics": magicians_topics_output,
         "cross_forum_edges": cross_forum_edges,
         "eip_authors": eip_authors_output,

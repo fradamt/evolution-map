@@ -1,0 +1,669 @@
+{
+  "version": 1,
+  "generated_at": "2026-02-07T09:07:27Z",
+  "description": "Curated seed of Ethereum-relevant research papers (Phase 0).",
+  "papers": [
+    {
+      "id": "doi:10.1016/j.jcorpfin.2024.102718",
+      "title": "Economics of Ethereum",
+      "year": 2024,
+      "authors": [
+        "Kose John",
+        "Barnab\u00e9 Monnot",
+        "Peter Mueller",
+        "Fahad Saleh",
+        "Caspar Schwarz-Schilling"
+      ],
+      "venue": "Journal of Corporate Finance",
+      "doi": "10.1016/j.jcorpfin.2024.102718",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1016/j.jcorpfin.2024.102718",
+      "openalex_id": "https://openalex.org/W4405356583",
+      "cited_by_count": 17,
+      "source": "openalex",
+      "tags": [
+        "ethereum",
+        "economics"
+      ]
+    },
+    {
+      "id": "doi:10.2139/ssrn.4529513",
+      "title": "An Economic Model of a Decentralized Exchange with Concentrated Liquidity",
+      "year": 2023,
+      "authors": [
+        "Joel Hasbrouck",
+        "Thomas J Rivera",
+        "Fahad Saleh"
+      ],
+      "venue": "SSRN Electronic Journal",
+      "doi": "10.2139/ssrn.4529513",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.2139/ssrn.4529513",
+      "openalex_id": "https://openalex.org/W4385502285",
+      "cited_by_count": 19,
+      "source": "openalex",
+      "tags": [
+        "defi",
+        "dex",
+        "concentrated-liquidity"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2305.14604",
+      "title": "Automated Market Making and Arbitrage Profits in the Presence of Fees",
+      "year": 2023,
+      "authors": [
+        "Jason Milionis",
+        "Ciamac C. Moallemi",
+        "Tim Roughgarden"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2305.14604",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2305.14604",
+      "openalex_id": "https://openalex.org/W4378471253",
+      "cited_by_count": 16,
+      "source": "openalex",
+      "tags": [
+        "defi",
+        "amm",
+        "arbitrage"
+      ]
+    },
+    {
+      "id": "doi:10.1007/978-3-031-30617-4_17",
+      "title": "HyperPlonk: Plonk with\u00a0Linear-Time Prover and\u00a0High-Degree Custom Gates",
+      "year": 2023,
+      "authors": [
+        "Binyi Chen",
+        "Benedikt B\u00fcnz",
+        "Dan Boneh",
+        "Zhenfei Zhang"
+      ],
+      "venue": "Lecture notes in computer science",
+      "doi": "10.1007/978-3-031-30617-4_17",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1007/978-3-031-30617-4_17",
+      "openalex_id": "https://openalex.org/W4365808257",
+      "cited_by_count": 97,
+      "source": "openalex",
+      "tags": [
+        "zk",
+        "plonk",
+        "proof-systems"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2308.05096",
+      "title": "Optimal Flexible Consensus and its Application to Ethereum",
+      "year": 2023,
+      "authors": [
+        "Joachim Neu",
+        "Srivatsan Sridhar",
+        "Lei Yang",
+        "David Tse"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2308.05096",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2308.05096",
+      "openalex_id": "https://openalex.org/W4385774491",
+      "cited_by_count": 0,
+      "source": "openalex",
+      "tags": [
+        "ethereum",
+        "consensus",
+        "finality"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2304.14701",
+      "title": "Permissionless Consensus",
+      "year": 2023,
+      "authors": [
+        "Andrew Lewis-Pye",
+        "Tim Roughgarden"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2304.14701",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2304.14701",
+      "openalex_id": "https://openalex.org/W4367626505",
+      "cited_by_count": 6,
+      "source": "openalex",
+      "tags": [
+        "consensus",
+        "proof-of-stake"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2305.09032",
+      "title": "Time is Money: Strategic Timing Games in Proof-of-Stake Protocols",
+      "year": 2023,
+      "authors": [
+        "Caspar Schwarz-Schilling",
+        "Fahad Saleh",
+        "Thomas Thiery",
+        "Jennifer Pan",
+        "Nihar B. Shah",
+        "Barnab\u00e9 Monnot"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2305.09032",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2305.09032",
+      "openalex_id": "https://openalex.org/W4376988601",
+      "cited_by_count": 9,
+      "source": "openalex",
+      "tags": [
+        "ethereum",
+        "proof-of-stake",
+        "timing-games"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2210.15017",
+      "title": "Accountable Safety for Rollups",
+      "year": 2022,
+      "authors": [
+        "Ertem Nusret Tas",
+        "John R. Adler",
+        "Mustafa Al-Bassam",
+        "Ismail Khoffi",
+        "David Tse",
+        "Nima Vaziri"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2210.15017",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2210.15017",
+      "openalex_id": "https://openalex.org/W4307534983",
+      "cited_by_count": 3,
+      "source": "openalex",
+      "tags": [
+        "rollups",
+        "safety",
+        "ethereum"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2208.06046",
+      "title": "Automated Market Making and Loss-Versus-Rebalancing",
+      "year": 2022,
+      "authors": [
+        "Jason Milionis",
+        "Ciamac C. Moallemi",
+        "Tim Roughgarden",
+        "Anthony Lee Zhang"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2208.06046",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2208.06046",
+      "openalex_id": "https://openalex.org/W4291961646",
+      "cited_by_count": 54,
+      "source": "openalex",
+      "tags": [
+        "defi",
+        "amm",
+        "lvr",
+        "mev"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2208.02999",
+      "title": "Cryptoeconomic Security for Data Availability Committees",
+      "year": 2022,
+      "authors": [
+        "Ertem Nusret Tas",
+        "Dan Boneh"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2208.02999",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2208.02999",
+      "openalex_id": "https://openalex.org/W4300691960",
+      "cited_by_count": 1,
+      "source": "openalex",
+      "tags": [
+        "data-availability",
+        "dac",
+        "rollups"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2209.03255",
+      "title": "Goldfish: No More Attacks on Ethereum?!",
+      "year": 2022,
+      "authors": [
+        "Francesco D\u2019Amato",
+        "Joachim Neu",
+        "Ertem Nusret Tas",
+        "David Tse"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2209.03255",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2209.03255",
+      "openalex_id": "https://openalex.org/W4297677807",
+      "cited_by_count": 3,
+      "source": "openalex",
+      "tags": [
+        "ethereum",
+        "proof-of-stake",
+        "consensus-security"
+      ]
+    },
+    {
+      "id": "doi:10.1145/3558535.3559778",
+      "title": "Information Dispersal with Provable Retrievability for Rollups",
+      "year": 2022,
+      "authors": [
+        "Kamilla Nazirkhanova",
+        "Joachim Neu",
+        "David Tse"
+      ],
+      "venue": "",
+      "doi": "10.1145/3558535.3559778",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1145/3558535.3559778",
+      "openalex_id": "https://openalex.org/W3215394575",
+      "cited_by_count": 3,
+      "source": "openalex",
+      "tags": [
+        "rollups",
+        "data-availability",
+        "ethereum"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2209.08673",
+      "title": "Proofs of Proof-of-Stake with Sublinear Complexity",
+      "year": 2022,
+      "authors": [
+        "Shresth Agrawal",
+        "Joachim Neu",
+        "Ertem Nusret Tas",
+        "Dionysis Zindros"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2209.08673",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2209.08673",
+      "openalex_id": "https://openalex.org/W4296544172",
+      "cited_by_count": 5,
+      "source": "openalex",
+      "tags": [
+        "proof-of-stake",
+        "cryptography"
+      ]
+    },
+    {
+      "id": "doi:10.1145/3560832.3563441",
+      "title": "Quantifying Loss in Automated Market Makers",
+      "year": 2022,
+      "authors": [
+        "Jason Milionis",
+        "Ciamac C. Moallemi",
+        "Tim Roughgarden",
+        "Anthony Lee Zhang"
+      ],
+      "venue": "",
+      "doi": "10.1145/3560832.3563441",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1145/3560832.3563441",
+      "openalex_id": "https://openalex.org/W4308219256",
+      "cited_by_count": 20,
+      "source": "openalex",
+      "tags": [
+        "defi",
+        "amm",
+        "lvr"
+      ]
+    },
+    {
+      "id": "doi:10.1007/978-3-031-18283-9_28",
+      "title": "Three Attacks on\u00a0Proof-of-Stake Ethereum",
+      "year": 2022,
+      "authors": [
+        "Caspar Schwarz-Schilling",
+        "Joachim Neu",
+        "Barnab\u00e9 Monnot",
+        "Aditya Asgaonkar",
+        "Ertem Nusret Tas",
+        "David Tse"
+      ],
+      "venue": "Lecture notes in computer science",
+      "doi": "10.1007/978-3-031-18283-9_28",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1007/978-3-031-18283-9_28",
+      "openalex_id": "https://openalex.org/W3206329751",
+      "cited_by_count": 52,
+      "source": "openalex",
+      "tags": [
+        "ethereum",
+        "proof-of-stake",
+        "consensus-security"
+      ]
+    },
+    {
+      "id": "doi:10.1145/3560829.3563560",
+      "title": "Two More Attacks on Proof-of-Stake GHOST/Ethereum",
+      "year": 2022,
+      "authors": [
+        "Joachim Neu",
+        "Ertem Nusret Tas",
+        "David Tse"
+      ],
+      "venue": "",
+      "doi": "10.1145/3560829.3563560",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1145/3560829.3563560",
+      "openalex_id": "https://openalex.org/W4307837975",
+      "cited_by_count": 28,
+      "source": "openalex",
+      "tags": [
+        "ethereum",
+        "proof-of-stake",
+        "consensus-security"
+      ]
+    },
+    {
+      "id": "doi:10.1109/sp40001.2021.00113",
+      "title": "On the Just-In-Time Discovery of Profit-Generating Transactions in DeFi Protocols",
+      "year": 2021,
+      "authors": [
+        "Liyi Zhou",
+        "Kaihua Qin",
+        "Antoine Cully",
+        "Benjamin Livshits",
+        "Arthur Gervais"
+      ],
+      "venue": "",
+      "doi": "10.1109/SP40001.2021.00113",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1109/SP40001.2021.00113",
+      "openalex_id": "https://openalex.org/W3152829963",
+      "cited_by_count": 87,
+      "source": "openalex",
+      "tags": [
+        "defi",
+        "mev",
+        "arbitrage"
+      ]
+    },
+    {
+      "id": "doi:10.1109/sp40000.2020.00040",
+      "title": "Flash Boys 2.0: Frontrunning in Decentralized Exchanges, Miner Extractable Value, and Consensus Instability",
+      "year": 2020,
+      "authors": [
+        "Philip Daian",
+        "Steven Goldfeder",
+        "Tyler Kell",
+        "Yunqi Li",
+        "Xueyuan Zhao",
+        "Iddo Bentov",
+        "Lorenz Breidenbach",
+        "Ari Juels"
+      ],
+      "venue": "",
+      "doi": "10.1109/SP40000.2020.00040",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1109/SP40000.2020.00040",
+      "openalex_id": "https://openalex.org/W3016124762",
+      "cited_by_count": 400,
+      "source": "openalex",
+      "tags": [
+        "ethereum",
+        "mev",
+        "dex",
+        "consensus"
+      ]
+    },
+    {
+      "id": "doi:10.1007/978-3-030-45721-1_26",
+      "title": "Marlin: Preprocessing zkSNARKs with Universal and Updatable SRS",
+      "year": 2020,
+      "authors": [
+        "Alessandro Chiesa",
+        "Yuncong Hu",
+        "Mary Maller",
+        "Pratyush Mishra",
+        "Noah Vesely",
+        "Nicholas Ward"
+      ],
+      "venue": "EUROCRYPT 2020",
+      "doi": "10.1007/978-3-030-45721-1_26",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1007/978-3-030-45721-1_26",
+      "openalex_id": null,
+      "cited_by_count": null,
+      "source": "curated",
+      "tags": [
+        "zk",
+        "snark",
+        "proof-systems"
+      ]
+    },
+    {
+      "id": "eprint:2020/315",
+      "title": "plookup: A simplified polynomial protocol for lookup tables",
+      "year": 2020,
+      "authors": [
+        "Ariel Gabizon",
+        "Zac Williamson",
+        "Oana Ciobotaru"
+      ],
+      "venue": "IACR ePrint",
+      "doi": null,
+      "arxiv_id": null,
+      "url": "https://eprint.iacr.org/2020/315",
+      "openalex_id": null,
+      "cited_by_count": null,
+      "source": "curated",
+      "tags": [
+        "zk",
+        "plonk",
+        "lookup-arguments"
+      ]
+    },
+    {
+      "id": "doi:10.1145/3419614.3423258",
+      "title": "Single Secret Leader Election",
+      "year": 2020,
+      "authors": [
+        "Dan Boneh",
+        "Saba Eskandarian",
+        "Lucjan Hanzlik",
+        "Nicola Greco"
+      ],
+      "venue": "",
+      "doi": "10.1145/3419614.3423258",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1145/3419614.3423258",
+      "openalex_id": "https://openalex.org/W3003841905",
+      "cited_by_count": 44,
+      "source": "openalex",
+      "tags": [
+        "ethereum",
+        "proof-of-stake",
+        "leader-election"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2012.00854",
+      "title": "Transaction Fee Mechanism Design for the Ethereum Blockchain: An Economic Analysis of EIP-1559",
+      "year": 2020,
+      "authors": [
+        "Tim Roughgarden"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2012.00854",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.48550/arXiv.2012.00854",
+      "openalex_id": "https://openalex.org/W3109883785",
+      "cited_by_count": 11,
+      "source": "openalex",
+      "tags": [
+        "ethereum",
+        "fee-market",
+        "eip-1559"
+      ]
+    },
+    {
+      "id": "doi:10.1145/3318041.3355470",
+      "title": "An Axiomatic Approach to Block Rewards",
+      "year": 2019,
+      "authors": [
+        "Xi Chen",
+        "Christos H. Papadimitriou",
+        "Tim Roughgarden"
+      ],
+      "venue": "",
+      "doi": "10.1145/3318041.3355470",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1145/3318041.3355470",
+      "openalex_id": "https://openalex.org/W2982187894",
+      "cited_by_count": 50,
+      "source": "openalex",
+      "tags": [
+        "blockchain",
+        "incentives",
+        "economics"
+      ]
+    },
+    {
+      "id": "doi:10.1007/978-3-030-26948-7_20",
+      "title": "Batching Techniques for Accumulators with Applications to IOPs and Stateless Blockchains",
+      "year": 2019,
+      "authors": [
+        "Dan Boneh",
+        "Benedikt B\u00fcnz",
+        "Ben Fisch"
+      ],
+      "venue": "Lecture notes in computer science",
+      "doi": "10.1007/978-3-030-26948-7_20",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1007/978-3-030-26948-7_20",
+      "openalex_id": "https://openalex.org/W2913435035",
+      "cited_by_count": 239,
+      "source": "openalex",
+      "tags": [
+        "cryptography",
+        "stateless",
+        "blockchains"
+      ]
+    },
+    {
+      "id": "eprint:2019/1021",
+      "title": "Halo: Recursive Proof Composition without a Trusted Setup",
+      "year": 2019,
+      "authors": [
+        "Sean Bowe",
+        "Jack Grigg",
+        "Daira Hopwood"
+      ],
+      "venue": "IACR ePrint",
+      "doi": null,
+      "arxiv_id": null,
+      "url": "https://eprint.iacr.org/2019/1021",
+      "openalex_id": null,
+      "cited_by_count": null,
+      "source": "curated",
+      "tags": [
+        "zk",
+        "recursive-proofs",
+        "proof-systems"
+      ]
+    },
+    {
+      "id": "eprint:2019/953",
+      "title": "PLONK: Permutations over Lagrange-bases for Oecumenical Noninteractive arguments of Knowledge",
+      "year": 2019,
+      "authors": [
+        "Ariel Gabizon",
+        "Zachary J. Williamson",
+        "Oana Ciobotaru"
+      ],
+      "venue": "IACR ePrint",
+      "doi": null,
+      "arxiv_id": null,
+      "url": "https://eprint.iacr.org/2019/953",
+      "openalex_id": null,
+      "cited_by_count": null,
+      "source": "curated",
+      "tags": [
+        "zk",
+        "plonk",
+        "proof-systems"
+      ]
+    },
+    {
+      "id": "eprint:2019/099",
+      "title": "Sonic: Zero-Knowledge SNARKs from Linear-Size Universal and Updateable Structured Reference Strings",
+      "year": 2019,
+      "authors": [
+        "Mary Maller",
+        "Sean Bowe",
+        "Markulf Kohlweiss",
+        "Sarah Meiklejohn"
+      ],
+      "venue": "IACR ePrint",
+      "doi": null,
+      "arxiv_id": null,
+      "url": "https://eprint.iacr.org/2019/099",
+      "openalex_id": null,
+      "cited_by_count": null,
+      "source": "curated",
+      "tags": [
+        "zk",
+        "snark",
+        "proof-systems"
+      ]
+    },
+    {
+      "id": "doi:10.1007/978-3-030-03329-3_15",
+      "title": "Compact Multi-signatures for Smaller Blockchains",
+      "year": 2018,
+      "authors": [
+        "Dan Boneh",
+        "Manu Drijvers",
+        "Gregory Neven"
+      ],
+      "venue": "Lecture notes in computer science",
+      "doi": "10.1007/978-3-030-03329-3_15",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1007/978-3-030-03329-3_15",
+      "openalex_id": "https://openalex.org/W2811448169",
+      "cited_by_count": 257,
+      "source": "openalex",
+      "tags": [
+        "cryptography",
+        "signatures",
+        "blockchains"
+      ]
+    },
+    {
+      "id": "doi:10.1007/978-3-642-17373-8_11",
+      "title": "Constant-Size Commitments to Polynomials and Their Applications",
+      "year": 2010,
+      "authors": [
+        "Aniket Kate",
+        "Gregory M. Zaverucha",
+        "Ian Goldberg"
+      ],
+      "venue": "ASIACRYPT 2010",
+      "doi": "10.1007/978-3-642-17373-8_11",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1007/978-3-642-17373-8_11",
+      "openalex_id": null,
+      "cited_by_count": null,
+      "source": "curated",
+      "tags": [
+        "kzg",
+        "polynomial-commitments",
+        "cryptography"
+      ]
+    }
+  ]
+}

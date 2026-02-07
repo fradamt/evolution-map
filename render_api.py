@@ -42,6 +42,7 @@ def main():
     threads = data["research_threads"]
     forks = data["forks"]
     graph = data["graph"]
+    papers = data.get("papers", {})
 
     # Flat topics array
     api_topics = []
@@ -110,6 +111,31 @@ def main():
     # Flat edges array
     api_edges = [{"source": e["source"], "target": e["target"]} for e in graph["edges"]]
 
+    # Flat papers array
+    api_papers = []
+    for pid, p in sorted(
+        papers.items(),
+        key=lambda x: (
+            -((x[1].get("cited_by_count") or 0)),
+            -((x[1].get("year") or 0)),
+            x[1].get("title", ""),
+        ),
+    ):
+        api_papers.append({
+            "id": pid,
+            "title": p.get("title"),
+            "year": p.get("year"),
+            "authors": p.get("authors", []),
+            "venue": p.get("venue"),
+            "doi": p.get("doi"),
+            "arxiv_id": p.get("arxiv_id"),
+            "eprint_id": p.get("eprint_id"),
+            "url": p.get("url"),
+            "cited_by_count": p.get("cited_by_count"),
+            "tags": p.get("tags", []),
+            "source": p.get("source"),
+        })
+
     # Compute date range from topics
     all_dates = sorted(t["date"] for t in topics.values() if t.get("date"))
     date_range = [all_dates[0], all_dates[-1]] if all_dates else None
@@ -119,12 +145,14 @@ def main():
             "total_topics": meta["total_topics"],
             "included_topics": meta["included"],
             "included_edges": meta["included_edges"],
+            "papers_count": meta.get("papers_count", len(api_papers)),
             "date_range": date_range,
             "generated_by": "render_api.py",
         },
         "topics": api_topics,
         "threads": api_threads,
         "forks": api_forks,
+        "papers": api_papers,
         "edges": api_edges,
     }
 
@@ -133,7 +161,7 @@ def main():
 
     size_kb = OUTPUT_PATH.stat().st_size / 1024
     print(f"Written: {OUTPUT_PATH} ({size_kb:.0f} KB, {len(api_topics)} topics, "
-          f"{len(api_threads)} threads, {len(api_forks)} forks, {len(api_edges)} edges)")
+          f"{len(api_threads)} threads, {len(api_forks)} forks, {len(api_papers)} papers, {len(api_edges)} edges)")
 
 
 if __name__ == "__main__":
