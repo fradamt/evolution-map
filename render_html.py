@@ -1657,6 +1657,7 @@ header .stats span { white-space: nowrap; }
 .eip-square { cursor: pointer; pointer-events: all; }
 .magicians-triangle { cursor: pointer; pointer-events: all; }
 .paper-diamond { cursor: pointer; pointer-events: all; }
+.paper-hit { cursor: pointer; pointer-events: all; fill: transparent; stroke: transparent; stroke-width: 8; }
 .magicians-label { fill: #c8b5db; font-size: 8px; pointer-events: none; }
 .paper-label { fill: #9ec6ff; font-size: 8px; pointer-events: none; }
 
@@ -4681,6 +4682,9 @@ function applyContentVisibility() {
   d3.selectAll('.paper-diamond').style('display', function(d) {
     return paperMatchesTimelineFilter(d) ? null : 'none';
   });
+  d3.selectAll('.paper-hit').style('display', function(d) {
+    return paperMatchesTimelineFilter(d) ? null : 'none';
+  });
   d3.selectAll('.paper-label').style('display', function(d) {
     return paperMatchesTimelineFilter(d) ? null : 'none';
   });
@@ -5530,7 +5534,7 @@ function buildTimeline() {
     if (!hasFocusedEntity() || ev.defaultPrevented) return;
     var target = ev && ev.target ? ev.target : null;
     if (target && target.closest && target.closest(
-      '.topic-circle,.milestone-marker,.eip-square,.magicians-triangle,.paper-diamond,.fork-hover-line,.eip-label,.magicians-label,.paper-label,.eip-tag'
+      '.topic-circle,.milestone-marker,.eip-square,.magicians-triangle,.paper-diamond,.paper-hit,.fork-hover-line,.eip-label,.magicians-label,.paper-label,.eip-tag'
     )) return;
     clearFocusedEntityState({keepDetailOpen: false});
   });
@@ -5539,7 +5543,7 @@ function buildTimeline() {
   svg.on('dblclick.zoom', function(ev) {
     var target = ev && ev.target ? ev.target : null;
     if (target && target.closest && target.closest(
-      '.topic-circle,.milestone-marker,.eip-square,.magicians-triangle,.paper-diamond,.fork-hover-line,.eip-label,.magicians-label,.paper-label,.eip-tag,.histogram-bar'
+      '.topic-circle,.milestone-marker,.eip-square,.magicians-triangle,.paper-diamond,.paper-hit,.fork-hover-line,.eip-label,.magicians-label,.paper-label,.eip-tag,.histogram-bar'
     )) {
       return;
     }
@@ -5635,6 +5639,11 @@ function buildTimeline() {
       if (!d || !d._paperDate) return '';
       var r = paperTimelineRScale ? paperTimelineRScale(d._paperInf || paperTimelineInfluence(d)) : 5;
       return diamondPath(newX(d._paperDate), d._paperYPos, r);
+    });
+    d3.selectAll('.paper-hit').attr('d', function(d) {
+      if (!d || !d._paperDate) return '';
+      var r = paperTimelineRScale ? paperTimelineRScale(d._paperInf || paperTimelineInfluence(d)) : 5;
+      return diamondPath(newX(d._paperDate), d._paperYPos, Math.max(6.5, r + 2.5));
     });
     d3.selectAll('.paper-label').attr('x', function(d) {
       if (!d || !d._paperDate) return 0;
@@ -6478,6 +6487,8 @@ function filterTimeline(skipFocusedHighlight) {
       .style('display', function(d) { return paperMatchesTimelineFilter(d) ? null : 'none'; })
       .transition().duration(200)
       .attr('opacity', 0.76);
+    d3.selectAll('.paper-hit')
+      .style('display', function(d) { return paperMatchesTimelineFilter(d) ? null : 'none'; });
     d3.selectAll('.paper-label')
       .style('display', function(d) { return paperMatchesTimelineFilter(d) ? null : 'none'; });
     d3.selectAll('.paper-topic-ref-edge')
@@ -9541,6 +9552,25 @@ function drawPaperTimeline() {
   paperData.forEach(function(paper) {
     var r = paperTimelineRScale(paper._paperInf || 0);
     var clickTimer = null;
+    function onPaperClick(ev, d) {
+      if (clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+        showPaperDetail(d, {
+          paperId: d._paperId,
+          linkedTargets: (d._paperLinkedTargets || []).slice(0),
+          paperScore: Number(d.rs || 0),
+        });
+        return;
+      }
+      clickTimer = setTimeout(function() {
+        clickTimer = null;
+        focusPaperNode(d._paperId);
+      }, 220);
+    }
+    function onPaperOver(ev, d) { onTimelineEntityHover(ev, d, 'paper', true); }
+    function onPaperOut(ev, d) { onTimelineEntityHover(ev, d, 'paper', false); }
+
     shapeG.append('path')
       .attr('class', 'paper-diamond')
       .attr('d', diamondPath(tlXScale(paper._paperDate), paper._paperYPos, r))
@@ -9549,24 +9579,18 @@ function drawPaperTimeline() {
       .attr('stroke-width', 0.7)
       .attr('opacity', 0.76)
       .datum(paper)
-      .on('click', function(ev, d) {
-        if (clickTimer) {
-          clearTimeout(clickTimer);
-          clickTimer = null;
-          showPaperDetail(d, {
-            paperId: d._paperId,
-            linkedTargets: (d._paperLinkedTargets || []).slice(0),
-            paperScore: Number(d.rs || 0),
-          });
-          return;
-        }
-        clickTimer = setTimeout(function() {
-          clickTimer = null;
-          focusPaperNode(d._paperId);
-        }, 220);
-      })
-      .on('mouseover', function(ev, d) { onTimelineEntityHover(ev, d, 'paper', true); })
-      .on('mouseout', function(ev, d) { onTimelineEntityHover(ev, d, 'paper', false); })
+      .on('click', onPaperClick)
+      .on('mouseover', onPaperOver)
+      .on('mouseout', onPaperOut)
+      .style('display', paperMatchesTimelineFilter(paper) ? null : 'none');
+
+    shapeG.append('path')
+      .attr('class', 'paper-hit')
+      .attr('d', diamondPath(tlXScale(paper._paperDate), paper._paperYPos, Math.max(6.5, r + 2.5)))
+      .datum(paper)
+      .on('click', onPaperClick)
+      .on('mouseover', onPaperOver)
+      .on('mouseout', onPaperOut)
       .style('display', paperMatchesTimelineFilter(paper) ? null : 'none');
   });
 
