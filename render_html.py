@@ -4652,19 +4652,87 @@ function populateDropdown(q) {
         '<div class="si-meta">' + escHtml(meta) + '</div></div>';
     }).join('');
 
-    // Match papers by title, author, tag, and referenced EIP numbers.
+    // Match papers by title/author/tag/EIP, prioritizing explicit author matches.
     var paperResults = [];
+    var qNorm = normalizeSearchText(q);
+    var qTokens = tokenizeSearchText(qNorm);
     Object.values(DATA.papers || {}).forEach(function(paper) {
       if (!paperPassesSidebarFilters(paper)) return;
       var score = 0;
-      var title = String(paper.t || '').toLowerCase();
-      if (title.includes(q)) score += 3;
-      if ((paper.a || []).some(function(name) { return String(name).toLowerCase().includes(q); })) score += 2;
-      if ((paper.tg || []).some(function(tag) { return String(tag).toLowerCase().includes(q); })) score += 1;
+      var titleNorm = normalizeSearchText(paper.t || '');
+      var titleTokens = titleNorm ? titleNorm.split(/\s+/).filter(Boolean) : [];
+      var authorNames = (paper.a || []);
+      var authorNormRows = authorNames.map(function(name) { return normalizeSearchText(name); }).filter(Boolean);
+      var tagNormRows = (paper.tg || []).map(function(tag) { return normalizeSearchText(tag); }).filter(Boolean);
+
+      var matchedAuthor = '';
+      var authorExact = false;
+      var authorTokenMatch = false;
+      var authorPrefixMatch = false;
+      var authorSubstringMatch = false;
+      if (qNorm) {
+        authorNames.forEach(function(name) {
+          if (matchedAuthor) return;
+          var nNorm = normalizeSearchText(name || '');
+          if (!nNorm) return;
+          var nTokens = nNorm.split(/\s+/).filter(Boolean);
+          if (nNorm === qNorm) {
+            matchedAuthor = String(name || '');
+            authorExact = true;
+            return;
+          }
+          if (qTokens.length > 0 && qTokens.every(function(tok) { return nTokens.indexOf(tok) >= 0; })) {
+            matchedAuthor = String(name || '');
+            authorTokenMatch = true;
+            return;
+          }
+          if (qTokens.length === 1 && qTokens[0].length >= 2 &&
+              nTokens.some(function(tok) { return tok.indexOf(qTokens[0]) === 0; })) {
+            matchedAuthor = String(name || '');
+            authorPrefixMatch = true;
+            return;
+          }
+          if (nNorm.indexOf(qNorm) >= 0) {
+            matchedAuthor = String(name || '');
+            authorSubstringMatch = true;
+          }
+        });
+      }
+
+      if (authorExact) score += 8;
+      else if (authorTokenMatch) score += 6;
+      else if (authorPrefixMatch) score += 4;
+      else if (authorSubstringMatch) score += 3;
+
+      var titleExactTokenMatch = qTokens.length > 0 &&
+        qTokens.every(function(tok) { return titleTokens.indexOf(tok) >= 0; });
+      var titlePhraseMatch = qNorm.length >= 4 && titleNorm.indexOf(qNorm) >= 0;
+      var titlePrefixMatch = qTokens.length === 1 && qTokens[0].length >= 4 &&
+        titleTokens.some(function(tok) { return tok.indexOf(qTokens[0]) === 0; });
+      if (titleExactTokenMatch) score += 3;
+      else if (titlePhraseMatch) score += 2;
+      else if (titlePrefixMatch) score += 1;
+
+      if (qNorm && tagNormRows.some(function(tag) { return tag.indexOf(qNorm) >= 0; })) score += 1;
       if ((paper.eq || []).some(function(e) { return ('eip-' + e).includes(q) || String(e) === q; })) score += 2;
-      if (score > 0) paperResults.push({paper: paper, score: score});
+
+      if (score > 0) {
+        paperResults.push({
+          paper: paper,
+          score: score,
+          matchedAuthor: matchedAuthor,
+          authorStrong: !!(authorExact || authorTokenMatch || authorPrefixMatch),
+          authorExact: !!authorExact,
+        });
+      }
     });
     paperResults.sort(function(a, b) {
+      if (Number(b.authorExact || 0) !== Number(a.authorExact || 0)) {
+        return Number(b.authorExact || 0) - Number(a.authorExact || 0);
+      }
+      if (Number(b.authorStrong || 0) !== Number(a.authorStrong || 0)) {
+        return Number(b.authorStrong || 0) - Number(a.authorStrong || 0);
+      }
       if (b.score !== a.score) return b.score - a.score;
       var bCb = Number((b.paper || {}).cb || 0);
       var aCb = Number((a.paper || {}).cb || 0);
@@ -4674,7 +4742,7 @@ function populateDropdown(q) {
       if (bRs !== aRs) return bRs - aRs;
       return String((a.paper || {}).t || '').localeCompare(String((b.paper || {}).t || ''));
     });
-    var paperSlice = paperResults.slice(0, 2);
+    var paperSlice = paperResults.slice(0, 4);
     var paperHtml = paperSlice.map(function(entry) {
       var p = entry.paper || {};
       var year = p.y ? String(p.y) : '?';
@@ -4682,6 +4750,7 @@ function populateDropdown(q) {
       var meta = year +
         (authorShort ? ' \u00b7 ' + authorShort : '') +
         (p.cb ? ' \u00b7 cited ' + Number(p.cb).toLocaleString() : '');
+      if (entry.matchedAuthor) meta += ' \u00b7 author match: ' + entry.matchedAuthor;
       return '<div class="search-item search-item-paper" data-paper-id="' + escHtml(String(p.id || '')) + '">' +
         '<div class="si-title"><span style="color:#9cc8ff">\u25C6</span> ' + escHtml(p.t || '') + '</div>' +
         '<div class="si-meta">' + escHtml(meta) + '</div></div>';
