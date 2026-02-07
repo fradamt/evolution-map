@@ -1137,30 +1137,34 @@ def generate_html(viz_json, data):
   <header>
     <div class="header-row header-row-top">
       <h1>Ethereum Evolution</h1>
-      <div class="controls">
-        <button id="btn-timeline" class="active" onclick="showView('timeline')">Timeline</button>
-        <button id="btn-network" onclick="showView('network')">Network</button>
-        <button id="btn-coauthor" onclick="showView('coauthor')">Authors</button>
-        <button class="help-btn" onclick="toggleHelp()" title="Keyboard shortcuts">?</button>
+      <div class="header-top-main">
+        <div class="stats">
+          <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
+        </div>
+        <div class="content-toggles">
+          <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresear.ch topics">\u25CF EthResearch</button>
+          <button id="toggle-eips" class="content-toggle" onclick="toggleContent('eips')" title="Toggle EIP nodes">\u25A0 EIPs</button>
+          <button id="toggle-magicians" class="content-toggle" onclick="toggleContent('magicians')" title="Toggle Magicians nodes">\u25B2 Magicians</button>
+          <button id="toggle-papers" class="content-toggle papers-toggle" onclick="toggleContent('papers')" title="Cycle papers: off \u2192 focus \u2192 context \u2192 broad \u2192 off">\u25C6 Papers</button>
+        </div>
+        <div class="inf-slider-wrap">
+          <label for="inf-slider" style="font-size:10px;color:#666;white-space:nowrap">Min influence</label>
+          <input type="range" id="inf-slider" min="0" max="100" value="0" step="1">
+          <span id="inf-slider-label" style="font-size:10px;color:#888;min-width:32px">0</span>
+        </div>
+        <div class="controls">
+          <button id="btn-timeline" class="active" onclick="showView('timeline')">Timeline</button>
+          <button id="btn-network" onclick="showView('network')">Network</button>
+          <button id="btn-coauthor" onclick="showView('coauthor')">Authors</button>
+          <button class="help-btn" onclick="toggleHelp()" title="Keyboard shortcuts">?</button>
+        </div>
       </div>
     </div>
     <div class="header-row header-row-bottom">
-      <div class="stats">
-        <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
-        <button id="paper-match-toggle" class="paper-match-toggle" onclick="cyclePaperMatchMode()" title="Cycle paper matching strictness">Papers: balanced</button>
-      </div>
-      <div class="content-toggles">
-        <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresear.ch topics">\u25CF EthResearch</button>
-        <button id="toggle-eips" class="content-toggle" onclick="toggleContent('eips')" title="Toggle EIP nodes">\u25A0 EIPs</button>
-        <button id="toggle-magicians" class="content-toggle" onclick="toggleContent('magicians')" title="Toggle Magicians nodes">\u25B2 Magicians</button>
-        <button id="toggle-papers" class="content-toggle papers-toggle" onclick="toggleContent('papers')" title="Toggle research paper nodes in network view">\u25C6 Papers</button>
-        <button id="paper-layer-mode" class="content-toggle paper-mode-toggle" onclick="cyclePaperLayerMode()" title="Cycle paper scope mode">papers: focus</button>
-      </div>
       <div id="filter-breadcrumb" class="breadcrumb"></div>
-      <div class="inf-slider-wrap">
-        <label for="inf-slider" style="font-size:10px;color:#666;white-space:nowrap">Min influence</label>
-        <input type="range" id="inf-slider" min="0" max="100" value="0" step="1">
-        <span id="inf-slider-label" style="font-size:10px;color:#888;min-width:32px">0</span>
+      <div class="search-wrap header-search-wrap">
+        <input type="text" id="search-box" placeholder="Search topics, authors, EIPs...">
+        <div class="search-dropdown" id="search-dropdown"></div>
       </div>
     </div>
   </header>
@@ -1176,12 +1180,6 @@ def generate_html(viz_json, data):
   <div id="sidebar">
     <button id="sidebar-width-toggle" class="sidebar-width-toggle" onclick="toggleSidebarWidth()" title="Expand sidebar">&#9664;</button>
     <button id="sidebar-hide-toggle" class="sidebar-hide-toggle" onclick="toggleSidebarHidden()" title="Hide sidebar">&#9654;</button>
-    <div class="sidebar-section">
-      <div class="search-wrap">
-        <input type="text" id="search-box" placeholder="Search topics, authors, EIPs...">
-        <div class="search-dropdown" id="search-dropdown"></div>
-      </div>
-    </div>
     <div class="sidebar-section">
       <h3>Research Threads</h3>
       <div id="thread-legend" class="thread-legend"></div>
@@ -1281,13 +1279,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 header { grid-column: 1 / -1; padding: 10px 20px; background: #12121a;
          border-bottom: 1px solid #2a2a3a; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
 .header-row { display: flex; align-items: center; gap: 12px; min-height: 28px; }
-.header-row-top { justify-content: space-between; }
+.header-row-top { justify-content: flex-start; }
 .header-row-bottom { justify-content: flex-start; }
 header h1 { font-size: 18px; font-weight: 600; color: #fff; white-space: nowrap; }
 header h1 .title-short { display: none; }
+header .header-top-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap; }
 header .stats { font-size: 12px; color: #888; display: flex; gap: 15px; }
 header .stats span { white-space: nowrap; }
-.inf-slider-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
+.inf-slider-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .inf-slider-wrap input[type=range] { width: 80px; height: 4px; -webkit-appearance: none; appearance: none;
   background: #333; border-radius: 2px; outline: none; cursor: pointer; }
 .inf-slider-wrap input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
@@ -1296,7 +1295,7 @@ header .stats span { white-space: nowrap; }
   background: #667; cursor: pointer; border: none; }
 .inf-slider-wrap input[type=range]::-webkit-slider-thumb:hover { background: #88a; }
 .bc-hint { font-size: 10px; color: #555; font-style: italic; }
-.controls { display: flex; gap: 8px; flex-shrink: 0; }
+.controls { display: flex; gap: 8px; flex-shrink: 0; margin-left: auto; }
 .controls button { background: #1e1e2e; border: 1px solid #333; color: #ccc;
                    padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
 .controls button:hover { background: #2a2a3e; }
@@ -1483,6 +1482,7 @@ header .stats span { white-space: nowrap; }
               border-radius: 4px; color: #ccc; font-size: 12px; }
 #search-box:focus { outline: none; border-color: #555; }
 .search-wrap { position: relative; margin-bottom: 8px; }
+.header-search-wrap { margin-left: auto; margin-bottom: 0; width: min(420px, 46vw); flex-shrink: 0; }
 .search-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #1a1a2e;
                    border: 1px solid #444; border-top: none; border-radius: 0 0 4px 4px;
                    max-height: 280px; overflow-y: auto; z-index: 200; display: none; }
@@ -1578,25 +1578,24 @@ header .stats span { white-space: nowrap; }
 .content-toggle:hover { background: #2a2a3e; }
 .content-toggle.active { background: #2a3a2a; border-color: #4a6a4a; color: #88cc88; }
 .content-toggle.papers-toggle.active { background: #1f2f45; border-color: #4b6f9d; color: #9cc8ff; }
-.content-toggle.paper-mode-toggle { border-color: #35527a; color: #7fb4ee; }
-.content-toggle.paper-mode-toggle:hover { border-color: #4b6f9d; color: #9cc8ff; }
-.content-toggle.paper-mode-toggle.mode-focus { border-color: #4b6f9d; color: #9cc8ff; }
-.content-toggle.paper-mode-toggle.mode-context { border-color: #4b7d5a; color: #9cddb4; }
-.content-toggle.paper-mode-toggle.mode-broad { border-color: #7d6a4b; color: #e3c58f; }
+.content-toggle.papers-toggle.mode-focus { border-color: #4b6f9d; color: #9cc8ff; }
+.content-toggle.papers-toggle.mode-context { border-color: #4b7d5a; color: #9cddb4; }
+.content-toggle.papers-toggle.mode-broad { border-color: #7d6a4b; color: #e3c58f; }
 .content-toggle.disabled { opacity: 0.45; cursor: default; pointer-events: none; }
 
 @media (max-width: 1450px) {
   header { padding: 10px 12px; gap: 8px; }
   header h1 .title-long { display: none; }
   header h1 .title-short { display: inline; }
-  header .stats .stats-topics,
-  header .stats .stats-range { display: none; }
-  .header-row-bottom { gap: 8px; }
+  .header-row-top { gap: 8px; }
+  .header-row-bottom { gap: 8px; min-height: 24px; }
+  .header-search-wrap { width: min(340px, 45vw); }
   .content-toggles { flex-wrap: wrap; }
 }
 
 @media (max-width: 1240px) {
-  header .stats .stats-citations { display: none; }
+  .controls button { padding: 4px 8px; font-size: 10px; }
+  .header-search-wrap { width: min(300px, 42vw); }
 }
 
 /* EIP squares on timeline */
@@ -2258,7 +2257,10 @@ const RELATED_PAPERS_CACHE = {
 
 function paperRelevanceBonus(pidx, cfg) {
   var weight = Number((cfg && cfg.relevanceWeight) || 1.0);
-  return Math.min(1.4 * weight, (Math.max(0, Number((pidx && pidx.relevance) || 0)) / 12) * weight);
+  var relBonus = Math.min(1.4 * weight, (Math.max(0, Number((pidx && pidx.relevance) || 0)) / 12) * weight);
+  var citedBy = Math.max(0, Number((pidx && pidx.citedBy) || 0));
+  var citationBonus = Math.min(1.2 * weight, Math.log10(1 + citedBy) * 0.45 * weight);
+  return relBonus + citationBonus;
 }
 
 function rankRelatedPapers(scoreFn, minScore, limit) {
@@ -2830,14 +2832,15 @@ function togglePaperRows(rowClass, toggleId, extraCount) {
 
 function buildRelatedPapersHtml(rows, sectionId, heading) {
   if (!rows || rows.length === 0) return '';
+  var initialVisible = 6;
   var domId = safeDomId(sectionId);
   var rowClass = 'paper-extra-' + domId;
   var toggleId = 'paper-toggle-' + domId;
-  var extraCount = Math.max(0, rows.length - 3);
+  var extraCount = Math.max(0, rows.length - initialVisible);
 
   var itemsHtml = rows.map(function(row, idx) {
     var paper = row.paper || {};
-    var hidden = idx >= 3;
+    var hidden = idx >= initialVisible;
     var url = paperUrl(paper);
     var titleHtml = url
       ? '<a class="paper-title" href="' + escHtml(url) + '" target="_blank">' + escHtml(paper.t || '') + '</a>'
@@ -3497,14 +3500,15 @@ const PAPER_LAYER_MODES = {
 };
 
 function updatePaperLayerModeUi() {
-  var btn = document.getElementById('paper-layer-mode');
+  var btn = document.getElementById('toggle-papers');
   if (!btn) return;
   var mode = PAPER_LAYER_MODES[paperLayerMode] ? paperLayerMode : 'focus';
-  btn.textContent = 'papers: ' + PAPER_LAYER_MODES[mode].label;
+  btn.textContent = showPapers ? ('\u25C6 Papers: ' + PAPER_LAYER_MODES[mode].label) : '\u25C6 Papers';
   btn.classList.remove('mode-focus', 'mode-context', 'mode-broad');
-  btn.classList.add('mode-' + mode);
-  if (!showPapers) btn.classList.add('disabled');
-  else btn.classList.remove('disabled');
+  btn.classList.toggle('active', showPapers);
+  if (showPapers) btn.classList.add('mode-' + mode);
+  btn.classList.remove('disabled');
+  btn.title = 'Cycle papers: off \u2192 focus \u2192 context \u2192 broad \u2192 off';
 }
 
 function setPaperLayerMode(mode, persist) {
@@ -4063,14 +4067,34 @@ function toggleContent(type, mode) {
       buildNetwork();
     }
   } else if (type === 'papers') {
-    showPapers = !showPapers;
-    document.getElementById('toggle-papers').classList.toggle('active', showPapers);
+    var prevShowPapers = showPapers;
+    var prevPaperMode = paperLayerMode;
+    var order = ['focus', 'context', 'broad'];
+    if (mode === 'off') {
+      showPapers = false;
+    } else if (mode === 'on') {
+      showPapers = true;
+    } else {
+      // Single-button cycle: off -> focus -> context -> broad -> off
+      if (!showPapers) {
+        showPapers = true;
+      } else {
+        var idx = order.indexOf(paperLayerMode);
+        if (idx < 0) idx = 0;
+        if (idx >= order.length - 1) {
+          showPapers = false;
+        } else {
+          paperLayerMode = order[idx + 1];
+          try { localStorage.setItem('evmap.paperLayerMode', paperLayerMode); } catch (e) {}
+        }
+      }
+    }
     updatePaperLayerModeUi();
     var pNetSvg = document.querySelector('#network-view svg');
-    if (activeView === 'network') {
+    if (activeView === 'network' && (prevShowPapers !== showPapers || prevPaperMode !== paperLayerMode)) {
       if (pNetSvg) { pNetSvg.remove(); simulation = null; }
       buildNetwork();
-    } else if (pNetSvg) {
+    } else if (pNetSvg && prevShowPapers !== showPapers) {
       pNetSvg.remove();
       simulation = null;
     }
