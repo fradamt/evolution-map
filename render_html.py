@@ -1115,7 +1115,12 @@ header .stats span { white-space: nowrap; }
 /* Detail panel */
 #detail-panel { display: none; position: absolute; top: 0; right: 0; width: 420px; height: 100%;
                 background: #15151f; border-left: 1px solid #2a2a3a; overflow-y: auto;
-                z-index: 100; padding: 16px; }
+                z-index: 100; padding: 16px;
+                scrollbar-width: thin; scrollbar-color: #3a3a4d #15151f; }
+#detail-panel::-webkit-scrollbar { width: 8px; }
+#detail-panel::-webkit-scrollbar-track { background: #15151f; }
+#detail-panel::-webkit-scrollbar-thumb { background: #3a3a4d; border-radius: 4px; }
+#detail-panel::-webkit-scrollbar-thumb:hover { background: #4a4a66; }
 #detail-panel.open { display: block; }
 #detail-panel .close-btn { position: absolute; top: 8px; right: 12px; background: none;
                            border: none; color: #666; font-size: 18px; cursor: pointer; }
@@ -1368,6 +1373,8 @@ document.documentElement.style.overscrollBehavior = 'none';
 document.body.style.overscrollBehavior = 'none';
 document.addEventListener('wheel', function(ev) {
   if (activeView !== 'timeline') return;
+  // Keep native scrolling inside right-side detail panel.
+  if (ev.target && ev.target.closest && ev.target.closest('#detail-panel')) return;
   // Only intercept events targeting the main visualization area
   if (ev.target.closest && ev.target.closest('#main-area')) {
     ev.preventDefault();
