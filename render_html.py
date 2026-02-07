@@ -62,6 +62,8 @@ EIP_TO_ETH_AUTHOR_OVERRIDES = {
     "Carl Beekhuizen": ["CarlBeek"],
     "Michael Neuder": ["mikeneuder"],
     "Mike Neuder": ["mikeneuder"],
+    "Mike": ["mikeneuder"],
+    "mike": ["mikeneuder"],
 }
 
 # Manual aliases for Magicians handles that should map to ethresear.ch usernames.
@@ -340,8 +342,8 @@ def _build_author_links(data):
         best_score, best_user = scored[0] if scored else (0, None)
         second_score = scored[1][0] if len(scored) > 1 else 0
 
-        # Conservative auto-linking: high confidence and clearly ahead of runner-up.
-        if best_user and best_score >= 240 and (best_score - second_score) >= 40:
+        # Conservative auto-linking: only when no manual override exists.
+        if not mapped and best_user and best_score >= 240 and (best_score - second_score) >= 40:
             if best_user not in mapped:
                 mapped.append(best_user)
 
@@ -369,7 +371,7 @@ def _build_author_links(data):
         )
         best_score, best_user = scored[0] if scored else (0, None)
         second_score = scored[1][0] if len(scored) > 1 else 0
-        if best_user and best_score >= 300 and (best_score - second_score) >= 40:
+        if not mapped and best_user and best_score >= 300 and (best_score - second_score) >= 40:
             if best_user not in mapped:
                 mapped.append(best_user)
 
@@ -406,7 +408,7 @@ def _build_author_links(data):
         )
         best_score, best_name = scored[0] if scored else (0, None)
         second_score = scored[1][0] if len(scored) > 1 else 0
-        if best_name and best_score >= 240 and (best_score - second_score) >= 40:
+        if not mapped and best_name and best_score >= 240 and (best_score - second_score) >= 40:
             if best_name not in mapped:
                 mapped.append(best_name)
 
@@ -427,6 +429,165 @@ def _build_author_links(data):
         "ethToMag": eth_to_mag,
         "magToEip": mag_to_eip,
         "eipToMag": eip_to_mag,
+    }
+
+
+def _eip_author_name_quality(name):
+    s = str(name or "").strip()
+    if not s:
+        return -1000
+    norm = _norm_alpha(s)
+    parts = [p for p in re.split(r"\s+", s) if p]
+    score = 0
+    if s in EIP_TO_ETH_AUTHOR_OVERRIDES:
+        score += 280
+    if len(parts) >= 2:
+        score += 120
+    if any(ch.isupper() for ch in s):
+        score += 18
+    if len(parts) == 1 and len(norm) <= 5:
+        score -= 45
+    if s.islower() and len(parts) == 1:
+        score -= 35
+    score += len(norm)
+    return score
+
+
+def _build_eip_author_canonical_map(eip_names, author_links):
+    names = sorted({str(n or "").strip() for n in eip_names if str(n or "").strip()})
+    if not names:
+        return {}, {}
+
+    parent = {n: n for n in names}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        if a not in parent or b not in parent:
+            return
+        ra = find(a)
+        rb = find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for linked_names in (author_links.get("ethToEip") or {}).values():
+        linked = [n for n in (linked_names or []) if n in parent]
+        if len(linked) < 2:
+            continue
+        first = linked[0]
+        for other in linked[1:]:
+            union(first, other)
+
+    for linked_names in (author_links.get("magToEip") or {}).values():
+        linked = [n for n in (linked_names or []) if n in parent]
+        if len(linked) < 2:
+            continue
+        first = linked[0]
+        for other in linked[1:]:
+            union(first, other)
+
+    groups = {}
+    for n in names:
+        groups.setdefault(find(n), []).append(n)
+
+    canonical = {}
+    aliases_by_canonical = {}
+    for members in groups.values():
+        sorted_members = sorted(
+            members,
+            key=lambda n: (-_eip_author_name_quality(n), -len(_norm_alpha(n)), n.lower(), n),
+        )
+        canon = sorted_members[0]
+        member_set = sorted(set(members))
+        aliases_by_canonical[canon] = [m for m in member_set if m != canon]
+        for name in member_set:
+            canonical[name] = canon
+
+    return canonical, aliases_by_canonical
+
+
+def _canonicalize_author_links(author_links, canonical_eip_map):
+    def canonical_name(name):
+        key = str(name or "").strip()
+        if not key:
+            return ""
+        return canonical_eip_map.get(key, key)
+
+    def uniq_sorted(values):
+        return sorted({v for v in values if v})
+
+    eth_to_eip = {}
+    for username, names in (author_links.get("ethToEip") or {}).items():
+        canonical_names = uniq_sorted(canonical_name(n) for n in (names or []))
+        if canonical_names:
+            eth_to_eip[username] = canonical_names
+
+    eip_to_eth_sets = {}
+    for name, usernames in (author_links.get("eipToEth") or {}).items():
+        canonical = canonical_name(name)
+        if not canonical:
+            continue
+        bucket = eip_to_eth_sets.setdefault(canonical, set())
+        for username in (usernames or []):
+            u = str(username or "").strip()
+            if u:
+                bucket.add(u)
+    for username, names in eth_to_eip.items():
+        for name in names:
+            eip_to_eth_sets.setdefault(name, set()).add(username)
+    eip_to_eth = {name: sorted(users) for name, users in eip_to_eth_sets.items() if users}
+
+    mag_to_eth = {}
+    for mag_user, usernames in (author_links.get("magToEth") or {}).items():
+        users = uniq_sorted(str(u or "").strip() for u in (usernames or []))
+        if users:
+            mag_to_eth[mag_user] = users
+
+    eth_to_mag = {}
+    for username, mag_users in (author_links.get("ethToMag") or {}).items():
+        mags = uniq_sorted(str(m or "").strip() for m in (mag_users or []))
+        if mags:
+            eth_to_mag[username] = mags
+
+    mag_to_eip = {}
+    for mag_user, names in (author_links.get("magToEip") or {}).items():
+        canonical_names = uniq_sorted(canonical_name(n) for n in (names or []))
+        if canonical_names:
+            mag_to_eip[mag_user] = canonical_names
+
+    eip_to_mag_sets = {}
+    for name, mag_users in (author_links.get("eipToMag") or {}).items():
+        canonical = canonical_name(name)
+        if not canonical:
+            continue
+        bucket = eip_to_mag_sets.setdefault(canonical, set())
+        for mag_user in (mag_users or []):
+            m = str(mag_user or "").strip()
+            if m:
+                bucket.add(m)
+    for mag_user, names in mag_to_eip.items():
+        for name in names:
+            eip_to_mag_sets.setdefault(name, set()).add(mag_user)
+    eip_to_mag = {name: sorted(mags) for name, mags in eip_to_mag_sets.items() if mags}
+
+    alias_to_canonical = {
+        alias: canonical
+        for alias, canonical in canonical_eip_map.items()
+        if alias != canonical
+    }
+
+    return {
+        "ethToEip": eth_to_eip,
+        "eipToEth": eip_to_eth,
+        "magToEth": mag_to_eth,
+        "ethToMag": eth_to_mag,
+        "magToEip": mag_to_eip,
+        "eipToMag": eip_to_mag,
+        "eipAliasToCanonical": alias_to_canonical,
     }
 
 
@@ -731,8 +892,41 @@ def prepare_viz_data(data):
             "rt": f.get("related_topics", [])[:10],
         })
 
+    raw_author_links = _build_author_links(data)
+    eip_author_names = set(data.get("eip_authors", {}).keys())
+    for e in (data.get("eip_catalog", {}) or {}).values():
+        for raw_name in (e.get("authors", []) or []):
+            name = str(raw_name or "").strip()
+            if name:
+                eip_author_names.add(name)
+    for source_key in ("eipToEth", "eipToMag"):
+        eip_author_names.update((raw_author_links.get(source_key) or {}).keys())
+    for source_key in ("ethToEip", "magToEip"):
+        for names in (raw_author_links.get(source_key) or {}).values():
+            eip_author_names.update(names or [])
+
+    eip_author_canonical, eip_author_aliases = _build_eip_author_canonical_map(
+        eip_author_names,
+        raw_author_links,
+    )
+    author_links = _canonicalize_author_links(raw_author_links, eip_author_canonical)
+
+    def canonical_eip_author(name):
+        key = str(name or "").strip()
+        if not key:
+            return ""
+        return eip_author_canonical.get(key, key)
+
     compact_eips = {}
     for eip_str, e in data.get("eip_catalog", {}).items():
+        canonical_authors = []
+        seen_authors = set()
+        for raw_name in (e.get("authors", []) or []):
+            name = canonical_eip_author(raw_name)
+            if not name or name in seen_authors:
+                continue
+            seen_authors.add(name)
+            canonical_authors.append(name)
         compact_eips[eip_str] = {
             "t": e.get("title"),
             "s": e.get("status"),
@@ -740,7 +934,7 @@ def prepare_viz_data(data):
             "c": e.get("category"),
             "cr": e.get("created"),
             "fk": e.get("fork"),
-            "au": e.get("authors", []),
+            "au": canonical_authors,
             "rq": e.get("requires", []),
             "mt": e.get("magicians_topic_id"),
             "et": e.get("ethresearch_topic_id"),
@@ -753,60 +947,99 @@ def prepare_viz_data(data):
             "erc": e.get("ethresearch_citation_count", 0),
         }
 
-    # Compact EIP authors
+    # Compact EIP authors (canonicalized aliases merged into a single profile).
     compact_eip_authors = {}
+    eip_influence_by_num = {}
+
+    def ensure_eip_author_entry(name):
+        entry = compact_eip_authors.get(name)
+        if entry is None:
+            entry = {
+                "eips": set(),
+                "st": {},
+                "fk": set(),
+                "inf": 0.0,
+                "yrs": set(),
+                "aliases": set(eip_author_aliases.get(name, [])),
+            }
+            compact_eip_authors[name] = entry
+        else:
+            entry["aliases"].update(eip_author_aliases.get(name, []))
+        return entry
+
     for name, a in data.get("eip_authors", {}).items():
-        compact_eip_authors[name] = {
-            "n": name,
-            "eips": a.get("eips", []),
-            "st": a.get("statuses", {}),
-            "fk": a.get("forks_contributed", []),
-            "inf": a.get("influence_score", 0),
-            "yrs": a.get("active_years", []),
-        }
+        canonical_name = canonical_eip_author(name)
+        if not canonical_name:
+            continue
+        entry = ensure_eip_author_entry(canonical_name)
+        for num in (a.get("eips", []) or []):
+            n = _to_int(num)
+            if n is not None:
+                entry["eips"].add(n)
+        for status, count in (a.get("statuses") or {}).items():
+            st = str(status or "").strip()
+            if not st:
+                continue
+            try:
+                c = int(count)
+            except (TypeError, ValueError):
+                c = 0
+            if c > 0:
+                entry["st"][st] = entry["st"].get(st, 0) + c
+        for fork in (a.get("forks_contributed", []) or []):
+            f = str(fork or "").strip()
+            if f:
+                entry["fk"].add(f)
+        for year in (a.get("active_years", []) or []):
+            y = _to_int(year)
+            if y is not None:
+                entry["yrs"].add(y)
+        entry["inf"] += float(a.get("influence_score", 0) or 0)
+
     # Ensure authors found in EIP metadata appear in sidebar/detail even if they
     # were not present in precomputed eip_authors aggregates.
-    catalog_author_eips = {}
-    catalog_author_statuses = {}
-    catalog_author_forks = {}
-    catalog_author_years = {}
-    catalog_author_inf = {}
     for eip_str, e in data.get("eip_catalog", {}).items():
         num = _to_int(eip_str)
         if num is None:
             continue
+        inf = float(e.get("influence_score", 0) or 0)
+        eip_influence_by_num[num] = inf
         status = str(e.get("status") or "").strip()
         fork = str(e.get("fork") or "").strip()
-        inf = float(e.get("influence_score", 0) or 0)
         year = None
         created = str(e.get("created") or "").strip()
         if created and len(created) >= 4 and created[:4].isdigit():
             year = int(created[:4])
-        for raw_name in e.get("authors", []) or []:
-            name = str(raw_name or "").strip()
-            if not name:
+        for raw_name in (e.get("authors", []) or []):
+            canonical_name = canonical_eip_author(raw_name)
+            if not canonical_name:
                 continue
-            catalog_author_eips.setdefault(name, set()).add(num)
+            entry = ensure_eip_author_entry(canonical_name)
+            entry["eips"].add(num)
             if status:
-                st = catalog_author_statuses.setdefault(name, {})
-                st[status] = st.get(status, 0) + 1
+                entry["st"][status] = entry["st"].get(status, 0) + 1
             if fork:
-                catalog_author_forks.setdefault(name, set()).add(fork)
+                entry["fk"].add(fork)
             if year is not None:
-                catalog_author_years.setdefault(name, set()).add(year)
-            catalog_author_inf[name] = catalog_author_inf.get(name, 0.0) + inf
+                entry["yrs"].add(year)
 
-    for name, eip_set in catalog_author_eips.items():
-        if name in compact_eip_authors:
-            continue
-        compact_eip_authors[name] = {
+    merged_eip_authors = {}
+    for name, entry in compact_eip_authors.items():
+        eips = sorted(entry["eips"])
+        inf = sum(eip_influence_by_num.get(num, 0.0) for num in eips)
+        if inf == 0:
+            inf = float(entry["inf"] or 0.0)
+        aliases = sorted({a for a in entry["aliases"] if a and a != name})
+        merged_eip_authors[name] = {
             "n": name,
-            "eips": sorted(eip_set),
-            "st": dict(sorted((catalog_author_statuses.get(name) or {}).items(), key=lambda kv: kv[0])),
-            "fk": sorted(catalog_author_forks.get(name) or []),
-            "inf": round(catalog_author_inf.get(name, 0.0), 3),
-            "yrs": sorted(catalog_author_years.get(name) or []),
+            "eips": eips,
+            "st": dict(sorted(entry["st"].items(), key=lambda kv: kv[0])),
+            "fk": sorted(entry["fk"]),
+            "inf": round(inf, 3),
+            "yrs": sorted(entry["yrs"]),
+            "al": aliases,
         }
+    compact_eip_authors = merged_eip_authors
 
     # Compact EIP graph
     eip_graph = data.get("eip_graph", {"nodes": [], "edges": []})
@@ -842,7 +1075,6 @@ def prepare_viz_data(data):
 
     compact_papers, papers_source = _load_papers_for_viz(data)
 
-    author_links = _build_author_links(data)
     unified_graph = _build_unified_graph(
         compact_topics,
         graph,
@@ -922,6 +1154,7 @@ def generate_html(viz_json, data):
         <button id="toggle-eips" class="content-toggle" onclick="toggleContent('eips')" title="Toggle EIP nodes">\u25A0 EIPs</button>
         <button id="toggle-magicians" class="content-toggle" onclick="toggleContent('magicians')" title="Toggle Magicians nodes">\u25B2 Magicians</button>
         <button id="toggle-papers" class="content-toggle papers-toggle" onclick="toggleContent('papers')" title="Toggle research paper nodes in network view">\u25C6 Papers</button>
+        <button id="paper-layer-mode" class="content-toggle paper-mode-toggle" onclick="cyclePaperLayerMode()" title="Cycle paper scope mode">papers: focus</button>
       </div>
       <div id="filter-breadcrumb" class="breadcrumb"></div>
       <div class="inf-slider-wrap">
@@ -1345,6 +1578,11 @@ header .stats span { white-space: nowrap; }
 .content-toggle:hover { background: #2a2a3e; }
 .content-toggle.active { background: #2a3a2a; border-color: #4a6a4a; color: #88cc88; }
 .content-toggle.papers-toggle.active { background: #1f2f45; border-color: #4b6f9d; color: #9cc8ff; }
+.content-toggle.paper-mode-toggle { border-color: #35527a; color: #7fb4ee; }
+.content-toggle.paper-mode-toggle:hover { border-color: #4b6f9d; color: #9cc8ff; }
+.content-toggle.paper-mode-toggle.mode-focus { border-color: #4b6f9d; color: #9cc8ff; }
+.content-toggle.paper-mode-toggle.mode-context { border-color: #4b7d5a; color: #9cddb4; }
+.content-toggle.paper-mode-toggle.mode-broad { border-color: #7d6a4b; color: #e3c58f; }
 .content-toggle.disabled { opacity: 0.45; cursor: default; pointer-events: none; }
 
 @media (max-width: 1450px) {
@@ -1432,6 +1670,7 @@ let showPosts = true;
 let showEips = false;
 let showMagicians = false;
 let showPapers = false;
+let paperLayerMode = 'focus'; // 'focus' | 'context' | 'broad'
 let eipVisibilityMode = 'connected'; // 'connected' | 'all'
 let eipAuthorTab = false; // false = ethresearch, true = EIP authors
 let sidebarWide = false;
@@ -1561,6 +1800,13 @@ const MAG_TO_ETH_AUTHORS = AUTHOR_LINKS.magToEth || {};
 const ETH_TO_MAG_AUTHORS = AUTHOR_LINKS.ethToMag || {};
 const MAG_TO_EIP_AUTHORS = AUTHOR_LINKS.magToEip || {};
 const EIP_TO_MAG_AUTHORS = AUTHOR_LINKS.eipToMag || {};
+const EIP_ALIAS_TO_CANONICAL = AUTHOR_LINKS.eipAliasToCanonical || {};
+
+function canonicalEipAuthorName(name) {
+  var raw = String(name || '').trim();
+  if (!raw) return raw;
+  return EIP_ALIAS_TO_CANONICAL[raw] || raw;
+}
 
 function identityNode(kind, name) {
   return String(kind) + ':' + String(name);
@@ -1691,7 +1937,7 @@ function linkedEipAuthors(username) {
 }
 
 function linkedEthAuthors(eipAuthorName) {
-  return identityMembers('eip', eipAuthorName).eth;
+  return identityMembers('eip', canonicalEipAuthorName(eipAuthorName)).eth;
 }
 
 function linkedEthAuthorsFromMag(magAuthor) {
@@ -1707,7 +1953,7 @@ function linkedMagAuthorsFromEth(username) {
 }
 
 function linkedMagAuthorsFromEip(eipAuthorName) {
-  return identityMembers('eip', eipAuthorName).mag;
+  return identityMembers('eip', canonicalEipAuthorName(eipAuthorName)).mag;
 }
 
 const PAPER_MATCH_MODES = {
@@ -2004,6 +2250,7 @@ const PAPER_INDEX = (function() {
 const RELATED_PAPERS_CACHE = {
   topic: {},
   eip: {},
+  magicians: {},
   fork: {},
   author: {},
   eipAuthor: {},
@@ -2145,6 +2392,59 @@ function relatedPapersForEip(num, eip) {
   return rows;
 }
 
+function relatedPapersForMagiciansTopic(topicId, mt) {
+  var key = String(topicId || '');
+  if (!key) return [];
+  var cacheKey = key + '|' + paperMatchMode;
+  if (RELATED_PAPERS_CACHE.magicians[cacheKey]) return RELATED_PAPERS_CACHE.magicians[cacheKey];
+  var cfg = getPaperMatchConfig();
+  var topic = mt || (DATA.magiciansTopics || {})[String(topicId)] || {};
+
+  var topicEips = new Set(uniqueSortedNumbers(topic.eips || []));
+  var threadTags = new Set(threadPaperTags(magiciansThreadFromTopic(topic)));
+  var titleTokens = new Set(keywordTokenList(topic.t || ''));
+  var aliasNames = new Set();
+  if (topic.a) aliasNames.add(topic.a);
+  linkedEthAuthorsFromMag(topic.a || '').forEach(function(username) { aliasNames.add(username); });
+  linkedEipAuthorsFromMag(topic.a || '').forEach(function(name) { aliasNames.add(name); });
+  var aliasRows = buildAliasRows(Array.from(aliasNames));
+
+  var rows = rankRelatedPapers(function(pidx) {
+    var score = paperRelevanceBonus(pidx, cfg);
+    var reasons = [];
+
+    var eipOverlap = setOverlapArray(topicEips, pidx.eipSet);
+    if (eipOverlap.length > 0) {
+      score += Math.min(5.8, 2.5 + eipOverlap.length * 1.0);
+      reasons.push('EIP overlap: ' + eipOverlap.slice(0, 3).map(function(n) { return 'EIP-' + n; }).join(', '));
+    }
+
+    var authorMatch = bestAliasMatch(aliasRows, pidx.authorRows);
+    if (authorMatch.score >= 2.0) {
+      score += Math.min(2.8, authorMatch.score * 0.9);
+      reasons.push('author match: ' + authorMatch.alias);
+    }
+
+    var titleOverlap = setOverlapArray(titleTokens, pidx.titleTokenSet);
+    if (titleOverlap.length >= 2) {
+      score += Math.min(1.6, titleOverlap.length * 0.5);
+      reasons.push('title overlap');
+    }
+
+    var tagOverlap = setOverlapArray(threadTags, pidx.tagSet);
+    if (tagOverlap.length > 0) {
+      score += 0.9;
+      reasons.push('thread/domain match');
+    }
+
+    if (score < cfg.minTopic) return null;
+    return {paper: pidx.p, score: Number(score.toFixed(3)), reasons: reasons};
+  }, cfg.minTopic, cfg.limit);
+
+  RELATED_PAPERS_CACHE.magicians[cacheKey] = rows;
+  return rows;
+}
+
 function relatedPapersForFork(forkObj) {
   var key = String((forkObj && (forkObj.cn || forkObj.n)) || '');
   if (!key) return [];
@@ -2276,11 +2576,42 @@ function relatedPapersForEipAuthor(name) {
 }
 
 const NETWORK_PAPER_LIMITS = {
-  maxTopics: 90,
-  maxEips: 120,
-  perTopic: 2,
-  perEip: 3,
-  maxPapers: 110,
+  focus: {
+    maxTopics: 36,
+    maxEips: 48,
+    maxMagicians: 30,
+    perTopic: 1,
+    perEip: 2,
+    perMagicians: 1,
+    maxPapers: 40,
+    topicWeight: 0.7,
+    eipWeight: 1.0,
+    magiciansWeight: 0.8,
+  },
+  context: {
+    maxTopics: 80,
+    maxEips: 105,
+    maxMagicians: 70,
+    perTopic: 2,
+    perEip: 2,
+    perMagicians: 2,
+    maxPapers: 90,
+    topicWeight: 0.72,
+    eipWeight: 1.0,
+    magiciansWeight: 0.85,
+  },
+  broad: {
+    maxTopics: 130,
+    maxEips: 180,
+    maxMagicians: 120,
+    perTopic: 2,
+    perEip: 3,
+    perMagicians: 2,
+    maxPapers: 150,
+    topicWeight: 0.75,
+    eipWeight: 1.02,
+    magiciansWeight: 0.9,
+  },
 };
 
 function paperNodeId(paperId) {
@@ -2307,6 +2638,7 @@ function paperScoreToInfluence(score) {
 
 function buildNetworkPaperAugment(baseNodeMap) {
   if (!showPapers) return {nodes: [], links: []};
+  var modeCfg = NETWORK_PAPER_LIMITS[paperLayerMode] || NETWORK_PAPER_LIMITS.focus;
 
   var relationByKey = {};
   var paperScoreById = {};
@@ -2354,12 +2686,12 @@ function buildNetworkPaperAugment(baseNodeMap) {
     .sort(function(a, b) {
       return (Number(b.influence || 0) - Number(a.influence || 0));
     })
-    .slice(0, NETWORK_PAPER_LIMITS.maxTopics);
+    .slice(0, modeCfg.maxTopics);
 
   topicTargets.forEach(function(n) {
     var topicId = Number(n.id);
     if (!isFinite(topicId)) return;
-    addRowsForTarget(relatedPapersForTopic(topicId), n.id, NETWORK_PAPER_LIMITS.perTopic, 0.7);
+    addRowsForTarget(relatedPapersForTopic(topicId), n.id, modeCfg.perTopic, modeCfg.topicWeight);
   });
 
   var eipTargets = Object.values(baseNodeMap)
@@ -2369,13 +2701,29 @@ function buildNetworkPaperAugment(baseNodeMap) {
     .sort(function(a, b) {
       return (Number(b.influence || 0) - Number(a.influence || 0));
     })
-    .slice(0, NETWORK_PAPER_LIMITS.maxEips);
+    .slice(0, modeCfg.maxEips);
 
   eipTargets.forEach(function(n) {
     var eipNum = eipNumFromNode(n);
     if (eipNum === null || !isFinite(eipNum)) return;
     var eipMeta = (DATA.eipCatalog || {})[String(eipNum)] || {};
-    addRowsForTarget(relatedPapersForEip(eipNum, eipMeta), n.id, NETWORK_PAPER_LIMITS.perEip, 1.0);
+    addRowsForTarget(relatedPapersForEip(eipNum, eipMeta), n.id, modeCfg.perEip, modeCfg.eipWeight);
+  });
+
+  var magiciansTargets = Object.values(baseNodeMap)
+    .filter(function(n) {
+      return networkNodeSourceType(n) === 'magicians' && magiciansTopicId(n) !== null;
+    })
+    .sort(function(a, b) {
+      return (Number(b.influence || 0) - Number(a.influence || 0));
+    })
+    .slice(0, modeCfg.maxMagicians);
+
+  magiciansTargets.forEach(function(n) {
+    var mid = magiciansTopicId(n);
+    if (mid === null || !isFinite(mid)) return;
+    var mt = (DATA.magiciansTopics || {})[String(mid)] || n;
+    addRowsForTarget(relatedPapersForMagiciansTopic(mid, mt), n.id, modeCfg.perMagicians, modeCfg.magiciansWeight);
   });
 
   if (pinnedTopicId !== null && baseNodeMap[pinnedTopicId]) {
@@ -2392,10 +2740,22 @@ function buildNetworkPaperAugment(baseNodeMap) {
       );
     }
   }
+  if (activeMagiciansId !== null) {
+    var focusedMagNodeId = magiciansNodeId(activeMagiciansId);
+    if (baseNodeMap[focusedMagNodeId]) {
+      var focusedMt = (DATA.magiciansTopics || {})[String(activeMagiciansId)] || {};
+      addRowsForTarget(
+        relatedPapersForMagiciansTopic(Number(activeMagiciansId), focusedMt),
+        focusedMagNodeId,
+        10,
+        1.25
+      );
+    }
+  }
 
   var rankedPaperIds = Object.entries(paperScoreById)
     .sort(function(a, b) { return Number(b[1] || 0) - Number(a[1] || 0); })
-    .slice(0, NETWORK_PAPER_LIMITS.maxPapers)
+    .slice(0, modeCfg.maxPapers)
     .map(function(entry) { return entry[0]; });
   var keep = new Set(rankedPaperIds);
 
@@ -2805,7 +3165,7 @@ function clearAuthorFilter() {
 
 function selectLinkedAuthorIdentity(ethUsername, eipAuthorName) {
   activeAuthor = ethUsername || null;
-  activeEipAuthor = eipAuthorName || null;
+  activeEipAuthor = eipAuthorName ? canonicalEipAuthorName(eipAuthorName) : null;
   lineageActive = false;
   lineageSet = new Set();
   lineageEdgeSet = new Set();
@@ -2883,12 +3243,23 @@ function eipInfluence(node) {
 }
 
 function eipAuthorsFromNode(node) {
+  function canonicalUniqueNames(names) {
+    var out = [];
+    var seen = new Set();
+    (names || []).forEach(function(name) {
+      var canonical = canonicalEipAuthorName(name);
+      if (!canonical || seen.has(canonical)) return;
+      seen.add(canonical);
+      out.push(canonical);
+    });
+    return out;
+  }
   if (!node) return [];
-  if (Array.isArray(node.au) && node.au.length > 0) return node.au;
+  if (Array.isArray(node.au) && node.au.length > 0) return canonicalUniqueNames(node.au);
   var num = eipNumFromNode(node);
   if (num === null || isNaN(num)) return [];
   var eip = (DATA.eipCatalog || {})[String(num)];
-  return (eip && Array.isArray(eip.au)) ? eip.au : [];
+  return (eip && Array.isArray(eip.au)) ? canonicalUniqueNames(eip.au) : [];
 }
 
 function eipMatchesFilter(node) {
@@ -3119,6 +3490,66 @@ function updateEipVisibilityUi() {
     : 'Toggle EIP nodes';
 }
 
+const PAPER_LAYER_MODES = {
+  focus: {label: 'focus'},
+  context: {label: 'context'},
+  broad: {label: 'broad'},
+};
+
+function updatePaperLayerModeUi() {
+  var btn = document.getElementById('paper-layer-mode');
+  if (!btn) return;
+  var mode = PAPER_LAYER_MODES[paperLayerMode] ? paperLayerMode : 'focus';
+  btn.textContent = 'papers: ' + PAPER_LAYER_MODES[mode].label;
+  btn.classList.remove('mode-focus', 'mode-context', 'mode-broad');
+  btn.classList.add('mode-' + mode);
+  if (!showPapers) btn.classList.add('disabled');
+  else btn.classList.remove('disabled');
+}
+
+function setPaperLayerMode(mode, persist) {
+  var next = PAPER_LAYER_MODES[mode] ? mode : 'focus';
+  if (paperLayerMode === next) {
+    updatePaperLayerModeUi();
+    return;
+  }
+  paperLayerMode = next;
+  updatePaperLayerModeUi();
+  if (persist !== false) {
+    try { localStorage.setItem('evmap.paperLayerMode', next); } catch (e) {}
+  }
+  if (showPapers) {
+    var netSvg = document.querySelector('#network-view svg');
+    if (activeView === 'network') {
+      if (netSvg) { netSvg.remove(); simulation = null; }
+      buildNetwork();
+    } else if (netSvg) {
+      netSvg.remove();
+      simulation = null;
+    }
+  }
+  updateHash();
+}
+
+function cyclePaperLayerMode() {
+  if (!showPapers) return;
+  var order = ['focus', 'context', 'broad'];
+  var idx = order.indexOf(paperLayerMode);
+  if (idx < 0) idx = 0;
+  var next = order[(idx + 1) % order.length];
+  setPaperLayerMode(next, true);
+}
+
+function setupPaperLayerMode() {
+  var mode = 'focus';
+  try {
+    var saved = localStorage.getItem('evmap.paperLayerMode');
+    if (saved && PAPER_LAYER_MODES[saved]) mode = saved;
+  } catch (e) {}
+  paperLayerMode = mode;
+  updatePaperLayerModeUi();
+}
+
 // Build co-author edge index: author_id -> set of connected author_ids
 const coAuthorEdgeIndex = {};
 const coAuthorNodeSet = new Set((DATA.coGraph.nodes || []).map(function(n) { return n.id; }));
@@ -3234,6 +3665,7 @@ function toggleSidebarHidden() {
 document.addEventListener('DOMContentLoaded', () => {
   setupSidebarWidth();
   setupPaperMatchMode();
+  setupPaperLayerMode();
   buildSidebar();
   buildTimeline();
   setupSearch();
@@ -3481,6 +3913,7 @@ function clearFilters() {
   document.getElementById('toggle-eips').classList.remove('active');
   document.getElementById('toggle-magicians').classList.remove('active');
   document.getElementById('toggle-papers').classList.remove('active');
+  updatePaperLayerModeUi();
   updateEipVisibilityUi();
   applyContentVisibility();
   if (similarActive) clearSimilar();
@@ -3531,15 +3964,17 @@ function selectAuthor(username) {
 }
 
 function toggleEipAuthor(name) {
-  var linkedEth = linkedEthAuthors(name);
-  var sameSelection = activeEipAuthor === name && (!activeAuthor || linkedEth.indexOf(activeAuthor) >= 0);
+  var canonical = canonicalEipAuthorName(name);
+  var linkedEth = linkedEthAuthors(canonical);
+  var sameSelection = activeEipAuthor === canonical && (!activeAuthor || linkedEth.indexOf(activeAuthor) >= 0);
   if (sameSelection) clearAuthorFilter();
-  else selectLinkedAuthorIdentity(linkedEth.length > 0 ? linkedEth[0] : null, name);
+  else selectLinkedAuthorIdentity(linkedEth.length > 0 ? linkedEth[0] : null, canonical);
 }
 
 function selectEipAuthor(name) {
-  var linkedEth = linkedEthAuthors(name);
-  selectLinkedAuthorIdentity(linkedEth.length > 0 ? linkedEth[0] : null, name);
+  var canonical = canonicalEipAuthorName(name);
+  var linkedEth = linkedEthAuthors(canonical);
+  selectLinkedAuthorIdentity(linkedEth.length > 0 ? linkedEth[0] : null, canonical);
 }
 
 function openAuthor(username) {
@@ -3555,8 +3990,9 @@ function openAuthor(username) {
 }
 
 function openEipAuthor(name) {
-  selectEipAuthor(name);
-  showEipAuthorDetail(name);
+  var canonical = canonicalEipAuthorName(name);
+  selectEipAuthor(canonical);
+  showEipAuthorDetail(canonical);
 }
 
 function toggleCategory(cat) {
@@ -3629,6 +4065,7 @@ function toggleContent(type, mode) {
   } else if (type === 'papers') {
     showPapers = !showPapers;
     document.getElementById('toggle-papers').classList.toggle('active', showPapers);
+    updatePaperLayerModeUi();
     var pNetSvg = document.querySelector('#network-view svg');
     if (activeView === 'network') {
       if (pNetSvg) { pNetSvg.remove(); simulation = null; }
@@ -7537,7 +7974,10 @@ function buildHash() {
     if (eipVisibilityMode === 'all') parts.push('eipmode=all');
   }
   if (showMagicians) parts.push('mags=1');
-  if (showPapers) parts.push('papers=1');
+  if (showPapers) {
+    parts.push('papers=1');
+    parts.push('pmode=' + encodeURIComponent(paperLayerMode));
+  }
   return parts.length > 0 ? '#' + parts.join('&') : '';
 }
 
@@ -7557,6 +7997,7 @@ function applyHash() {
   var params = parseHash();
   var changed = false;
   var eipModeChanged = false;
+  var paperModeChanged = false;
 
   // Switch view if specified
   if (params.view && params.view !== activeView) {
@@ -7580,7 +8021,7 @@ function applyHash() {
   // Apply author filter
   if (params.author || params.eip_author) {
     var nextEthAuthor = params.author || null;
-    var nextEipAuthor = params.eip_author || null;
+    var nextEipAuthor = params.eip_author ? canonicalEipAuthorName(params.eip_author) : null;
     if (nextEthAuthor && !nextEipAuthor) {
       var linkedEips = linkedEipAuthors(nextEthAuthor);
       if (linkedEips.length > 0) nextEipAuthor = linkedEips[0];
@@ -7594,6 +8035,16 @@ function applyHash() {
       activeEipAuthor = nextEipAuthor;
       refreshAuthorSidebarList();
       changed = true;
+    }
+  }
+
+  if (params.pmode && PAPER_LAYER_MODES[params.pmode]) {
+    if (params.pmode !== paperLayerMode) {
+      paperLayerMode = params.pmode;
+      updatePaperLayerModeUi();
+      paperModeChanged = true;
+      changed = true;
+      try { localStorage.setItem('evmap.paperLayerMode', paperLayerMode); } catch (e) {}
     }
   }
 
@@ -7624,6 +8075,10 @@ function applyHash() {
   if (params.papers === '1' && !showPapers) {
     toggleContent('papers');
     changed = true;
+  } else if (params.papers === '1' && showPapers && paperModeChanged && activeView === 'network') {
+    var paperNetSvg = document.querySelector('#network-view svg');
+    if (paperNetSvg) { paperNetSvg.remove(); simulation = null; }
+    buildNetwork();
   }
 
   if (changed) applyFilters();
@@ -8040,8 +8495,9 @@ function showEipDetail(eip, num) {
   if (eip.au && eip.au.length > 0) {
     authorsHtml = '<div class="eip-detail-stat"><span class="label">Authors</span><span class="value">' +
       eip.au.map(function(a) {
-        var ea = (DATA.eipAuthors || {})[a];
-        if (ea) return '<span style="cursor:pointer;color:#7788cc" onclick="openEipAuthor(' + jsQuote(a) + ')">' + escHtml(a) + '</span>';
+        var canonical = canonicalEipAuthorName(a);
+        var ea = (DATA.eipAuthors || {})[canonical];
+        if (ea) return '<span style="cursor:pointer;color:#7788cc" onclick="openEipAuthor(' + jsQuote(canonical) + ')">' + escHtml(canonical) + '</span>';
         return escHtml(a);
       }).join(', ') + '</span></div>';
   }
@@ -8098,6 +8554,7 @@ function showEipDetail(eip, num) {
 // EIP AUTHOR DETAIL
 // ========================================================================
 function showEipAuthorDetail(name) {
+  name = canonicalEipAuthorName(name);
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
   var a = (DATA.eipAuthors || {})[name];
