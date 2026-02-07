@@ -1656,12 +1656,18 @@ header .stats span { white-space: nowrap; }
 /* EIP squares on timeline */
 .eip-square { cursor: pointer; pointer-events: all; }
 .magicians-triangle { cursor: pointer; pointer-events: all; }
+.paper-diamond { cursor: pointer; pointer-events: all; }
 .magicians-label { fill: #c8b5db; font-size: 8px; pointer-events: none; }
+.paper-label { fill: #9ec6ff; font-size: 8px; pointer-events: none; }
 
 /* Cross-reference edges (EIP ↔ topic) */
 .cross-ref-edge { stroke-dasharray: 4 3; pointer-events: none; }
 .magicians-ref-edge { pointer-events: none; }
-.cross-ref-edge, .magicians-ref-edge, .focus-eip-topic-edge { stroke-linecap: round; pointer-events: none; }
+.paper-topic-ref-edge { stroke-dasharray: 2 3; pointer-events: none; }
+.paper-eip-ref-edge { stroke-dasharray: 3 2; pointer-events: none; }
+.cross-ref-edge, .magicians-ref-edge, .paper-topic-ref-edge, .paper-eip-ref-edge, .focus-eip-topic-edge {
+  stroke-linecap: round; pointer-events: none;
+}
 
 /* EIP status colors */
 .eip-color-final { fill: #4caf50; stroke: #4caf50; }
@@ -1712,6 +1718,7 @@ let hoveredTopicId = null;
 let pinnedTopicId = null;
 let activeMagiciansId = null;
 let activeEipNum = null;
+let activePaperId = null;
 let lineageActive = false;
 let lineageSet = new Set();
 let lineageEdgeSet = new Set(); // "src-tgt" strings for fast edge lookup
@@ -2073,6 +2080,13 @@ function refreshOpenDetailPanel() {
   if (activeMagiciansId !== null && activeMagiciansId !== undefined) {
     showMagiciansTopicDetailById(activeMagiciansId);
     return;
+  }
+  if (activePaperId) {
+    var activePaper = (DATA.papers || {})[String(activePaperId)];
+    if (activePaper) {
+      showPaperDetail(activePaper, null);
+      return;
+    }
   }
   if (activeEipAuthor) {
     showEipAuthorDetail(activeEipAuthor);
@@ -2507,6 +2521,171 @@ const PAPER_INDEX = (function() {
     return String((a.p || {}).t || '').localeCompare(String((b.p || {}).t || ''));
   });
 })();
+
+const PAPER_INDEX_BY_ID = {};
+const EIP_TO_PAPER_IDS = {};
+const PAPER_TO_EIP_IDS = {};
+const PAPER_TO_TOPIC_IDS = {};
+const PAPER_TO_MAGICIANS_IDS = {};
+
+(function buildPaperRelationIndices() {
+  PAPER_INDEX.forEach(function(pidx) {
+    var p = pidx && pidx.p ? pidx.p : null;
+    if (!p) return;
+    var pid = String(p.id || '').trim();
+    if (!pid) return;
+    PAPER_INDEX_BY_ID[pid] = pidx;
+
+    var eips = uniqueSortedNumbers(p.eq || []);
+    PAPER_TO_EIP_IDS[pid] = eips;
+
+    var topicSet = new Set();
+    var magSet = new Set();
+    eips.forEach(function(num) {
+      var eipKey = String(num);
+      if (!EIP_TO_PAPER_IDS[eipKey]) EIP_TO_PAPER_IDS[eipKey] = new Set();
+      EIP_TO_PAPER_IDS[eipKey].add(pid);
+
+      (eipToTopicIds[eipKey] || []).forEach(function(tid) { topicSet.add(Number(tid)); });
+      (eipToMagiciansRefs[eipKey] || new Set()).forEach(function(mid) { magSet.add(Number(mid)); });
+      var eMeta = (DATA.eipCatalog || {})[eipKey] || {};
+      if (eMeta.mt !== undefined && eMeta.mt !== null && !isNaN(Number(eMeta.mt))) {
+        magSet.add(Number(eMeta.mt));
+      }
+    });
+    PAPER_TO_TOPIC_IDS[pid] = Array.from(topicSet);
+    PAPER_TO_MAGICIANS_IDS[pid] = Array.from(magSet);
+  });
+})();
+
+const PAPER_TAG_TO_THREADS = (function() {
+  var out = {};
+  Object.entries(THREAD_PAPER_TAG_HINTS || {}).forEach(function(entry) {
+    var th = entry[0];
+    (entry[1] || []).forEach(function(tag) {
+      var key = String(tag || '').toLowerCase();
+      if (!key) return;
+      if (!out[key]) out[key] = [];
+      if (out[key].indexOf(th) < 0) out[key].push(th);
+    });
+  });
+  return out;
+})();
+
+function paperTimelineInfluence(nodeOrPaper) {
+  var p = nodeOrPaper || {};
+  if (p._paperInf !== undefined && p._paperInf !== null) return Number(p._paperInf) || 0;
+  return paperScoreToInfluence(Number(p.rs || p.paperScore || 0));
+}
+
+function paperTimelineThread(nodeOrPaper) {
+  var p = nodeOrPaper || {};
+  if (p._paperThread !== undefined && p._paperThread !== null) return p._paperThread;
+  return inferPaperThread(p);
+}
+
+function inferPaperThread(paper) {
+  if (!paper) return null;
+  var pid = String(paper.id || '').trim();
+  var eips = PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(paper.eq || []);
+  var topicIds = PAPER_TO_TOPIC_IDS[pid] || [];
+  var counts = {};
+
+  topicIds.forEach(function(tid) {
+    var t = DATA.topics[tid];
+    if (!t || !t.th) return;
+    counts[t.th] = (counts[t.th] || 0) + 2;
+  });
+
+  eips.forEach(function(num) {
+    var eMeta = (DATA.eipCatalog || {})[String(num)];
+    if (!eMeta || !eMeta.th) return;
+    counts[eMeta.th] = (counts[eMeta.th] || 0) + 1;
+  });
+
+  (paper.tg || []).forEach(function(tag) {
+    var threads = PAPER_TAG_TO_THREADS[String(tag || '').toLowerCase()] || [];
+    threads.forEach(function(th) { counts[th] = (counts[th] || 0) + 1; });
+  });
+
+  var best = null;
+  var bestCount = 0;
+  Object.keys(counts).forEach(function(th) {
+    if (counts[th] > bestCount) {
+      bestCount = counts[th];
+      best = th;
+    }
+  });
+  return best;
+}
+
+function paperTimelineDate(paper) {
+  if (!paper) return null;
+  var year = paperYearValue(paper);
+  if (year === null) return null;
+  var pid = String(paper.id || '').trim();
+  var seed = hashText(pid || String(year));
+  var month = seed % 12;
+  var day = 3 + (seed % 24);
+  var d = new Date(year, month, day);
+  if (isNaN(d)) return null;
+  return d;
+}
+
+function activePaperAliasRows() {
+  if (!hasAuthorFilter()) return null;
+  var names = new Set();
+  getActiveEthAuthorSet().forEach(function(username) {
+    names.add(username);
+    linkedEipAuthors(username).forEach(function(name) { names.add(name); });
+  });
+  getActiveEipAuthorSet().forEach(function(name) {
+    names.add(name);
+    linkedEthAuthors(name).forEach(function(username) {
+      names.add(username);
+      linkedEipAuthors(username).forEach(function(eipName) { names.add(eipName); });
+    });
+  });
+  if (names.size === 0) return [];
+  return buildAliasRows(Array.from(names));
+}
+
+function paperMatchesTimelineFilter(nodeOrPaper) {
+  if (!showPapers || !nodeOrPaper) return false;
+  var pid = String(nodeOrPaper._paperId || nodeOrPaper.id || '').replace(/^paper_/, '').trim();
+  var paper = (DATA.papers || {})[pid] || nodeOrPaper;
+  if (!paper || !paper.id) return false;
+  if (!paperPassesSidebarFilters(paper)) return false;
+
+  var inf = paperTimelineInfluence(paper);
+  if (minInfluence > 0 && inf < minInfluence) return false;
+
+  var thread = paperTimelineThread(paper);
+  if (activeThread && thread !== activeThread) return false;
+
+  if (activeCategory || activeTag) {
+    var topicIds = PAPER_TO_TOPIC_IDS[pid] || [];
+    var hasTopicMatch = topicIds.some(function(tid) {
+      var t = DATA.topics[tid];
+      if (!t) return false;
+      if (activeCategory && t.cat !== activeCategory) return false;
+      if (activeTag && !(t.tg || []).includes(activeTag)) return false;
+      return true;
+    });
+    if (!hasTopicMatch) return false;
+  }
+
+  if (hasAuthorFilter()) {
+    var aliases = activePaperAliasRows();
+    if (!aliases || aliases.length === 0) return false;
+    var pidx = PAPER_INDEX_BY_ID[pid];
+    var authorRows = pidx ? (pidx.authorRows || []) : buildAliasRows(paper.a || []);
+    var match = bestAliasMatch(aliases, authorRows);
+    if (match.score < 2.0) return false;
+  }
+
+  return true;
+}
 
 const RELATED_PAPERS_CACHE = {
   topic: {},
@@ -3872,6 +4051,7 @@ function canApplyFocusedHighlightInView() {
   if (activeView === 'timeline' || activeView === 'network') {
     if (activeEipNum !== null && !showEips) return false;
     if (activeMagiciansId !== null && !showMagicians) return false;
+    if (activePaperId && !showPapers) return false;
   }
   return hasFocusedEntity();
 }
@@ -3887,6 +4067,7 @@ function rebuildActiveViewLayout() {
     buildTimeline();
     if (showEips && !document.querySelector('.eip-square')) drawEipTimeline();
     if (showMagicians && !document.querySelector('.magicians-triangle')) drawMagiciansTimeline();
+    if (showPapers && !document.querySelector('.paper-diamond')) drawPaperTimeline();
   } else if (activeView === 'network') {
     var netContainer = document.getElementById('network-view');
     if (netContainer) netContainer.innerHTML = '';
@@ -4046,6 +4227,7 @@ function showView(view) {
     if (!document.querySelector('#timeline-view svg')) buildTimeline();
     if (showEips && !document.querySelector('.eip-square')) drawEipTimeline();
     if (showMagicians && !document.querySelector('.magicians-triangle')) drawMagiciansTimeline();
+    if (showPapers && !document.querySelector('.paper-diamond')) drawPaperTimeline();
   }
   if (view === 'network' && !document.querySelector('#network-view svg')) buildNetwork();
   if (view === 'coauthor' && !document.querySelector('#coauthor-view svg')) buildCoAuthorNetwork();
@@ -4224,6 +4406,7 @@ function clearFilters() {
   activeTag = null;
   activeMagiciansId = null;
   activeEipNum = null;
+  activePaperId = null;
   minInfluence = defaultInfluenceThreshold;
   var slider = document.getElementById('inf-slider');
   if (slider) { slider.value = defaultSliderPct; }
@@ -4433,6 +4616,9 @@ function toggleContent(type, mode) {
       }
     }
     updatePaperLayerModeUi();
+    if (showPapers && activeView === 'timeline' && !document.querySelector('.paper-diamond')) {
+      drawPaperTimeline();
+    }
     var pNetSvg = document.querySelector('#network-view svg');
     if (activeView === 'network' && (prevShowPapers !== showPapers || prevPaperMode !== paperLayerMode)) {
       if (pNetSvg) { pNetSvg.remove(); simulation = null; }
@@ -4479,6 +4665,26 @@ function applyContentVisibility() {
   });
   d3.selectAll('.magicians-label').style('display', function(d) {
     return magiciansMatchesFilter(d) ? null : 'none';
+  });
+  d3.selectAll('.paper-diamond').style('display', function(d) {
+    return paperMatchesTimelineFilter(d) ? null : 'none';
+  });
+  d3.selectAll('.paper-label').style('display', function(d) {
+    return paperMatchesTimelineFilter(d) ? null : 'none';
+  });
+  d3.selectAll('.paper-topic-ref-edge').style('display', function(d) {
+    if (!(showPosts && showPapers)) return 'none';
+    if (!d || !paperMatchesTimelineFilter((DATA.papers || {})[String(d.paperId)] || {})) return 'none';
+    var t = DATA.topics[d.topicId];
+    if (!t) return 'none';
+    return topicMatchesFilter(t) ? null : 'none';
+  });
+  d3.selectAll('.paper-eip-ref-edge').style('display', function(d) {
+    if (!(showEips && showPapers)) return 'none';
+    if (!d || !paperMatchesTimelineFilter((DATA.papers || {})[String(d.paperId)] || {})) return 'none';
+    var e = (DATA.eipCatalog || {})[String(d.eipNum)];
+    if (!e) return 'none';
+    return eipMatchesFilter(e) ? null : 'none';
   });
   d3.selectAll('.magicians-ref-edge').style('display', function(d) {
     if (!(showPosts && showMagicians)) return 'none';
@@ -5312,7 +5518,7 @@ function buildTimeline() {
     if (!hasFocusedEntity() || ev.defaultPrevented) return;
     var target = ev && ev.target ? ev.target : null;
     if (target && target.closest && target.closest(
-      '.topic-circle,.milestone-marker,.eip-square,.magicians-triangle,.fork-hover-line,.eip-label,.magicians-label,.eip-tag'
+      '.topic-circle,.milestone-marker,.eip-square,.magicians-triangle,.paper-diamond,.fork-hover-line,.eip-label,.magicians-label,.paper-label,.eip-tag'
     )) return;
     clearFocusedEntityState({keepDetailOpen: false});
   });
@@ -5406,6 +5612,24 @@ function buildTimeline() {
       .attr('x1', function(d) { return d && d.magDate ? newX(d.magDate) : 0; })
       .attr('x2', function(d) { return d && d.topicDate ? newX(d.topicDate) : 0; });
 
+    // Update paper diamonds + labels + ref edges
+    d3.selectAll('.paper-diamond').attr('d', function(d) {
+      if (!d || !d._paperDate) return '';
+      var r = paperTimelineRScale ? paperTimelineRScale(d._paperInf || paperTimelineInfluence(d)) : 5;
+      return diamondPath(newX(d._paperDate), d._paperYPos, r);
+    });
+    d3.selectAll('.paper-label').attr('x', function(d) {
+      if (!d || !d._paperDate) return 0;
+      var r = paperTimelineRScale ? paperTimelineRScale(d._paperInf || paperTimelineInfluence(d)) : 5;
+      return newX(d._paperDate) + r + 3;
+    });
+    d3.selectAll('.paper-topic-ref-edge')
+      .attr('x1', function(d) { return d && d.paperDate ? newX(d.paperDate) : 0; })
+      .attr('x2', function(d) { return d && d.topicDate ? newX(d.topicDate) : 0; });
+    d3.selectAll('.paper-eip-ref-edge')
+      .attr('x1', function(d) { return d && d.paperDate ? newX(d.paperDate) : 0; })
+      .attr('x2', function(d) { return d && d.eipDate ? newX(d.eipDate) : 0; });
+
     // Update x-axis with adaptive tick density
     var axisFn;
     if (t.k > 4) {
@@ -5422,7 +5646,7 @@ function buildTimeline() {
 }
 
 function hasFocusedEntity() {
-  return pinnedTopicId !== null || activeEipNum !== null || activeMagiciansId !== null;
+  return pinnedTopicId !== null || activeEipNum !== null || activeMagiciansId !== null || !!activePaperId;
 }
 
 function clearFocusedEntityState(options) {
@@ -5432,6 +5656,7 @@ function clearFocusedEntityState(options) {
   pinnedTopicId = null;
   activeEipNum = null;
   activeMagiciansId = null;
+  activePaperId = null;
   if (similarActive) clearSimilar();
   else applyFilters();
   if (showPapers) refreshNetworkForFocusChange();
@@ -5450,10 +5675,14 @@ function focusedEntityDescriptor() {
     var mid = Number(activeMagiciansId);
     return {kind: 'magicians', key: isNaN(mid) ? activeMagiciansId : mid};
   }
+  if (activePaperId) {
+    return {kind: 'paper', key: paperNodeId(activePaperId)};
+  }
   return null;
 }
 
 function isHoverBlockedByFocusedEntity(kind, node) {
+  if (!canApplyFocusedHighlightInView()) return false;
   var focus = focusedEntityDescriptor();
   if (!focus) return false;
   if (kind === 'topic') {
@@ -5471,6 +5700,11 @@ function isHoverBlockedByFocusedEntity(kind, node) {
     if (focus.kind === 'magicians' && Number(mid) === Number(focus.key)) return false;
     return true;
   }
+  if (kind === 'paper') {
+    var pid = paperIdFromNode(node);
+    if (focus.kind === 'paper' && String(paperNodeId(pid)) === String(focus.key)) return false;
+    return true;
+  }
   return true;
 }
 
@@ -5478,9 +5712,11 @@ function buildEntityFocusContext(kind, node) {
   var linkedTopics = new Set();
   var linkedEips = new Set();
   var linkedMagicians = new Set();
+  var linkedPapers = new Set();
   var entityNodeId = null;
   var entityMagId = null;
   var entityEipNum = null;
+  var entityPaperId = null;
 
   if (kind === 'eip') {
     entityNodeId = eipNodeId(node);
@@ -5491,6 +5727,7 @@ function buildEntityFocusContext(kind, node) {
     (eipToMagiciansRefs[String(eipNum)] || new Set()).forEach(function(mid) { linkedMagicians.add(Number(mid)); });
     var eipMeta = (DATA.eipCatalog || {})[String(eipNum)];
     if (eipMeta && eipMeta.mt) linkedMagicians.add(Number(eipMeta.mt));
+    (EIP_TO_PAPER_IDS[String(eipNum)] || new Set()).forEach(function(pid) { linkedPapers.add(String(pid)); });
     ((DATA.eipGraph || {}).edges || []).forEach(function(edge) {
       if (!edge || edge.type !== 'eip_requires') return;
       if (edge.source === entityNodeId && edge.target) linkedEips.add(String(edge.target));
@@ -5502,7 +5739,26 @@ function buildEntityFocusContext(kind, node) {
     linkedMagicians.add(Number(entityMagId));
     var mt = (DATA.magiciansTopics || {})[String(entityMagId)] || node;
     (mt.er || []).forEach(function(tid) { linkedTopics.add(Number(tid)); });
-    (magiciansLinkedEips(mt) || []).forEach(function(eipNum) { linkedEips.add('eip_' + String(eipNum)); });
+    (magiciansLinkedEips(mt) || []).forEach(function(eipNum) {
+      linkedEips.add('eip_' + String(eipNum));
+      (EIP_TO_PAPER_IDS[String(eipNum)] || new Set()).forEach(function(pid) { linkedPapers.add(String(pid)); });
+    });
+  } else if (kind === 'paper') {
+    var pid = String((node && (node._paperId || node.paperId || node.id)) || '').replace(/^paper_/, '').trim();
+    if (!pid) return null;
+    var p = (DATA.papers || {})[pid] || node;
+    if (!p) return null;
+    entityPaperId = pid;
+    linkedPapers.add(pid);
+    (PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(p.eq || [])).forEach(function(eipNum) {
+      linkedEips.add('eip_' + String(eipNum));
+      (eipToTopicIds[String(eipNum)] || []).forEach(function(tid) { linkedTopics.add(Number(tid)); });
+      (eipToMagiciansRefs[String(eipNum)] || new Set()).forEach(function(mid) { linkedMagicians.add(Number(mid)); });
+      var eMeta = (DATA.eipCatalog || {})[String(eipNum)] || {};
+      if (eMeta.mt !== undefined && eMeta.mt !== null && !isNaN(Number(eMeta.mt))) linkedMagicians.add(Number(eMeta.mt));
+    });
+    (PAPER_TO_TOPIC_IDS[pid] || []).forEach(function(tid) { linkedTopics.add(Number(tid)); });
+    (PAPER_TO_MAGICIANS_IDS[pid] || []).forEach(function(mid) { linkedMagicians.add(Number(mid)); });
   } else {
     return null;
   }
@@ -5512,9 +5768,11 @@ function buildEntityFocusContext(kind, node) {
     entityNodeId: entityNodeId,
     entityMagId: entityMagId,
     entityEipNum: entityEipNum,
+    entityPaperId: entityPaperId,
     linkedTopics: linkedTopics,
     linkedEips: linkedEips,
     linkedMagicians: linkedMagicians,
+    linkedPapers: linkedPapers,
   };
 }
 
@@ -5568,6 +5826,15 @@ function applyEntityFocusTimeline(context) {
     return 0.15;
   });
 
+  d3.selectAll('.paper-diamond').attr('opacity', function(p) {
+    var pid = String((p && (p._paperId || p.id)) || '').replace(/^paper_/, '');
+    var paper = (DATA.papers || {})[pid] || p;
+    if (!showPapers || !paperMatchesTimelineFilter(paper)) return 0.05;
+    if (context.kind === 'paper' && context.entityPaperId && String(pid) === String(context.entityPaperId)) return 1;
+    if (context.linkedPapers.has(String(pid))) return 0.92;
+    return 0.15;
+  });
+
   d3.selectAll('.cross-ref-edge')
     .attr('stroke', '#8fb4ff')
     .attr('stroke-opacity', function(ed) {
@@ -5606,6 +5873,58 @@ function applyEntityFocusTimeline(context) {
       }
       if (!ed || !ed.magTopic) return 0.6;
       return context.linkedMagicians.has(magiciansTopicId(ed.magTopic)) ? 1.4 : 0.6;
+    });
+
+  d3.selectAll('.paper-topic-ref-edge')
+    .attr('stroke', '#8eb8ff')
+    .attr('stroke-opacity', function(ed) {
+      if (!showPosts || !showPapers || !ed) return 0.01;
+      var p = (DATA.papers || {})[String(ed.paperId)] || null;
+      if (!p || !paperMatchesTimelineFilter(p)) return 0.02;
+      var t = DATA.topics[ed.topicId];
+      if (!t || !topicMatchesFilter(t)) return 0.02;
+      if (context.kind === 'paper') return String(ed.paperId) === String(context.entityPaperId) ? 0.90 : 0.02;
+      if (context.kind === 'eip') {
+        var edgeEips = Array.isArray(ed.eipNodeIds) ? ed.eipNodeIds : [];
+        var linkedToFocusedEip = edgeEips.some(function(eid) {
+          return String(eid) === String(context.entityNodeId || '');
+        });
+        return linkedToFocusedEip ? 0.74 : 0.02;
+      }
+      if (context.kind === 'magicians') return context.linkedMagicians.has(Number(ed.magId || -1)) ? 0.68 : 0.02;
+      return context.linkedPapers.has(String(ed.paperId)) ? 0.66 : 0.02;
+    })
+    .attr('stroke-width', function(ed) {
+      if (!showPosts || !showPapers || !ed) return 0.5;
+      if (context.kind === 'paper') return String(ed.paperId) === String(context.entityPaperId) ? 1.8 : 0.6;
+      if (context.kind === 'eip') {
+        var edgeEips = Array.isArray(ed.eipNodeIds) ? ed.eipNodeIds : [];
+        var linkedToFocusedEip = edgeEips.some(function(eid) {
+          return String(eid) === String(context.entityNodeId || '');
+        });
+        return linkedToFocusedEip ? 1.5 : 0.6;
+      }
+      return context.linkedPapers.has(String(ed.paperId)) ? 1.4 : 0.6;
+    });
+
+  d3.selectAll('.paper-eip-ref-edge')
+    .attr('stroke', '#94c3ff')
+    .attr('stroke-opacity', function(ed) {
+      if (!showEips || !showPapers || !ed) return 0.01;
+      var p = (DATA.papers || {})[String(ed.paperId)] || null;
+      if (!p || !paperMatchesTimelineFilter(p)) return 0.02;
+      var eMeta = (DATA.eipCatalog || {})[String(ed.eipNum)] || null;
+      if (!eMeta || !eipMatchesFilter(eMeta)) return 0.02;
+      if (context.kind === 'paper') return String(ed.paperId) === String(context.entityPaperId) ? 0.88 : 0.02;
+      if (context.kind === 'eip') return String(ed.eipNodeId || '') === String(context.entityNodeId || '') ? 0.86 : 0.02;
+      if (context.kind === 'magicians') return context.linkedMagicians.has(Number(ed.magId || -1)) ? 0.66 : 0.02;
+      return context.linkedPapers.has(String(ed.paperId)) ? 0.66 : 0.02;
+    })
+    .attr('stroke-width', function(ed) {
+      if (!showEips || !showPapers || !ed) return 0.5;
+      if (context.kind === 'paper') return String(ed.paperId) === String(context.entityPaperId) ? 1.8 : 0.6;
+      if (context.kind === 'eip') return String(ed.eipNodeId || '') === String(context.entityNodeId || '') ? 1.8 : 0.6;
+      return context.linkedPapers.has(String(ed.paperId)) ? 1.3 : 0.6;
     });
 
   updateFocusedTimelineExtraEdges(context, hasFilter);
@@ -5709,6 +6028,19 @@ function applyFocusedEntityHighlightTimeline() {
     }
     return;
   }
+  if (activePaperId) {
+    if (!showPapers) {
+      clearFocusedTimelineExtraEdges();
+      filterTimeline(true);
+      return;
+    }
+    var paper = (DATA.papers || {})[String(activePaperId)];
+    if (paper) {
+      var ctxPaper = buildEntityFocusContext('paper', paper);
+      applyEntityFocusTimeline(ctxPaper);
+    }
+    return;
+  }
   clearFocusedTimelineExtraEdges();
 }
 
@@ -5716,6 +6048,7 @@ function focusedNetworkNodeId() {
   if (pinnedTopicId !== null) return Number(pinnedTopicId);
   if (activeEipNum !== null) return 'eip_' + String(activeEipNum);
   if (activeMagiciansId !== null) return magiciansNodeId(activeMagiciansId);
+  if (activePaperId) return paperNodeId(activePaperId);
   return null;
 }
 
@@ -5726,6 +6059,7 @@ function applyFocusedEntityHighlightNetwork() {
   }
   if (activeEipNum !== null && !showEips) return;
   if (activeMagiciansId !== null && !showMagicians) return;
+  if (activePaperId && !showPapers) return;
   var focusId = focusedNetworkNodeId();
   if (focusId === null || focusId === undefined) return;
 
@@ -5838,6 +6172,10 @@ function onTimelineEntityHover(ev, node, kind, entering) {
         var mt = (DATA.magiciansTopics || {})[String(magId)] || node;
         showMagiciansTooltip(ev, mt);
       } else showMagiciansTooltip(ev, node);
+    } else if (kind === 'paper') {
+      var pid = String((node && (node._paperId || node.id)) || '').replace(/^paper_/, '');
+      var paper = (DATA.papers || {})[pid] || node;
+      showPaperTooltip(ev, paper, node);
     } else {
       return;
     }
@@ -5849,6 +6187,7 @@ function onTimelineEntityHover(ev, node, kind, entering) {
     if (hasFilter) {
       if (kind === 'eip' && !eipMatchesFilter(node)) return;
       if (kind === 'magicians' && !magiciansMatchesFilter(node)) return;
+      if (kind === 'paper' && !paperMatchesTimelineFilter(node)) return;
     }
     var context = buildEntityFocusContext(kind, node);
     applyEntityFocusTimeline(context);
@@ -6113,6 +6452,63 @@ function filterTimeline(skipFocusedHighlight) {
         var t = DATA.topics[d.topicId];
         if (!t) return 0.7;
         return hasFilter && !topicMatchesFilter(t) ? 0.7 : 0.9;
+      });
+  }
+
+  // Filter papers on timeline
+  if (showPapers) {
+    d3.selectAll('.paper-diamond')
+      .style('display', function(d) { return paperMatchesTimelineFilter(d) ? null : 'none'; })
+      .transition().duration(200)
+      .attr('opacity', 0.76);
+    d3.selectAll('.paper-label')
+      .style('display', function(d) { return paperMatchesTimelineFilter(d) ? null : 'none'; });
+    d3.selectAll('.paper-topic-ref-edge')
+      .style('display', function(d) {
+        if (!showPosts || !showPapers || !d) return 'none';
+        var p = (DATA.papers || {})[String(d.paperId)];
+        if (!p || !paperMatchesTimelineFilter(p)) return 'none';
+        var t = DATA.topics[d.topicId];
+        if (!t) return 'none';
+        if (hasFilter && !topicMatchesFilter(t)) return 'none';
+        return null;
+      })
+      .attr('stroke-opacity', function(d) {
+        if (!d) return 0.02;
+        var p = (DATA.papers || {})[String(d.paperId)];
+        var t = DATA.topics[d.topicId];
+        if (!p || !t) return 0.02;
+        return (paperMatchesTimelineFilter(p) && topicMatchesFilter(t)) ? 0.12 : 0.02;
+      })
+      .attr('stroke-width', function(d) {
+        if (!d) return 0.6;
+        var p = (DATA.papers || {})[String(d.paperId)];
+        var t = DATA.topics[d.topicId];
+        if (!p || !t) return 0.6;
+        return (paperMatchesTimelineFilter(p) && topicMatchesFilter(t)) ? 0.9 : 0.6;
+      });
+    d3.selectAll('.paper-eip-ref-edge')
+      .style('display', function(d) {
+        if (!showEips || !showPapers || !d) return 'none';
+        var p = (DATA.papers || {})[String(d.paperId)];
+        if (!p || !paperMatchesTimelineFilter(p)) return 'none';
+        var eMeta = (DATA.eipCatalog || {})[String(d.eipNum)];
+        if (!eMeta || !eipMatchesFilter(eMeta)) return 'none';
+        return null;
+      })
+      .attr('stroke-opacity', function(d) {
+        if (!d) return 0.02;
+        var p = (DATA.papers || {})[String(d.paperId)];
+        var eMeta = (DATA.eipCatalog || {})[String(d.eipNum)];
+        if (!p || !eMeta) return 0.02;
+        return (paperMatchesTimelineFilter(p) && eipMatchesFilter(eMeta)) ? 0.12 : 0.02;
+      })
+      .attr('stroke-width', function(d) {
+        if (!d) return 0.6;
+        var p = (DATA.papers || {})[String(d.paperId)];
+        var eMeta = (DATA.eipCatalog || {})[String(d.eipNum)];
+        if (!p || !eMeta) return 0.6;
+        return (paperMatchesTimelineFilter(p) && eipMatchesFilter(eMeta)) ? 0.9 : 0.6;
       });
   }
 
@@ -6428,6 +6824,7 @@ function buildNetwork() {
 
   // Events
   function handleNetworkNodeSingleClick(ev, d) {
+    if (d.isPaper) { focusPaperNode(paperIdFromNode(d)); return; }
     if (d.isEip && d.eipNum) { focusEipNode(d.eipNum); return; }
     if (d.isMagicians && d.magiciansId) { focusMagiciansNode(d.magiciansId); return; }
     var t = DATA.topics[d.id];
@@ -7453,6 +7850,7 @@ function focusTopicNode(d) {
   pinnedTopicId = d.id;
   activeEipNum = null;
   activeMagiciansId = null;
+  activePaperId = null;
   applyFilters();
   refreshNetworkForFocusChange();
   updateHash();
@@ -7467,6 +7865,7 @@ function focusEipNode(num) {
   pinnedTopicId = null;
   activeEipNum = n;
   activeMagiciansId = null;
+  activePaperId = null;
   applyFilters();
   refreshNetworkForFocusChange();
   updateHash();
@@ -7481,6 +7880,22 @@ function focusMagiciansNode(id) {
   pinnedTopicId = null;
   activeEipNum = null;
   activeMagiciansId = mid;
+  activePaperId = null;
+  applyFilters();
+  refreshNetworkForFocusChange();
+  updateHash();
+}
+
+function focusPaperNode(paperId) {
+  var pid = String(paperId || '').trim();
+  if (!pid || !(DATA.papers || {})[pid]) return;
+  var panel = document.getElementById('detail-panel');
+  if (panel) panel.classList.remove('open');
+  if (similarActive) clearSimilar();
+  pinnedTopicId = null;
+  activeEipNum = null;
+  activeMagiciansId = null;
+  activePaperId = pid;
   applyFilters();
   refreshNetworkForFocusChange();
   updateHash();
@@ -7837,6 +8252,7 @@ function showDetail(t) {
   pinnedTopicId = t.id;
   activeEipNum = null;
   activeMagiciansId = null;
+  activePaperId = null;
   applyFilters();
   if (showPapers) {
     var netSvgShowDetail = document.querySelector('#network-view svg');
@@ -8053,7 +8469,7 @@ function showPaperTooltip(ev, paper, node) {
   var tip = document.getElementById('tooltip');
   var year = paper.y ? String(paper.y) : '?';
   var authors = paperAuthorsShort(paper, 2);
-  var eips = uniqueSortedNumbers(paper.eq || []);
+  var eips = PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(paper.eq || []);
   var eipHint = eips.length > 0
     ? '<br><span style="color:#9cc8ff">' + eips.slice(0, 3).map(function(n) { return 'EIP-' + n; }).join(', ') + '</span>'
     : '';
@@ -8083,6 +8499,15 @@ function hideTooltip() {
 
 function showPaperDetail(paper, node) {
   if (!paper) return;
+  var pid = String(paper.id || '').trim();
+  if (pid) {
+    pinnedTopicId = null;
+    activeEipNum = null;
+    activeMagiciansId = null;
+    activePaperId = pid;
+    applyFilters();
+    refreshNetworkForFocusChange();
+  }
   var panel = document.getElementById('detail-panel');
   var content = document.getElementById('detail-content');
   var url = paperUrl(paper);
@@ -8098,9 +8523,30 @@ function showPaperDetail(paper, node) {
     eipChips += ' <span style="color:#666;font-size:10px">+' + (eips.length - 14) + '</span>';
   }
 
+  var linkedTargets = [];
+  var linkedSeen = new Set();
+  function addLinkedTarget(targetId) {
+    if (targetId === undefined || targetId === null) return;
+    var normalized = targetId;
+    if (typeof normalized === 'number') normalized = Number(normalized);
+    if (typeof normalized === 'string') normalized = normalized.trim();
+    if (!normalized && normalized !== 0) return;
+    var key = String(normalized);
+    if (linkedSeen.has(key)) return;
+    linkedSeen.add(key);
+    linkedTargets.push(normalized);
+  }
+  var nodeTargets = [];
+  if (node && Array.isArray(node.linkedTargets)) nodeTargets = nodeTargets.concat(node.linkedTargets);
+  if (node && Array.isArray(node._paperLinkedTargets)) nodeTargets = nodeTargets.concat(node._paperLinkedTargets);
+  nodeTargets.forEach(addLinkedTarget);
+  (PAPER_TO_TOPIC_IDS[pid] || []).forEach(function(tid) { addLinkedTarget(Number(tid)); });
+  (PAPER_TO_EIP_IDS[pid] || []).forEach(function(num) { addLinkedTarget('eip_' + String(num)); });
+  (PAPER_TO_MAGICIANS_IDS[pid] || []).forEach(function(mid) { addLinkedTarget('mag_' + String(mid)); });
+
   var linkedRows = '';
-  if (node && Array.isArray(node.linkedTargets) && node.linkedTargets.length > 0) {
-    linkedRows = node.linkedTargets.slice(0, 10).map(function(targetId) {
+  if (linkedTargets.length > 0) {
+    linkedRows = linkedTargets.slice(0, 14).map(function(targetId) {
       if (typeof targetId === 'number') {
         var t = DATA.topics[targetId];
         if (!t) return '';
@@ -8141,6 +8587,7 @@ function showPaperDetail(paper, node) {
     (linkedRows ? '<div class="detail-refs"><h4>Linked in Network</h4>' + linkedRows + '</div>' : '');
 
   panel.classList.add('open');
+  updateHash();
 }
 
 function magiciansTopicUrl(mt) {
@@ -8183,6 +8630,7 @@ function showMagiciansTopicDetail(mt) {
   pinnedTopicId = null;
   activeEipNum = null;
   activeMagiciansId = mt.id;
+  activePaperId = null;
   if (similarActive) clearSimilar();
   applyFilters();
   if (showPapers) {
@@ -8476,6 +8924,7 @@ function buildHash() {
   if (detailOpen && pinnedTopicId) parts.push('topic=' + pinnedTopicId);
   if (detailOpen && activeEipNum !== null && activeEipNum !== undefined) parts.push('eip=' + activeEipNum);
   if (detailOpen && activeMagiciansId) parts.push('mag=' + activeMagiciansId);
+  if (detailOpen && activePaperId) parts.push('paper=' + encodeURIComponent(String(activePaperId)));
   if (showEips) {
     parts.push('eips=1');
     if (eipVisibilityMode === 'all') parts.push('eipmode=all');
@@ -8611,6 +9060,14 @@ function applyHash() {
     showMagiciansTopicDetailById(Number(params.mag));
     changed = true;
   }
+
+  if (params.paper) {
+    var paper = (DATA.papers || {})[String(params.paper)];
+    if (paper) {
+      showPaperDetail(paper, null);
+      changed = true;
+    }
+  }
 }
 
 // === HELP & BREADCRUMB ===
@@ -8655,6 +9112,16 @@ function hashCode(n) {
   return ((n * 2654435761) >>> 0) % 10000;
 }
 
+function hashText(value) {
+  var s = String(value || '');
+  var h = 2166136261 >>> 0;
+  for (var i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
 function escHtml(s) {
   if (!s) return '';
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -8676,6 +9143,7 @@ function starPoints(cx, cy, outerR, innerR, nPoints) {
 // ========================================================================
 var eipRScale = null;
 var magiciansRScale = null;
+var paperTimelineRScale = null;
 
 function inferEipThread(eipNum) {
   var tids = eipToTopicIds[eipNum] || eipToTopicIds[String(eipNum)] || [];
@@ -8713,6 +9181,13 @@ function trianglePath(cx, cy, r) {
   return 'M' + cx.toFixed(2) + ',' + (cy - r).toFixed(2) +
     ' L' + (cx + r).toFixed(2) + ',' + (cy + r).toFixed(2) +
     ' L' + (cx - r).toFixed(2) + ',' + (cy + r).toFixed(2) + ' Z';
+}
+
+function diamondPath(cx, cy, r) {
+  return 'M' + cx.toFixed(2) + ',' + (cy - r).toFixed(2) +
+    ' L' + (cx + r).toFixed(2) + ',' + cy.toFixed(2) +
+    ' L' + cx.toFixed(2) + ',' + (cy + r).toFixed(2) +
+    ' L' + (cx - r).toFixed(2) + ',' + cy.toFixed(2) + ' Z';
 }
 
 function drawEipTimeline() {
@@ -8925,6 +9400,177 @@ function drawMagiciansTimeline() {
   });
 }
 
+function drawPaperTimeline() {
+  var zoomG = d3.select('#timeline-view svg g g[clip-path] g');
+  if (zoomG.empty()) return;
+
+  var paperData = [];
+  var maxPaperInf = 0;
+  PAPER_LIST.forEach(function(paper) {
+    if (!paper || !paper.id) return;
+    var pid = String(paper.id || '').trim();
+    if (!pid) return;
+    var d = paperTimelineDate(paper);
+    if (!d || isNaN(d)) return;
+    var th = inferPaperThread(paper);
+    var yPos = timelineLaneYForThread(th, hashText(pid));
+    if (yPos === null) return;
+    var inf = paperTimelineInfluence(paper);
+    if (inf > maxPaperInf) maxPaperInf = inf;
+
+    var topicIds = (PAPER_TO_TOPIC_IDS[pid] || []).filter(function(tid) {
+      var t = DATA.topics[tid];
+      return !!(t && t._date && t._yPos !== undefined);
+    }).sort(function(a, b) {
+      var ta = DATA.topics[a] || {};
+      var tb = DATA.topics[b] || {};
+      return (Number(tb.inf || 0) - Number(ta.inf || 0));
+    }).slice(0, 9);
+
+    var eipNums = (PAPER_TO_EIP_IDS[pid] || []).filter(function(num) {
+      var eMeta = (DATA.eipCatalog || {})[String(num)];
+      return !!(eMeta && eMeta.cr);
+    }).slice(0, 8);
+
+    paper._paperId = pid;
+    paper._paperDate = d;
+    paper._paperThread = th || null;
+    paper._paperYPos = yPos;
+    paper._paperInf = inf;
+    paper._paperTopicIds = topicIds;
+    paper._paperEipNums = eipNums;
+    paper._paperLinkedTargets = topicIds.concat(eipNums.map(function(num) { return 'eip_' + String(num); }));
+    paperData.push(paper);
+  });
+
+  paperTimelineRScale = d3.scaleSqrt().domain([0, maxPaperInf || 1]).range([3.5, 10.5]);
+  var paperG = zoomG.append('g').attr('class', 'paper-layer');
+
+  var topicRefG = paperG.append('g');
+  var eipRefG = paperG.append('g');
+  paperData.forEach(function(paper) {
+    var pid = String(paper._paperId || '');
+    var pDate = paper._paperDate;
+    var pY = paper._paperYPos;
+
+    (paper._paperTopicIds || []).forEach(function(tid) {
+      var t = DATA.topics[tid];
+      if (!t || !t._date || t._yPos === undefined) return;
+      var bestMagId = null;
+      var topicEipNodeIds = [];
+      var eips = PAPER_TO_EIP_IDS[pid] || [];
+      for (var i = 0; i < eips.length; i++) {
+        var num = eips[i];
+        if ((eipToTopicIds[String(num)] || []).indexOf(Number(tid)) >= 0) {
+          topicEipNodeIds.push('eip_' + String(num));
+          var eMeta = (DATA.eipCatalog || {})[String(num)] || {};
+          if (eMeta.mt !== undefined && eMeta.mt !== null && !isNaN(Number(eMeta.mt))) {
+            bestMagId = Number(eMeta.mt);
+          }
+        }
+      }
+      topicRefG.append('line')
+        .attr('class', 'paper-topic-ref-edge')
+        .attr('x1', tlXScale(pDate)).attr('y1', pY)
+        .attr('x2', tlXScale(t._date)).attr('y2', t._yPos)
+        .attr('stroke', '#7ea9e4').attr('stroke-opacity', 0.12).attr('stroke-width', 0.9)
+        .datum({
+          paperId: pid,
+          paperDate: pDate,
+          paperY: pY,
+          topicId: Number(tid),
+          topicDate: t._date,
+          topicY: t._yPos,
+          magId: bestMagId,
+          eipNodeIds: topicEipNodeIds,
+        })
+        .style('display', (showPosts && showPapers && paperMatchesTimelineFilter(paper) && topicMatchesFilter(t)) ? null : 'none');
+    });
+
+    (paper._paperEipNums || []).forEach(function(num) {
+      var eMeta = (DATA.eipCatalog || {})[String(num)];
+      if (!eMeta || !eMeta.cr) return;
+      var eDate = eMeta._eipDate;
+      if (!eDate) {
+        eDate = new Date(eMeta.cr);
+        if (isNaN(eDate)) return;
+      }
+      var eY = eMeta._eipYPos;
+      if (eY === undefined || eY === null) {
+        var inferredThread = eMeta.th || inferEipThread(Number(num));
+        eY = timelineLaneYForThread(inferredThread, Number(num));
+      }
+      if (eY === undefined || eY === null) return;
+      eipRefG.append('line')
+        .attr('class', 'paper-eip-ref-edge')
+        .attr('x1', tlXScale(pDate)).attr('y1', pY)
+        .attr('x2', tlXScale(eDate)).attr('y2', eY)
+        .attr('stroke', '#8fb7ef').attr('stroke-opacity', 0.12).attr('stroke-width', 0.9)
+        .datum({
+          paperId: pid,
+          paperDate: pDate,
+          paperY: pY,
+          eipNum: Number(num),
+          eipNodeId: 'eip_' + String(num),
+          eipDate: eDate,
+          eipY: eY,
+          magId: (eMeta.mt !== undefined && eMeta.mt !== null && !isNaN(Number(eMeta.mt))) ? Number(eMeta.mt) : null,
+        })
+        .style('display', (showEips && showPapers && paperMatchesTimelineFilter(paper) && eipMatchesFilter(eMeta)) ? null : 'none');
+    });
+  });
+
+  var shapeG = paperG.append('g');
+  paperData.forEach(function(paper) {
+    var r = paperTimelineRScale(paper._paperInf || 0);
+    var clickTimer = null;
+    shapeG.append('path')
+      .attr('class', 'paper-diamond')
+      .attr('d', diamondPath(tlXScale(paper._paperDate), paper._paperYPos, r))
+      .attr('fill', '#6fa3df')
+      .attr('stroke', '#afd1ff')
+      .attr('stroke-width', 0.7)
+      .attr('opacity', 0.76)
+      .datum(paper)
+      .on('click', function(ev, d) {
+        if (clickTimer) {
+          clearTimeout(clickTimer);
+          clickTimer = null;
+          showPaperDetail(d, {
+            paperId: d._paperId,
+            linkedTargets: (d._paperLinkedTargets || []).slice(0),
+            paperScore: Number(d.rs || 0),
+          });
+          return;
+        }
+        clickTimer = setTimeout(function() {
+          clickTimer = null;
+          focusPaperNode(d._paperId);
+        }, 220);
+      })
+      .on('mouseover', function(ev, d) { onTimelineEntityHover(ev, d, 'paper', true); })
+      .on('mouseout', function(ev, d) { onTimelineEntityHover(ev, d, 'paper', false); })
+      .style('display', paperMatchesTimelineFilter(paper) ? null : 'none');
+  });
+
+  var topPapers = paperData.slice().sort(function(a, b) {
+    var d = Number(b.rs || 0) - Number(a.rs || 0);
+    if (d !== 0) return d;
+    return Number(b.cb || 0) - Number(a.cb || 0);
+  }).slice(0, 14);
+  var labelG = paperG.append('g');
+  topPapers.forEach(function(paper) {
+    var r = paperTimelineRScale(paper._paperInf || 0);
+    labelG.append('text')
+      .attr('class', 'paper-label')
+      .attr('x', tlXScale(paper._paperDate) + r + 3)
+      .attr('y', paper._paperYPos + 3)
+      .text((paper.t || '').length > 32 ? (paper.t || '').slice(0, 31) + '\u2026' : (paper.t || 'paper'))
+      .datum(paper)
+      .style('display', paperMatchesTimelineFilter(paper) ? null : 'none');
+  });
+}
+
 function showEipTooltip(ev, e) {
   var tip = document.getElementById('tooltip');
   tip.innerHTML = '<strong>EIP-' + e._eipNum + ': ' + escHtml(e.t || '') + '</strong><br>' +
@@ -8959,6 +9605,7 @@ function showEipDetail(eip, num) {
   pinnedTopicId = null;
   activeEipNum = Number(num);
   activeMagiciansId = null;
+  activePaperId = null;
   applyFilters();
   if (showPapers) {
     var netSvgEip = document.querySelector('#network-view svg');
