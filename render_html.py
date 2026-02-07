@@ -60,6 +60,8 @@ EIP_TO_ETH_AUTHOR_OVERRIDES = {
     "Danny Ryan": ["djrtwo"],
     "Toni Wahrstätter": ["Nero_eth"],
     "Carl Beekhuizen": ["CarlBeek"],
+    "Michael Neuder": ["mikeneuder"],
+    "Mike Neuder": ["mikeneuder"],
 }
 
 # Manual aliases for Magicians handles that should map to ethresear.ch usernames.
@@ -315,7 +317,13 @@ def _build_author_links(data):
     """Create bidirectional links between ethresear.ch and EIP author identities."""
     usernames = _collect_ethresearch_usernames(data)
     mag_usernames = _collect_magicians_usernames(data)
-    eip_names = sorted(data.get("eip_authors", {}).keys())
+    eip_names = set(data.get("eip_authors", {}).keys())
+    for e in (data.get("eip_catalog", {}) or {}).values():
+        for raw_name in (e.get("authors", []) or []):
+            name = str(raw_name or "").strip()
+            if name:
+                eip_names.add(name)
+    eip_names = sorted(eip_names)
 
     eip_to_eth = {}
     for eip_name in eip_names:
@@ -756,6 +764,49 @@ def prepare_viz_data(data):
             "inf": a.get("influence_score", 0),
             "yrs": a.get("active_years", []),
         }
+    # Ensure authors found in EIP metadata appear in sidebar/detail even if they
+    # were not present in precomputed eip_authors aggregates.
+    catalog_author_eips = {}
+    catalog_author_statuses = {}
+    catalog_author_forks = {}
+    catalog_author_years = {}
+    catalog_author_inf = {}
+    for eip_str, e in data.get("eip_catalog", {}).items():
+        num = _to_int(eip_str)
+        if num is None:
+            continue
+        status = str(e.get("status") or "").strip()
+        fork = str(e.get("fork") or "").strip()
+        inf = float(e.get("influence_score", 0) or 0)
+        year = None
+        created = str(e.get("created") or "").strip()
+        if created and len(created) >= 4 and created[:4].isdigit():
+            year = int(created[:4])
+        for raw_name in e.get("authors", []) or []:
+            name = str(raw_name or "").strip()
+            if not name:
+                continue
+            catalog_author_eips.setdefault(name, set()).add(num)
+            if status:
+                st = catalog_author_statuses.setdefault(name, {})
+                st[status] = st.get(status, 0) + 1
+            if fork:
+                catalog_author_forks.setdefault(name, set()).add(fork)
+            if year is not None:
+                catalog_author_years.setdefault(name, set()).add(year)
+            catalog_author_inf[name] = catalog_author_inf.get(name, 0.0) + inf
+
+    for name, eip_set in catalog_author_eips.items():
+        if name in compact_eip_authors:
+            continue
+        compact_eip_authors[name] = {
+            "n": name,
+            "eips": sorted(eip_set),
+            "st": dict(sorted((catalog_author_statuses.get(name) or {}).items(), key=lambda kv: kv[0])),
+            "fk": sorted(catalog_author_forks.get(name) or []),
+            "inf": round(catalog_author_inf.get(name, 0.0), 3),
+            "yrs": sorted(catalog_author_years.get(name) or []),
+        }
 
     # Compact EIP graph
     eip_graph = data.get("eip_graph", {"nodes": [], "edges": []})
@@ -852,28 +903,32 @@ def generate_html(viz_json, data):
 <body>
 <div id="app">
   <header>
-    <h1>Ethereum Evolution</h1>
-    <div class="stats">
-      <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
-      <button id="paper-match-toggle" class="paper-match-toggle" onclick="cyclePaperMatchMode()" title="Cycle paper matching strictness">Papers: balanced</button>
+    <div class="header-row header-row-top">
+      <h1>Ethereum Evolution</h1>
+      <div class="controls">
+        <button id="btn-timeline" class="active" onclick="showView('timeline')">Timeline</button>
+        <button id="btn-network" onclick="showView('network')">Network</button>
+        <button id="btn-coauthor" onclick="showView('coauthor')">Authors</button>
+        <button class="help-btn" onclick="toggleHelp()" title="Keyboard shortcuts">?</button>
+      </div>
     </div>
-    <div class="content-toggles">
-      <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresear.ch topics">\u25CF EthResearch</button>
-      <button id="toggle-eips" class="content-toggle" onclick="toggleContent('eips')" title="Toggle EIP nodes">\u25A0 EIPs</button>
-      <button id="toggle-magicians" class="content-toggle" onclick="toggleContent('magicians')" title="Toggle Magicians nodes">\u25B2 Magicians</button>
-      <button id="toggle-papers" class="content-toggle papers-toggle" onclick="toggleContent('papers')" title="Toggle research paper nodes in network view">\u25C6 Papers</button>
-    </div>
-    <div id="filter-breadcrumb" class="breadcrumb"></div>
-    <div class="inf-slider-wrap">
-      <label for="inf-slider" style="font-size:10px;color:#666;white-space:nowrap">Min influence</label>
-      <input type="range" id="inf-slider" min="0" max="100" value="0" step="1">
-      <span id="inf-slider-label" style="font-size:10px;color:#888;min-width:32px">0</span>
-    </div>
-    <div class="controls">
-      <button id="btn-timeline" class="active" onclick="showView('timeline')">Timeline</button>
-      <button id="btn-network" onclick="showView('network')">Network</button>
-      <button id="btn-coauthor" onclick="showView('coauthor')">Authors</button>
-      <button class="help-btn" onclick="toggleHelp()" title="Keyboard shortcuts">?</button>
+    <div class="header-row header-row-bottom">
+      <div class="stats">
+        <button id="milestone-toggle" class="milestone-toggle" onclick="toggleMilestones()" title="Toggle influential post markers">\u2605 Influential Posts</button>
+        <button id="paper-match-toggle" class="paper-match-toggle" onclick="cyclePaperMatchMode()" title="Cycle paper matching strictness">Papers: balanced</button>
+      </div>
+      <div class="content-toggles">
+        <button id="toggle-posts" class="content-toggle active" onclick="toggleContent('posts')" title="Toggle ethresear.ch topics">\u25CF EthResearch</button>
+        <button id="toggle-eips" class="content-toggle" onclick="toggleContent('eips')" title="Toggle EIP nodes">\u25A0 EIPs</button>
+        <button id="toggle-magicians" class="content-toggle" onclick="toggleContent('magicians')" title="Toggle Magicians nodes">\u25B2 Magicians</button>
+        <button id="toggle-papers" class="content-toggle papers-toggle" onclick="toggleContent('papers')" title="Toggle research paper nodes in network view">\u25C6 Papers</button>
+      </div>
+      <div id="filter-breadcrumb" class="breadcrumb"></div>
+      <div class="inf-slider-wrap">
+        <label for="inf-slider" style="font-size:10px;color:#666;white-space:nowrap">Min influence</label>
+        <input type="range" id="inf-slider" min="0" max="100" value="0" step="1">
+        <span id="inf-slider-label" style="font-size:10px;color:#888;min-width:32px">0</span>
+      </div>
     </div>
   </header>
   <div id="main-area">
@@ -887,6 +942,7 @@ def generate_html(viz_json, data):
   </div>
   <div id="sidebar">
     <button id="sidebar-width-toggle" class="sidebar-width-toggle" onclick="toggleSidebarWidth()" title="Expand sidebar">&#9664;</button>
+    <button id="sidebar-hide-toggle" class="sidebar-hide-toggle" onclick="toggleSidebarHidden()" title="Hide sidebar">&#9654;</button>
     <div class="sidebar-section">
       <div class="search-wrap">
         <input type="text" id="search-box" placeholder="Search topics, authors, EIPs...">
@@ -945,7 +1001,8 @@ def generate_html(viz_json, data):
   <div class="help-card" onclick="event.stopPropagation()">
     <h3>Keyboard Shortcuts &amp; Interactions</h3>
     <div class="help-grid">
-      <div class="help-key">Click node</div><div class="help-desc">Pin topic &amp; show detail panel</div>
+      <div class="help-key">Click node</div><div class="help-desc">Pin/focus node and highlight links</div>
+      <div class="help-key">Double-click node</div><div class="help-desc">Open detail sidebar for that node</div>
       <div class="help-key">Click thread/author</div><div class="help-desc">Filter by thread or author</div>
       <div class="help-key">Double-click thread/author</div><div class="help-desc">Filter &amp; open detail sidebar</div>
       <div class="help-key">Shift+Click</div><div class="help-desc">Find citation path from pinned to clicked topic</div>
@@ -986,9 +1043,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
        background: #0a0a0f; color: #e0e0e0; overflow: hidden; height: 100vh; }
 #app { --sidebar-width: 300px; display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr var(--sidebar-width); height: 100vh; }
 #app.sidebar-wide { --sidebar-width: 460px; }
+#app.sidebar-hidden { --sidebar-width: 0px; }
 
-header { grid-column: 1 / -1; padding: 12px 20px; background: #12121a;
-         border-bottom: 1px solid #2a2a3a; display: flex; align-items: center; gap: 20px; }
+header { grid-column: 1 / -1; padding: 10px 20px; background: #12121a;
+         border-bottom: 1px solid #2a2a3a; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.header-row { display: flex; align-items: center; gap: 12px; min-height: 28px; }
+.header-row-top { justify-content: space-between; }
+.header-row-bottom { justify-content: flex-start; }
 header h1 { font-size: 18px; font-weight: 600; color: #fff; white-space: nowrap; }
 header h1 .title-short { display: none; }
 header .stats { font-size: 12px; color: #888; display: flex; gap: 15px; }
@@ -1010,6 +1071,7 @@ header .stats span { white-space: nowrap; }
 
 #main-area { grid-column: 1; overflow: hidden; position: relative; overscroll-behavior: none; min-width: 0; }
 #sidebar { grid-column: 2; background: #12121a; border-left: 1px solid #2a2a3a; overflow-y: auto; position: relative; min-width: 0; }
+#app.sidebar-hidden #sidebar { border-left: none; overflow: hidden; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 .sidebar-width-toggle { position: fixed; left: 0; top: 50%; transform: translate(-50%, -50%);
@@ -1017,6 +1079,11 @@ header .stats span { white-space: nowrap; }
                         border-radius: 0 6px 6px 0; background: #12121a; color: #7788cc;
                         font-size: 11px; cursor: pointer; z-index: 200; line-height: 1; padding: 0; }
 .sidebar-width-toggle:hover { background: #1a1a2e; color: #aab6ff; }
+.sidebar-hide-toggle { position: fixed; left: 0; top: 50%; transform: translate(-50%, -50%);
+                       width: 24px; height: 36px; border: 1px solid #2a2a3a;
+                       border-radius: 0 6px 6px 0; background: #12121a; color: #88aacc;
+                       font-size: 11px; cursor: pointer; z-index: 200; line-height: 1; padding: 0; }
+.sidebar-hide-toggle:hover { background: #1a1a2e; color: #bbd6ff; }
 #sidebar .sidebar-section:first-child { padding-top: 12px; }
 
 #timeline-view, #network-view, #coauthor-view { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
@@ -1028,7 +1095,7 @@ header .stats span { white-space: nowrap; }
 .timeline-container { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; }
 .timeline-container svg { touch-action: none; }
 .fork-line { stroke: #555; stroke-width: 1.5; stroke-dasharray: 4,4; }
-.fork-label { fill: #999; font-size: 11px; font-weight: 600; }
+.fork-label { fill: #999; font-size: 12px; font-weight: 600; }
 .era-bg { opacity: 0.03; }
 .histogram-bar { fill: rgba(255,255,255,0.13); }
 .histogram-bar:hover { fill: rgba(255,255,255,0.25); }
@@ -1281,11 +1348,13 @@ header .stats span { white-space: nowrap; }
 .content-toggle.disabled { opacity: 0.45; cursor: default; pointer-events: none; }
 
 @media (max-width: 1450px) {
-  header { padding: 10px 12px; gap: 10px; }
+  header { padding: 10px 12px; gap: 8px; }
   header h1 .title-long { display: none; }
   header h1 .title-short { display: inline; }
   header .stats .stats-topics,
   header .stats .stats-range { display: none; }
+  .header-row-bottom { gap: 8px; }
+  .content-toggles { flex-wrap: wrap; }
 }
 
 @media (max-width: 1240px) {
@@ -1366,6 +1435,7 @@ let showPapers = false;
 let eipVisibilityMode = 'connected'; // 'connected' | 'all'
 let eipAuthorTab = false; // false = ethresearch, true = EIP authors
 let sidebarWide = false;
+let sidebarHidden = false;
 let paperMatchMode = 'balanced'; // 'strict' | 'balanced' | 'loose'
 
 // --- Prevent macOS trackpad swipe-back/forward ---
@@ -3099,40 +3169,65 @@ function setupInfSlider() {
 
 function positionSidebarToggle() {
   var sidebar = document.getElementById('sidebar');
-  var btn = document.getElementById('sidebar-width-toggle');
-  if (!sidebar || !btn) return;
+  var widthBtn = document.getElementById('sidebar-width-toggle');
+  var hideBtn = document.getElementById('sidebar-hide-toggle');
+  if (!sidebar || !widthBtn || !hideBtn) return;
   var rect = sidebar.getBoundingClientRect();
-  if (!isFinite(rect.left) || !isFinite(rect.top) || rect.height <= 0) return;
-  btn.style.left = Math.round(rect.left) + 'px';
-  btn.style.top = Math.round(rect.top + rect.height / 2) + 'px';
+  if (!isFinite(rect.left) || !isFinite(rect.top)) return;
+  var y = Math.round(rect.top + Math.max(120, rect.height) / 2);
+  var x = Math.round(rect.left);
+  widthBtn.style.left = x + 'px';
+  widthBtn.style.top = y + 'px';
+  hideBtn.style.left = x + 'px';
+  hideBtn.style.top = (y + 44) + 'px';
 }
 
 function applySidebarWidthState() {
   var app = document.getElementById('app');
-  var btn = document.getElementById('sidebar-width-toggle');
-  if (!app || !btn) return;
+  var widthBtn = document.getElementById('sidebar-width-toggle');
+  var hideBtn = document.getElementById('sidebar-hide-toggle');
+  if (!app || !widthBtn || !hideBtn) return;
   app.classList.toggle('sidebar-wide', sidebarWide);
-  btn.innerHTML = sidebarWide ? '&#9654;' : '&#9664;';
-  btn.title = sidebarWide ? 'Collapse sidebar' : 'Expand sidebar';
+  app.classList.toggle('sidebar-hidden', sidebarHidden);
+  widthBtn.innerHTML = sidebarWide ? '&#9654;' : '&#9664;';
+  widthBtn.title = sidebarWide ? 'Narrow sidebar' : 'Widen sidebar';
+  widthBtn.style.display = sidebarHidden ? 'none' : 'block';
+  hideBtn.innerHTML = sidebarHidden ? '&#9664;' : '&#9654;';
+  hideBtn.title = sidebarHidden ? 'Show sidebar' : 'Hide sidebar';
   requestAnimationFrame(positionSidebarToggle);
 }
 
 function setupSidebarWidth() {
   try {
     sidebarWide = localStorage.getItem('evmap.sidebarWide') === '1';
+    sidebarHidden = localStorage.getItem('evmap.sidebarHidden') === '1';
   } catch (e) {
     sidebarWide = false;
+    sidebarHidden = false;
   }
   applySidebarWidthState();
 }
 
 function toggleSidebarWidth() {
+  if (sidebarHidden) return;
   sidebarWide = !sidebarWide;
   applySidebarWidthState();
   try { localStorage.setItem('evmap.sidebarWide', sidebarWide ? '1' : '0'); } catch (e) {}
   refreshAuthorSidebarList();
   applyFilters();
   if (hasFocusedEntity()) applyFocusedEntityHighlight();
+}
+
+function toggleSidebarHidden() {
+  sidebarHidden = !sidebarHidden;
+  if (!sidebarHidden) sidebarWide = false;
+  applySidebarWidthState();
+  try { localStorage.setItem('evmap.sidebarHidden', sidebarHidden ? '1' : '0'); } catch (e) {}
+  if (!sidebarHidden) {
+    refreshAuthorSidebarList();
+    applyFilters();
+    if (hasFocusedEntity()) applyFocusedEntityHighlight();
+  }
 }
 
 // === INIT ===
@@ -4141,6 +4236,7 @@ function buildTimeline() {
   Object.values(DATA.topics).forEach(t => {
     if (t._yPos === undefined) return;
     const color = t.th ? (THREAD_COLORS[t.th] || '#555') : '#555';
+    var clickTimer = null;
 
     var circle = circleG.append('circle')
       .attr('class', 'topic-circle')
@@ -4151,7 +4247,18 @@ function buildTimeline() {
       .attr('stroke-width', t.mn ? 1 : 0.5)
       .attr('opacity', 0.65)
       .datum(t)
-      .on('click', function(ev, d) { handleTopicClick(ev, d); })
+      .on('click', function(ev, d) {
+        if (clickTimer) {
+          clearTimeout(clickTimer);
+          clickTimer = null;
+          handleTopicDoubleClick(ev, d);
+          return;
+        }
+        clickTimer = setTimeout(function() {
+          clickTimer = null;
+          handleTopicClick(ev, d);
+        }, 220);
+      })
       .on('mouseover', function(ev, d) { onTimelineHover(ev, d, true); })
       .on('mouseout', function(ev, d) { onTimelineHover(ev, d, false); });
     if (t.mn) circle.attr('stroke-dasharray', '3 2');
@@ -4189,11 +4296,23 @@ function buildTimeline() {
   });
   milestoneData.forEach(function(md) {
     var r = rScale(md.topic.inf) + 4;
+    var msClickTimer = null;
     milestoneG.append('polygon')
       .attr('class', 'milestone-marker')
       .attr('points', starPoints(xScale(md.topic._date), md.topic._yPos, r, r * 0.5, 4))
       .datum(md.topic)
-      .on('click', function(ev, d) { handleTopicClick(ev, d); })
+      .on('click', function(ev, d) {
+        if (msClickTimer) {
+          clearTimeout(msClickTimer);
+          msClickTimer = null;
+          handleTopicDoubleClick(ev, d);
+          return;
+        }
+        msClickTimer = setTimeout(function() {
+          msClickTimer = null;
+          handleTopicClick(ev, d);
+        }, 220);
+      })
       .on('mouseover', function(ev, d) { showTooltip(ev, d); })
       .on('mouseout', function() { hideTooltip(); })
       .style('display', milestonesVisible ? null : 'none');
@@ -4243,7 +4362,7 @@ function buildTimeline() {
     .attr('transform', 'translate(0,' + (topicLaneY0 + swimH + histH + forkLabelH) + ')');
   var xAxisFn = d3.axisBottom(xScale).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y'));
   xAxisG.call(xAxisFn);
-  xAxisG.selectAll('text').attr('fill', '#666').attr('font-size', 10);
+  xAxisG.selectAll('text').attr('fill', '#666').attr('font-size', 12);
   xAxisG.selectAll('.domain, .tick line').attr('stroke', '#333');
 
   // === D3 ZOOM (horizontal only) ===
@@ -4372,7 +4491,7 @@ function buildTimeline() {
       axisFn = d3.axisBottom(newX).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y'));
     }
     xAxisG.call(axisFn);
-    xAxisG.selectAll('text').attr('fill', '#666').attr('font-size', 10);
+    xAxisG.selectAll('text').attr('fill', '#666').attr('font-size', 12);
     xAxisG.selectAll('.domain, .tick line').attr('stroke', '#333');
   }
 }
@@ -5348,7 +5467,14 @@ function buildNetwork() {
     });
 
   // Events
-  node.on('click', function(ev, d) {
+  function handleNetworkNodeSingleClick(ev, d) {
+    if (d.isEip && d.eipNum) { focusEipNode(d.eipNum); return; }
+    if (d.isMagicians && d.magiciansId) { focusMagiciansNode(d.magiciansId); return; }
+    var t = DATA.topics[d.id];
+    if (t) { handleTopicClick(ev, t); return; }
+  }
+
+  function handleNetworkNodeDoubleClick(ev, d) {
     if (d.isFork) {
       ev.stopPropagation();
       var fork = findForkByName(d.fork || d.title);
@@ -5363,7 +5489,30 @@ function buildNetwork() {
     if (d.isEip && d.eipNum) { showEipDetailByNum(d.eipNum); return; }
     if (d.isMagicians && d.magiciansId) { showMagiciansTopicDetailById(d.magiciansId); return; }
     var t = DATA.topics[d.id];
-    if (t) handleTopicClick(ev, t);
+    if (t) handleTopicDoubleClick(ev, t);
+  }
+
+  var netClickTimer = null;
+  var netClickNodeId = null;
+  node.on('click', function(ev, d) {
+    if (netClickTimer && netClickNodeId === d.id) {
+      clearTimeout(netClickTimer);
+      netClickTimer = null;
+      netClickNodeId = null;
+      handleNetworkNodeDoubleClick(ev, d);
+      return;
+    }
+    if (netClickTimer) {
+      clearTimeout(netClickTimer);
+      netClickTimer = null;
+      netClickNodeId = null;
+    }
+    netClickNodeId = d.id;
+    netClickTimer = setTimeout(function() {
+      netClickTimer = null;
+      netClickNodeId = null;
+      handleNetworkNodeSingleClick(ev, d);
+    }, 220);
   });
 
   node.on('mouseover', function(ev, d) {
@@ -6324,12 +6473,70 @@ function applyLineageNetwork() {
 }
 
 // === FIND PATH ===
+function refreshNetworkForFocusChange() {
+  if (!showPapers) return;
+  var netSvg = document.querySelector('#network-view svg');
+  if (activeView === 'network') {
+    if (netSvg) { netSvg.remove(); simulation = null; }
+    buildNetwork();
+  } else if (netSvg) {
+    netSvg.remove();
+    simulation = null;
+  }
+}
+
+function focusTopicNode(d) {
+  if (!d) return;
+  var panel = document.getElementById('detail-panel');
+  if (panel) panel.classList.remove('open');
+  if (similarActive) clearSimilar();
+  pinnedTopicId = d.id;
+  activeEipNum = null;
+  activeMagiciansId = null;
+  applyFilters();
+  refreshNetworkForFocusChange();
+  updateHash();
+}
+
+function focusEipNode(num) {
+  var n = Number(num);
+  if (!isFinite(n)) return;
+  var panel = document.getElementById('detail-panel');
+  if (panel) panel.classList.remove('open');
+  if (similarActive) clearSimilar();
+  pinnedTopicId = null;
+  activeEipNum = n;
+  activeMagiciansId = null;
+  applyFilters();
+  refreshNetworkForFocusChange();
+  updateHash();
+}
+
+function focusMagiciansNode(id) {
+  var mid = Number(id);
+  if (!isFinite(mid)) return;
+  var panel = document.getElementById('detail-panel');
+  if (panel) panel.classList.remove('open');
+  if (similarActive) clearSimilar();
+  pinnedTopicId = null;
+  activeEipNum = null;
+  activeMagiciansId = mid;
+  applyFilters();
+  refreshNetworkForFocusChange();
+  updateHash();
+}
+
 function handleTopicClick(ev, d) {
   if (ev.shiftKey && pinnedTopicId && pinnedTopicId !== d.id) {
     // Shift+click = find path from pinned to clicked
     activatePath(pinnedTopicId, d.id);
     return;
   }
+  focusTopicNode(d);
+}
+
+function handleTopicDoubleClick(ev, d) {
+  if (!d) return;
   showDetail(d);
 }
 
@@ -7316,13 +7523,15 @@ function parseHash() {
 
 function buildHash() {
   var parts = [];
+  var panel = document.getElementById('detail-panel');
+  var detailOpen = !!(panel && panel.classList.contains('open'));
   if (activeView && activeView !== 'timeline') parts.push('view=' + activeView);
   if (activeThread) parts.push('thread=' + encodeURIComponent(activeThread));
   if (activeAuthor) parts.push('author=' + encodeURIComponent(activeAuthor));
   if (activeEipAuthor) parts.push('eip_author=' + encodeURIComponent(activeEipAuthor));
-  if (pinnedTopicId) parts.push('topic=' + pinnedTopicId);
-  if (activeEipNum !== null && activeEipNum !== undefined) parts.push('eip=' + activeEipNum);
-  if (activeMagiciansId) parts.push('mag=' + activeMagiciansId);
+  if (detailOpen && pinnedTopicId) parts.push('topic=' + pinnedTopicId);
+  if (detailOpen && activeEipNum !== null && activeEipNum !== undefined) parts.push('eip=' + activeEipNum);
+  if (detailOpen && activeMagiciansId) parts.push('mag=' + activeMagiciansId);
   if (showEips) {
     parts.push('eips=1');
     if (eipVisibilityMode === 'all') parts.push('eipmode=all');
@@ -7610,6 +7819,7 @@ function drawEipTimeline() {
   eipData.forEach(function(e) {
     var sz = eipRScale(e.inf) * 1.4;
     var color = eipColor(e);
+    var eipClickTimer = null;
     squareG.append('rect')
       .attr('class', 'eip-square')
       .attr('x', tlXScale(e._eipDate) - sz/2)
@@ -7619,7 +7829,18 @@ function drawEipTimeline() {
       .attr('fill', color).attr('stroke', color).attr('stroke-width', 0.5)
       .attr('opacity', 0.7)
       .datum(e)
-      .on('click', function(ev, d) { showEipDetailByNum(d._eipNum); })
+      .on('click', function(ev, d) {
+        if (eipClickTimer) {
+          clearTimeout(eipClickTimer);
+          eipClickTimer = null;
+          showEipDetailByNum(d._eipNum);
+          return;
+        }
+        eipClickTimer = setTimeout(function() {
+          eipClickTimer = null;
+          focusEipNode(d._eipNum);
+        }, 220);
+      })
       .on('mouseover', function(ev, d) { onTimelineEntityHover(ev, d, 'eip', true); })
       .on('mouseout', function(ev, d) { onTimelineEntityHover(ev, d, 'eip', false); })
       .style('display', showEips ? null : 'none');
@@ -7699,6 +7920,7 @@ function drawMagiciansTimeline() {
   var triG = magG.append('g');
   magData.forEach(function(mt) {
     var r = magiciansRScale(mt._magInf);
+    var magClickTimer = null;
     triG.append('path')
       .attr('class', 'magicians-triangle')
       .attr('d', trianglePath(tlXScale(mt._magDate), mt._magYPos, r))
@@ -7707,7 +7929,18 @@ function drawMagiciansTimeline() {
       .attr('stroke-width', 0.5)
       .attr('opacity', 0.78)
       .datum(mt)
-      .on('click', function(ev, d) { showMagiciansTopicDetailById(d._magId); })
+      .on('click', function(ev, d) {
+        if (magClickTimer) {
+          clearTimeout(magClickTimer);
+          magClickTimer = null;
+          showMagiciansTopicDetailById(d._magId);
+          return;
+        }
+        magClickTimer = setTimeout(function() {
+          magClickTimer = null;
+          focusMagiciansNode(d._magId);
+        }, 220);
+      })
       .on('mouseover', function(ev, d) { onTimelineEntityHover(ev, d, 'magicians', true); })
       .on('mouseout', function(ev, d) { onTimelineEntityHover(ev, d, 'magicians', false); })
       .style('display', magiciansMatchesFilter(mt) ? null : 'none');
