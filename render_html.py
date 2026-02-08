@@ -129,15 +129,19 @@ def _load_papers_for_viz(data):
             rows = analysis_papers
         source = "analysis"
 
-    # Merge pre-computed influence scores from analysis.json into rows
+    # Merge pre-computed influence scores and research threads from analysis.json
     analysis_papers = data.get("papers", {})
     if isinstance(analysis_papers, dict):
         inf_by_id = {str(k): v.get("influence_score") for k, v in analysis_papers.items()
                      if isinstance(v, dict) and v.get("influence_score") is not None}
+        thread_by_id = {str(k): v.get("research_thread") for k, v in analysis_papers.items()
+                        if isinstance(v, dict) and v.get("research_thread")}
         for row in rows:
             pid = str(row.get("id", "")).strip()
             if pid and pid in inf_by_id and row.get("influence_score") is None:
                 row["influence_score"] = inf_by_id[pid]
+            if pid and pid in thread_by_id and not row.get("research_thread"):
+                row["research_thread"] = thread_by_id[pid]
 
     compact = {}
     for row in rows:
@@ -209,6 +213,9 @@ def _load_papers_for_viz(data):
         }
         if inf_score is not None:
             entry["inf"] = inf_score
+        paper_thread = row.get("research_thread")
+        if paper_thread:
+            entry["th"] = paper_thread
         compact[pid] = entry
 
     return compact, source
@@ -2926,6 +2933,8 @@ function paperTimelineThread(nodeOrPaper) {
 
 function inferPaperThread(paper) {
   if (!paper) return null;
+  // Use pre-computed thread from analyze.py if available
+  if (paper.th) return paper.th;
   var pid = String(paper.id || '').trim();
   var eips = PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(paper.eq || []);
   var topicIds = PAPER_TO_TOPIC_IDS[pid] || [];
@@ -5298,7 +5307,8 @@ function toggleEipVisibilityMode() {
 }
 
 function applyContentVisibility() {
-  d3.selectAll('.topic-circle').style('display', showPosts ? null : 'none');
+  d3.selectAll('.topic-circle').style('display', showPosts ? null : 'none')
+    .style('pointer-events', showPosts ? null : 'none');
   d3.selectAll('.topic-label').style('display', showPosts ? null : 'none');
   d3.selectAll('.edge-line').style('display', showPosts ? null : 'none');
   clearTimelineAuxEdgeMarkers();
@@ -5307,21 +5317,29 @@ function applyContentVisibility() {
   });
   d3.selectAll('.eip-square').style('display', function(d) {
     return showEips && eipMatchesFilter(d) ? null : 'none';
+  }).style('pointer-events', function(d) {
+    return showEips && eipMatchesFilter(d) ? 'all' : 'none';
   });
   d3.selectAll('.eip-label').style('display', function(d) {
     return showEips && eipMatchesFilter(d) ? null : 'none';
   });
   d3.selectAll('.magicians-triangle').style('display', function(d) {
     return magiciansMatchesFilter(d) ? null : 'none';
+  }).style('pointer-events', function(d) {
+    return magiciansMatchesFilter(d) ? 'all' : 'none';
   });
   d3.selectAll('.magicians-label').style('display', function(d) {
     return magiciansMatchesFilter(d) ? null : 'none';
   });
   d3.selectAll('.paper-diamond').style('display', function(d) {
     return paperMatchesTimelineFilter(d) ? null : 'none';
+  }).style('pointer-events', function(d) {
+    return paperMatchesTimelineFilter(d) ? 'all' : 'none';
   });
   d3.selectAll('.paper-hit').style('display', function(d) {
     return paperMatchesTimelineFilter(d) ? null : 'none';
+  }).style('pointer-events', function(d) {
+    return paperMatchesTimelineFilter(d) ? 'all' : 'none';
   });
   d3.selectAll('.paper-label').style('display', function(d) {
     return paperMatchesTimelineFilter(d) ? null : 'none';
@@ -7217,6 +7235,10 @@ function applyFocusedEntityHighlight() {
 function onTimelineHover(ev, d, entering) {
   var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
   if (entering) {
+    // Skip hover for hidden/filtered-out nodes (pointer-events guard)
+    var circleEl = d3.select(ev.currentTarget);
+    if (circleEl.style('display') === 'none' || circleEl.style('pointer-events') === 'none') return;
+    if (hasFilter && !topicMatchesFilter(d)) return;
     hoveredTopicId = d.id;
     showTooltip(ev, d);
     if (hasFocusedEntity() && isHoverBlockedByFocusedEntity('topic', d)) return;
@@ -7295,6 +7317,9 @@ function onTimelineHover(ev, d, entering) {
 
 function onTimelineEntityHover(ev, node, kind, entering) {
   if (entering) {
+    // Skip hover for hidden/filtered-out entity nodes (pointer-events guard)
+    var entityEl = d3.select(ev.currentTarget);
+    if (entityEl.style('display') === 'none' || entityEl.style('pointer-events') === 'none') return;
     if (kind === 'eip') {
       showEipTooltip(ev, node);
     } else if (kind === 'magicians') {
@@ -7516,6 +7541,7 @@ function filterTimeline(skipFocusedHighlight) {
   });
 
   d3.selectAll('.topic-circle')
+    .style('pointer-events', function(d) { return targetOp[d.id] > 0.25 ? 'all' : 'none'; })
     .transition().duration(200)
     .attr('opacity', function(d) { return targetOp[d.id]; })
     .attr('r', function(d) { return tlRScale(d.inf); });
@@ -7538,6 +7564,7 @@ function filterTimeline(skipFocusedHighlight) {
   if (showEips) {
     d3.selectAll('.eip-square')
       .style('display', function(d) { return eipMatchesFilter(d) ? null : 'none'; })
+      .style('pointer-events', function(d) { return eipMatchesFilter(d) ? 'all' : 'none'; })
       .transition().duration(200)
       .attr('opacity', function(d) {
         return 0.7;
@@ -7564,6 +7591,7 @@ function filterTimeline(skipFocusedHighlight) {
   if (showMagicians) {
     d3.selectAll('.magicians-triangle')
       .style('display', function(d) { return magiciansMatchesFilter(d) ? null : 'none'; })
+      .style('pointer-events', function(d) { return magiciansMatchesFilter(d) ? 'all' : 'none'; })
       .transition().duration(200)
       .attr('opacity', 0.78);
     d3.selectAll('.magicians-label')
@@ -7587,10 +7615,12 @@ function filterTimeline(skipFocusedHighlight) {
   if (showPapers) {
     d3.selectAll('.paper-diamond')
       .style('display', function(d) { return paperMatchesTimelineFilter(d) ? null : 'none'; })
+      .style('pointer-events', function(d) { return paperMatchesTimelineFilter(d) ? 'all' : 'none'; })
       .transition().duration(200)
       .attr('opacity', 0.76);
     d3.selectAll('.paper-hit')
-      .style('display', function(d) { return paperMatchesTimelineFilter(d) ? null : 'none'; });
+      .style('display', function(d) { return paperMatchesTimelineFilter(d) ? null : 'none'; })
+      .style('pointer-events', function(d) { return paperMatchesTimelineFilter(d) ? 'all' : 'none'; });
     d3.selectAll('.paper-label')
       .style('display', function(d) { return paperMatchesTimelineFilter(d) ? null : 'none'; })
       .attr('opacity', 0.74);
@@ -8905,6 +8935,7 @@ function applyLineageHighlight() {
 function applyLineageTimeline() {
   d3.selectAll('.topic-circle')
     .attr('opacity', function(d) { return lineageSet.has(d.id) ? 1 : 0.04; })
+    .style('pointer-events', function(d) { return lineageSet.has(d.id) ? 'all' : 'none'; })
     .attr('r', function(d) { return lineageSet.has(d.id) ? tlRScale(d.inf) * 1.2 : tlRScale(d.inf); });
 
   d3.selectAll('.edge-line')
