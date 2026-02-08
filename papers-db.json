@@ -54,10 +54,10 @@
     "Ariel Gabizon",
     "Arthur Gervais",
     "Barnabe Monnot",
-    "Barnab\u00e9 Monnot",
+    "Barnabé Monnot",
     "Ben Fisch",
     "Benedikt Bunz",
-    "Benedikt B\u00fcnz",
+    "Benedikt Bünz",
     "Benjamin Livshits",
     "Binyi Chen",
     "Caspar Schwarz-Schilling",
@@ -70,7 +70,7 @@
     "Ertem Nusret Tas",
     "Fahad Saleh",
     "Francesco D'Amato",
-    "Francesco D\u2019Amato",
+    "Francesco D’Amato",
     "Gregory M. Zaverucha",
     "Gregory Neven",
     "Ian Goldberg",
@@ -489,10 +489,10 @@
       "title": "Time to Bribe: Measuring Block Construction Market",
       "year": 2023,
       "authors": [
-        "Anton Wahrst\u00e4tter",
+        "Anton Wahrstätter",
         "Liyi Zhou",
         "Kaihua Qin",
-        "Davor Svetinovi\u0107",
+        "Davor Svetinović",
         "Arthur Gervais"
       ],
       "venue": "arXiv (Cornell University)",
@@ -679,8 +679,8 @@
       "year": 2023,
       "authors": [
         "Stefanos Leonardos",
-        "Dani\u00ebl Reijsbergen",
-        "Barnab\u00e9 Monnot",
+        "Daniël Reijsbergen",
+        "Barnabé Monnot",
         "Georgios Piliouras"
       ],
       "venue": "Lecture notes in computer science",
@@ -708,7 +708,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "eip-1559"
       ],
       "source_types": [
@@ -719,12 +719,12 @@
     },
     {
       "id": "doi:10.1145/3773291",
-      "title": "Dynamics of Ethereum\u2019s EIP-1559 Transaction Fee Mechanism",
+      "title": "Dynamics of Ethereum’s EIP-1559 Transaction Fee Mechanism",
       "year": 2025,
       "authors": [
         "Stefanos Leonardos",
-        "Dani\u00ebl Reijsbergen",
-        "Barnab\u00e9 Monnot",
+        "Daniël Reijsbergen",
+        "Barnabé Monnot",
         "Georgios Piliouras"
       ],
       "venue": "Distributed Ledger Technologies Research and Practice",
@@ -752,7 +752,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "eip-1559"
       ],
       "source_types": [
@@ -767,8 +767,8 @@
       "year": 2022,
       "authors": [
         "Stefanos Leonardos",
-        "Dani\u00ebl Reijsbergen",
-        "Barnab\u00e9 Monnot",
+        "Daniël Reijsbergen",
+        "Barnabé Monnot",
         "Georgios Piliouras"
       ],
       "venue": "arXiv (Cornell University)",
@@ -796,7 +796,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "eip-1559"
       ],
       "source_types": [
@@ -856,16 +856,16 @@
       "title": "Blockchain Censorship",
       "year": 2023,
       "authors": [
-        "Anton Wahrst\u00e4tter",
+        "Anton Wahrstätter",
         "Jens Ernstberger",
         "Aviv Yaish",
         "Liyi Zhou",
         "Kaihua Qin",
         "Taro Tsuchiya",
         "Sebastian Steinhorst",
-        "Davor Svetinovi\u0107",
+        "Davor Svetinović",
         "Nicolas Christin",
-        "Miko\u0142aj Barczentewicz",
+        "Mikołaj Barczentewicz",
         "Arthur Gervais"
       ],
       "venue": "arXiv (Cornell University)",
@@ -955,7 +955,7 @@
         "Theo Diamandis",
         "Ciamac C. Moallemi"
       ],
-      "venue": "Leibniz-Zentrum f\u00fcr Informatik (Schloss Dagstuhl)",
+      "venue": "Leibniz-Zentrum für Informatik (Schloss Dagstuhl)",
       "doi": "10.4230/lipics.aft.2025.24",
       "arxiv_id": null,
       "eprint_id": null,
@@ -1040,7 +1040,7 @@
       "title": "Goldfish: No More Attacks on Ethereum?!",
       "year": 2022,
       "authors": [
-        "Francesco D\u2019Amato",
+        "Francesco D’Amato",
         "Joachim Neu",
         "Ertem Nusret Tas",
         "David Tse"
@@ -1216,7 +1216,7 @@
       "authors": [
         "Caspar Schwarz-Schilling",
         "Joachim Neu",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Aditya Asgaonkar",
         "Ertem Nusret Tas",
         "David Tse"
@@ -1249,7 +1249,7 @@
       "matched_queries": [
         "Aditya Asgaonkar",
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "David Tse",
         "Ertem Nusret Tas",
@@ -1317,7 +1317,7 @@
         "Thomas Thiery",
         "Jennifer Pan",
         "Nihar B. Shah",
-        "Barnab\u00e9 Monnot"
+        "Barnabé Monnot"
       ],
       "venue": "arXiv (Cornell University)",
       "doi": "10.48550/arxiv.2305.09032",
@@ -1347,7 +1347,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Fahad Saleh",
         "Jennifer Pan",
@@ -1417,7 +1417,7 @@
       "authors": [
         "Roozbeh Sarenche",
         "Ertem Nusret Tas",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Bart Preneel"
       ],
@@ -1446,7 +1446,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Ertem Nusret Tas",
         "Nusret Tas"
@@ -1788,9 +1788,9 @@
       "title": "Transaction Fees on a Honeymoon: Ethereum's EIP-1559 One Month Later",
       "year": 2021,
       "authors": [
-        "Dani\u00ebl Reijsbergen",
+        "Daniël Reijsbergen",
         "Shyam Sridhar",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Stefanos Leonardos",
         "Stratis Skoulakis",
         "Georgios Piliouras"
@@ -1818,7 +1818,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "eip-1559"
       ],
       "source_types": [
@@ -1833,8 +1833,8 @@
       "year": 2021,
       "authors": [
         "Stefanos Leonardos",
-        "Barnab\u00e9 Monnot",
-        "Dani\u00ebl Reijsbergen",
+        "Barnabé Monnot",
+        "Daniël Reijsbergen",
         "Stratis Skoulakis",
         "Georgios Piliouras"
       ],
@@ -1861,7 +1861,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "eip-1559"
       ],
       "source_types": [
@@ -2003,7 +2003,7 @@
       "authors": [
         "Caspar Schwarz-Schilling",
         "Joachim Neu",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Aditya Asgaonkar",
         "Ertem Nusret Tas",
         "David Tse"
@@ -2032,7 +2032,7 @@
       "matched_queries": [
         "Aditya Asgaonkar",
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Ertem Nusret Tas",
         "Joachim Neu",
@@ -2190,7 +2190,7 @@
         "David C. Parkes",
         "Mitchell Stern"
       ],
-      "venue": "Leibniz-Zentrum f\u00fcr Informatik (Schloss Dagstuhl)",
+      "venue": "Leibniz-Zentrum für Informatik (Schloss Dagstuhl)",
       "doi": "10.4230/oasics.tokenomics.2021.6",
       "arxiv_id": null,
       "eprint_id": null,
@@ -2436,7 +2436,7 @@
       "year": 2025,
       "authors": [
         "Kaihua Qin",
-        "\u54f2 \u7530\u91ce",
+        "哲 田野",
         "Zhun Wang",
         "W. D. Li",
         "Liyi Zhou",
@@ -2519,7 +2519,7 @@
       "authors": [
         "Rim Ben Fekih",
         "Mariam Lahami",
-        "Mohamed Jma\u00efel",
+        "Mohamed Jmaïel",
         "Ahmed Ben Ali",
         "Philippe Genestier"
       ],
@@ -2712,7 +2712,7 @@
       "title": "Economics of Ethereum",
       "year": 2024,
       "authors": [
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Fahad Saleh",
         "Kose John",
@@ -2741,7 +2741,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Fahad Saleh",
         "Kose John"
@@ -2885,7 +2885,7 @@
       "title": "Goldfish: No More Attacks on Ethereum?!",
       "year": 2025,
       "authors": [
-        "Francesco D\u2019Amato",
+        "Francesco D’Amato",
         "Joachim Neu",
         "Ertem Nusret Tas",
         "David Tse"
@@ -3058,7 +3058,7 @@
       "authors": [
         "Roozbeh Sarenche",
         "Ertem Nusret Tas",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Bart Preneel"
       ],
@@ -3083,7 +3083,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Ertem Nusret Tas",
         "Nusret Tas"
@@ -3095,12 +3095,12 @@
     },
     {
       "id": "doi:10.1109/eurosp63326.2025.00036",
-      "title": "Commitment Attacks on Ethereum\u2019s Reward Mechanism",
+      "title": "Commitment Attacks on Ethereum’s Reward Mechanism",
       "year": 2025,
       "authors": [
         "Roozbeh Sarenche",
         "Ertem Nusret Tas",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Bart Preneel"
       ],
@@ -3125,7 +3125,7 @@
       ],
       "matched_queries": [
         "Barnabe Monnot",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Caspar Schwarz-Schilling",
         "Ertem Nusret Tas",
         "Nusret Tas"
@@ -3255,7 +3255,7 @@
     },
     {
       "id": "doi:10.1145/3428258",
-      "title": "Precise static modeling of Ethereum \u201cmemory\u201d",
+      "title": "Precise static modeling of Ethereum “memory”",
       "year": 2020,
       "authors": [
         "Sifis Lagouvardos",
@@ -3369,7 +3369,7 @@
     },
     {
       "id": "doi:10.1007/s42979-024-02976-1",
-      "title": "A Hybrid CNN\u2013LSTM Model for Transaction Fee Forecasting in Post EIP-1559 Ethereum",
+      "title": "A Hybrid CNN–LSTM Model for Transaction Fee Forecasting in Post EIP-1559 Ethereum",
       "year": 2024,
       "authors": [
         "Harshal Shridhar Kallurkar",
@@ -3409,9 +3409,9 @@
       "authors": [
         "Soumya Basu",
         "David Easley",
-        "Maureen O\u2019Hara"
+        "Maureen O’Hara"
       ],
-      "venue": "Leibniz-Zentrum f\u00fcr Informatik (Schloss Dagstuhl)",
+      "venue": "Leibniz-Zentrum für Informatik (Schloss Dagstuhl)",
       "doi": "10.4230/lipics.aft.2024.9",
       "arxiv_id": null,
       "eprint_id": null,
@@ -3482,7 +3482,7 @@
       "year": 2023,
       "authors": [
         "Aggelos Kiayias",
-        "\u0397\u03bb\u03af\u03b1\u03c2 \u039a\u03bf\u03c5\u03c4\u03c3\u03bf\u03c5\u03c0\u03b9\u03ac\u03c2",
+        "Ηλίας Κουτσουπιάς",
         "Philip Lazos",
         "Giorgos Panagiotakos"
       ],
@@ -3770,7 +3770,7 @@
       "title": "Correlation Between Gas Prices and Transaction Value in Ethereum Blockchain",
       "year": 2025,
       "authors": [
-        "Aytekin I\u015fman"
+        "Aytekin Işman"
       ],
       "venue": "Journal of Current Research in Blockchain.",
       "doi": "10.47738/jcrb.v2i4.47",
@@ -4015,11 +4015,11 @@
     },
     {
       "id": "doi:10.1109/bloc.2019.8751241",
-      "title": "Incentives in Ethereum\u2019s Hybrid Casper Protocol",
+      "title": "Incentives in Ethereum’s Hybrid Casper Protocol",
       "year": 2019,
       "authors": [
         "Vitalik Buterin",
-        "Dani\u00ebl Reijsbergen",
+        "Daniël Reijsbergen",
         "Stefanos Leonardos",
         "Georgios Piliouras"
       ],
@@ -4507,7 +4507,7 @@
       "year": 2024,
       "authors": [
         "Aditya Asgaonkar",
-        "Francesco D\u2019Amato",
+        "Francesco D’Amato",
         "Roberto Saltini",
         "Luca Zanolini",
         "Chenyi Zhang"
@@ -4535,7 +4535,7 @@
       ],
       "matched_queries": [
         "Aditya Asgaonkar",
-        "Francesco D\u2019Amato",
+        "Francesco D’Amato",
         "ethereum finality"
       ],
       "source_types": [
@@ -4672,7 +4672,7 @@
         "Benjamin Kraner",
         "Caspar Schwarz-Schilling",
         "Claudio J. Tessone",
-        "Nicol\u00f2 Vallarano"
+        "Nicolò Vallarano"
       ],
       "venue": "arXiv (Cornell University)",
       "doi": "10.1109/icbc56567.2023.10174948",
@@ -4762,7 +4762,7 @@
       "authors": [
         "Krzysztof Gogol",
         "Johnnatan Messias",
-        "Maria In\u00eas Silva",
+        "Maria Inês Silva",
         "Benjamin Livshits"
       ],
       "venue": "arXiv (Cornell University)",
@@ -4804,7 +4804,7 @@
       "title": "3-Slot-Finality Protocol for Ethereum",
       "year": 2024,
       "authors": [
-        "Francesco D\u2019Amato",
+        "Francesco D’Amato",
         "Roberto Saltini",
         "Thuy-An Tran",
         "Luca Zanolini"
@@ -4833,7 +4833,7 @@
         "mev_pbs"
       ],
       "matched_queries": [
-        "Francesco D\u2019Amato",
+        "Francesco D’Amato",
         "ethereum finality"
       ],
       "source_types": [
@@ -4851,7 +4851,7 @@
         "Andrei Dan",
         "Dana Drachsler-Cohen",
         "Arthur Gervais",
-        "Florian B\u00fcnzli",
+        "Florian Bünzli",
         "Martin Vechev"
       ],
       "venue": null,
@@ -4897,8 +4897,8 @@
         "Brandon Moore",
         "Daejun Park",
         "Yi Zhang",
-        "Andrei \u0218tef\u0103nescu",
-        "Grigore Ro\u015fu"
+        "Andrei Ștefănescu",
+        "Grigore Roşu"
       ],
       "venue": null,
       "doi": "10.1109/csf.2018.00022",
@@ -4975,7 +4975,7 @@
         "Konstantinos Tsoulias",
         "Georgios Palaiokrassas",
         "Georgios Fragkos",
-        "\u0391\u03bd\u03c4\u03ce\u03bd\u03b9\u03bf\u03c2 \u039b\u03af\u03c4\u03ba\u03b5",
+        "Αντώνιος Λίτκε",
         "Theodora Varvarigou"
       ],
       "venue": "IEEE Access",
@@ -5054,7 +5054,7 @@
         "Sarah Meiklejohn",
         "Rebekah Mercer"
       ],
-      "venue": "SHILAP Revista de lepidopterolog\u00eda",
+      "venue": "SHILAP Revista de lepidopterología",
       "doi": "10.2478/popets-2020-0074",
       "arxiv_id": null,
       "eprint_id": null,
@@ -5127,7 +5127,7 @@
       "year": 2025,
       "authors": [
         "Bruno Mazorra",
-        "Burak \u00d6z",
+        "Burak Öz",
         "Christof Ferreira Torres",
         "Christoph Schlegel",
         "Filip Rezabek",
@@ -5261,10 +5261,10 @@
       "title": "What Drives the (In)stability of a Stablecoin?",
       "year": 2023,
       "authors": [
-        "Yu\u2010Jin Kwon",
+        "Yu‐Jin Kwon",
         "Kornrapat Pongmala",
         "Kaihua Qin",
-        "Ariah Klages\u2010Mundt",
+        "Ariah Klages‐Mundt",
         "Philipp Jovanovic",
         "Christine A. Parlour",
         "Arthur Gervais",
@@ -5307,7 +5307,7 @@
         "Ariel Gabizon",
         "Dmitry Khovratovich",
         "Mary Maller",
-        "Carla R\u00e0fols"
+        "Carla Ràfols"
       ],
       "venue": "IACR Communications in Cryptology",
       "doi": "10.62056/ae890l5vt",
@@ -5422,7 +5422,7 @@
       "year": 2020,
       "authors": [
         "Vitalik Buterin",
-        "Dani\u00ebl Reijsbergen",
+        "Daniël Reijsbergen",
         "Stefanos Leonardos",
         "Georgios Piliouras"
       ],
@@ -5464,7 +5464,7 @@
         "Mingxun Zhou",
         "Yan Ji",
         "Phil Daian",
-        "Florian Tram\u00e8r",
+        "Florian Tramèr",
         "Giulia Fanti",
         "Ari Juels"
       ],
@@ -5634,7 +5634,7 @@
       "title": "Who Wins Ethereum Block Building Auctions and Why?",
       "year": 2024,
       "authors": [
-        "Burak \u00d6z",
+        "Burak Öz",
         "Danning Sui",
         "Thomas Thiery",
         "Florian Matthes"
@@ -5798,7 +5798,7 @@
       "title": "A Simple Single Slot Finality Protocol For Ethereum",
       "year": 2023,
       "authors": [
-        "Francesco D\u2019Amato",
+        "Francesco D’Amato",
         "Luca Zanolini"
       ],
       "venue": "arXiv (Cornell University)",
@@ -5837,7 +5837,7 @@
       "title": "Proof-of-Prestige: A Useful Work Reward System for Unverifiable Tasks",
       "year": 2021,
       "authors": [
-        "Micha\u0142 Kr\u00f3l",
+        "Michał Król",
         "Alberto Sonnino",
         "Mustafa Al-Bassam",
         "Argyrios G. Tasiopoulos",
@@ -5878,7 +5878,7 @@
       "title": "Do you Need a Blockchain?",
       "year": 2018,
       "authors": [
-        "Karl W\u00fcst",
+        "Karl Wüst",
         "Arthur Gervais"
       ],
       "venue": null,
@@ -5914,7 +5914,7 @@
       "year": 2019,
       "authors": [
         "Giulio Malavolta",
-        "Pedro Moreno-S\u00e1nchez",
+        "Pedro Moreno-Sánchez",
         "Clara Schneidewind",
         "Aniket Kate",
         "Matteo Maffei"
@@ -6075,7 +6075,7 @@
       "year": 2018,
       "authors": [
         "Stefanie Roos",
-        "Pedro Moreno-S\u00e1nchez",
+        "Pedro Moreno-Sánchez",
         "Aniket Kate",
         "Ian Goldberg"
       ],
@@ -6151,7 +6151,7 @@
       "year": 2017,
       "authors": [
         "Stefanie Roos",
-        "Pedro Moreno-S\u00e1nchez",
+        "Pedro Moreno-Sánchez",
         "Aniket Kate",
         "Ian Goldberg"
       ],
@@ -6348,7 +6348,7 @@
         "Yi Zhang",
         "Manasvi Saxena",
         "Philip Daian",
-        "Grigore Ro\u015fu"
+        "Grigore Roşu"
       ],
       "venue": null,
       "doi": "10.1145/3236024.3264591",
@@ -6394,7 +6394,7 @@
         "Nishant Rodrigues",
         "Philip Daian",
         "Dwight Guth",
-        "Grigore Ro\u015fu"
+        "Grigore Roşu"
       ],
       "venue": "Illinois Digital Environment for Access to Learning and Scholarship (University of Illinois at Urbana-Champaign)",
       "doi": null,
@@ -6530,11 +6530,11 @@
         "Lei Li",
         "Cedric Xing",
         "Mona Vij",
-        "Rivi\u00e8re, Etienne",
+        "Rivière, Etienne",
         "Schiavoni, Valerio",
         "Yuhala, Peterson"
       ],
-      "venue": "Leibniz-Zentrum f\u00fcr Informatik (Schloss Dagstuhl)",
+      "venue": "Leibniz-Zentrum für Informatik (Schloss Dagstuhl)",
       "doi": "10.4230/lipics.opodis.2023.23",
       "arxiv_id": null,
       "eprint_id": null,
@@ -6610,9 +6610,9 @@
       "title": "Time Moves Faster When There is Nothing You Anticipate: The Role of Time in MEV Rewards",
       "year": 2023,
       "authors": [
-        "Burak \u00d6z",
+        "Burak Öz",
         "Benjamin Kraner",
-        "Nicol\u00f2 Vallarano",
+        "Nicolò Vallarano",
         "Bingle Stegmann Kruger",
         "Florian Matthes",
         "Claudio J. Tessone"
@@ -6887,8 +6887,8 @@
       "title": "Simulating an Ethereum 2.0 Beacon Chain Network",
       "year": 2021,
       "authors": [
-        "Marco H\u00fcnseler",
-        "Kerstin Lemke\u2010Rust"
+        "Marco Hünseler",
+        "Kerstin Lemke‐Rust"
       ],
       "venue": null,
       "doi": "10.1109/sds54264.2021.9732095",
@@ -7080,7 +7080,7 @@
       "year": 2025,
       "authors": [
         "Arusoaie, Andrei",
-        "B\u0103rbieru, Claudiu-Nicu",
+        "Bărbieru, Claudiu-Nicu",
         "Captarencu, Oana-Otilia",
         "Felber, Pascal",
         "Libert, Corentin",
@@ -7249,7 +7249,7 @@
         "Mingxun Zhou",
         "Yan Ji",
         "Phil Daian",
-        "Florian Tram\u00e8r",
+        "Florian Tramèr",
         "Giulia Fanti",
         "Ari Juels"
       ],
@@ -7293,7 +7293,7 @@
         "Christos Nasikas",
         "Dionysis Zindros"
       ],
-      "venue": "Leibniz-Zentrum f\u00fcr Informatik (Schloss Dagstuhl)",
+      "venue": "Leibniz-Zentrum für Informatik (Schloss Dagstuhl)",
       "doi": "10.4230/oasics.tokenomics.2019.7",
       "arxiv_id": null,
       "eprint_id": null,
@@ -7403,7 +7403,7 @@
       "year": 2025,
       "authors": [
         "Firas Dahi",
-        "Walter Hern\u00e1ndez",
+        "Walter Hernández",
         "Yebo Feng",
         "Jiahua Xu",
         "Aanchal Malhotra",
@@ -7442,7 +7442,7 @@
       "year": 2020,
       "authors": [
         "Thomas Durieux",
-        "Jo\u00e3o F. Ferreira",
+        "João F. Ferreira",
         "Rui Abreu",
         "Pedro E. D. Cruz"
       ],
@@ -7638,7 +7638,7 @@
       "year": 2023,
       "authors": [
         "James Austgen",
-        "Andr\u00e9s F\u00e1brega",
+        "Andrés Fábrega",
         "Sarah Levin Allen",
         "Kushal Babel",
         "Mahimna Kelkar",
@@ -7678,7 +7678,7 @@
       "title": "Broken Metre: Attacking Resource Metering in EVM",
       "year": 2020,
       "authors": [
-        "Daniel P\u00e9rez",
+        "Daniel Pérez",
         "Benjamin Livshits"
       ],
       "venue": null,
@@ -7718,7 +7718,7 @@
       "title": "A Simple Single Slot Finality Protocol for Ethereum",
       "year": 2024,
       "authors": [
-        "Francesco D\u2019Amato",
+        "Francesco D’Amato",
         "Luca Zanolini"
       ],
       "venue": "Lecture notes in computer science",
@@ -8069,8 +8069,8 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "https://doi.org/10.1007/978-3-030-45721-1_26",
-      "openalex_id": null,
-      "cited_by_count": 0,
+      "openalex_id": "https://openalex.org/W2982474429",
+      "cited_by_count": 299,
       "source": "curated",
       "tags": [
         "proof-systems",
@@ -8101,8 +8101,8 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "https://eprint.iacr.org/2020/315",
-      "openalex_id": null,
-      "cited_by_count": 0,
+      "openalex_id": "https://openalex.org/W3013936684",
+      "cited_by_count": 16,
       "source": "curated",
       "tags": [
         "lookup-arguments",
@@ -8133,8 +8133,8 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "https://eprint.iacr.org/2019/1021",
-      "openalex_id": null,
-      "cited_by_count": 0,
+      "openalex_id": "https://openalex.org/W2977627479",
+      "cited_by_count": 43,
       "source": "curated",
       "tags": [
         "proof-systems",
@@ -8165,8 +8165,8 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "https://eprint.iacr.org/2019/953",
-      "openalex_id": null,
-      "cited_by_count": 0,
+      "openalex_id": "https://openalex.org/W2978282230",
+      "cited_by_count": 157,
       "source": "curated",
       "tags": [
         "plonk",
@@ -8198,8 +8198,8 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "https://eprint.iacr.org/2019/099",
-      "openalex_id": null,
-      "cited_by_count": 0,
+      "openalex_id": "https://openalex.org/W2919751322",
+      "cited_by_count": 10,
       "source": "curated",
       "tags": [
         "proof-systems",
@@ -8230,8 +8230,8 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "https://doi.org/10.1007/978-3-642-17373-8_11",
-      "openalex_id": null,
-      "cited_by_count": 0,
+      "openalex_id": "https://openalex.org/W1909324101",
+      "cited_by_count": 509,
       "source": "curated",
       "tags": [
         "cryptography",
@@ -8477,7 +8477,7 @@
     },
     {
       "id": "doi:10.1515/popets-2018-0015",
-      "title": "M\u00f6bius: Trustless Tumbling for Transaction Privacy",
+      "title": "Möbius: Trustless Tumbling for Transaction Privacy",
       "year": 2018,
       "authors": [
         "Sarah Meiklejohn",
@@ -8515,7 +8515,7 @@
       "title": "Ethereum Eclipse Attacks",
       "year": 2016,
       "authors": [
-        "Karl W\u00fcst",
+        "Karl Wüst",
         "Arthur Gervais"
       ],
       "venue": "Repository for Publications and Research Data (ETH Zurich)",
@@ -8589,7 +8589,7 @@
       "title": "Do you need a Blockchain",
       "year": 2017,
       "authors": [
-        "Karl W\u00fcst",
+        "Karl Wüst",
         "Arthur Gervais"
       ],
       "venue": "IACR Cryptology ePrint Archive",
@@ -8660,9 +8660,9 @@
       "title": "State of the Art of Zero-Knowledge Proofs in Blockchain",
       "year": 2022,
       "authors": [
-        "Darko \u010capko",
-        "Sr\u0111an Vukmirovi\u0107",
-        "Nemanja Nedi\u0107"
+        "Darko Čapko",
+        "Srđan Vukmirović",
+        "Nemanja Nedić"
       ],
       "venue": "2022 30th Telecommunications Forum (TELFOR)",
       "doi": "10.1109/telfor56187.2022.9983760",
@@ -8816,7 +8816,7 @@
         "Jing Li",
         "Dusit Niyato",
         "Choong Seon Hong",
-        "Kyung\u2010Joon Park",
+        "Kyung‐Joon Park",
         "Li Wang",
         "Zhu Han"
       ],
@@ -8852,9 +8852,9 @@
       "title": "Decentralization Is Good or Not? Defending Consensus in Ethereum 2.0",
       "year": 2024,
       "authors": [
-        "Vojislav B. Mi\u0161i\u0107",
+        "Vojislav B. Mišić",
         "Soosan Naderi Mighan",
-        "Jelena Mi\u0161i\u0107",
+        "Jelena Mišić",
         "Xiaolin Chang"
       ],
       "venue": "Blockchains",
@@ -9053,7 +9053,7 @@
       "year": 2023,
       "authors": [
         "Vytautas Tumas",
-        "Beltr\u00e1n Borja Fiz Pontiveros",
+        "Beltrán Borja Fiz Pontiveros",
         "Christof Ferreira Torres",
         "Radu State"
       ],
@@ -9133,7 +9133,7 @@
         "Anna Cartwright",
         "Edward Cartwright",
         "Darren Hurley-Smith",
-        "Julio Hern\u00e1ndez-Castro"
+        "Julio Hernández-Castro"
       ],
       "venue": null,
       "doi": "10.1145/3600160.3604985",
@@ -9358,7 +9358,7 @@
       "authors": [
         "Jean-Philippe Aumasson",
         "Denis Kolegov",
-        "\u0395. \u03a3\u03c4\u03b1\u03b8\u03bf\u03c0\u03bf\u03cd\u03bb\u03bf\u03c5"
+        "Ε. Σταθοπούλου"
       ],
       "venue": "arXiv (Cornell University)",
       "doi": "10.48550/arxiv.2109.11677",
@@ -9389,7 +9389,7 @@
     },
     {
       "id": "doi:10.1049/blc2.70014",
-      "title": "Cost Optimization in Layer 2 Rollups via EIP\u20104844: A Gas Efficiency and Economic Analysis",
+      "title": "Cost Optimization in Layer 2 Rollups via EIP‐4844: A Gas Efficiency and Economic Analysis",
       "year": 2025,
       "authors": [
         "Antosh Madappa Dyade",
@@ -9705,13 +9705,13 @@
       "authors": [
         "Matthieu Pigaglio",
         "Onur Ascigil",
-        "Micha\u0142 Kr\u00f3l",
-        "Sergi Re\u00f1\u00e9",
+        "Michał Król",
+        "Sergi Reñé",
         "Felix Lange",
         "Kaleem Peeroo",
         "Ramin Sadre",
-        "Vladimir Stankovi\u0107",
-        "\u00c9tienne Rivi\u00e8re"
+        "Vladimir Stanković",
+        "Étienne Rivière"
       ],
       "venue": "arXiv (Cornell University)",
       "doi": "10.48550/arxiv.2507.00824",
@@ -9975,7 +9975,7 @@
       "year": 2018,
       "authors": [
         "Christof Ferreira Torres",
-        "Julian Sch\u00fctte",
+        "Julian Schütte",
         "Radu State"
       ],
       "venue": null,
@@ -10205,7 +10205,7 @@
       "authors": [
         "Marcus Brandenburger",
         "Christian Cachin",
-        "R\u00fcdiger Kapitza",
+        "Rüdiger Kapitza",
         "Alessandro Sorniotti"
       ],
       "venue": "arXiv (Cornell University)",
@@ -10355,7 +10355,7 @@
       "title": "Decentralized Finance: On Blockchain- and Smart Contract-Based Financial Markets",
       "year": 2021,
       "authors": [
-        "Fabian Sch\u00e4r"
+        "Fabian Schär"
       ],
       "venue": null,
       "doi": "10.20955/r.103.153-74",
@@ -10443,7 +10443,7 @@
         "Osama Alkadi",
         "Nour Moustafa",
         "Benjamin Turnbull",
-        "Kim\u2010Kwang Raymond Choo"
+        "Kim‐Kwang Raymond Choo"
       ],
       "venue": "IEEE Internet of Things Journal",
       "doi": "10.1109/jiot.2020.2996590",
@@ -10556,7 +10556,7 @@
       "authors": [
         "Christy Dwita Mariana",
         "Irwan Adi Ekaputra",
-        "Za\u00e4fri A. Husodo"
+        "Zaäfri A. Husodo"
       ],
       "venue": "Finance research letters",
       "doi": "10.1016/j.frl.2020.101798",
@@ -10594,7 +10594,7 @@
         "Passent Elkafrawy",
         "Oh-Young Song",
         "Ali Kashif Bashir",
-        "Ahmed A. Abd El\u2010Latif"
+        "Ahmed A. Abd El‐Latif"
       ],
       "venue": "IEEE Access",
       "doi": "10.1109/access.2020.2999468",
@@ -10885,7 +10885,7 @@
         "Peilin Zheng",
         "Zibin Zheng",
         "Jiajing Wu",
-        "Hong\u2010Ning Dai"
+        "Hong‐Ning Dai"
       ],
       "venue": "IEEE Open Journal of the Computer Society",
       "doi": "10.1109/ojcs.2020.2990458",
@@ -11111,7 +11111,7 @@
       "title": "Revisiting Transactional Statistics of High-scalability Blockchains",
       "year": 2020,
       "authors": [
-        "Daniel P\u00e9rez",
+        "Daniel Pérez",
         "Jiahua Xu",
         "Benjamin Livshits"
       ],
@@ -11148,7 +11148,7 @@
       "year": 2020,
       "authors": [
         "Shunfan Zhou",
-        "Malte M\u00f6ser",
+        "Malte Möser",
         "Zhemin Yang",
         "Ben Adida",
         "Thorsten Holz",
@@ -11199,7 +11199,7 @@
       "title": "Smart Contract Vulnerabilities: Vulnerable Does Not Imply Exploited",
       "year": 2021,
       "authors": [
-        "Daniel P\u00e9rez",
+        "Daniel Pérez",
         "Benjamin Livshits"
       ],
       "venue": "USENIX Security Symposium",
@@ -11275,7 +11275,7 @@
       "title": "FlyClient: Super-Light Clients for Cryptocurrencies",
       "year": 2020,
       "authors": [
-        "Benedikt B\u00fcnz",
+        "Benedikt Bünz",
         "Lucianna Kiffer",
         "Loi Luu",
         "Mahdi Zamani"
@@ -11300,7 +11300,7 @@
         "known-authors"
       ],
       "matched_queries": [
-        "Benedikt B\u00fcnz",
+        "Benedikt Bünz",
         "blob gas ethereum",
         "inclusion lists ethereum"
       ],
@@ -11352,11 +11352,11 @@
       "title": "BaseSAP: Modular Stealth Address Protocol for Programmable Blockchains",
       "year": 2024,
       "authors": [
-        "Anton Wahrst\u00e4tter",
+        "Anton Wahrstätter",
         "Matthew D. Solomon",
         "Ben DiFrancesco",
         "Vitalik Buterin",
-        "Davor Svetinovi\u0107"
+        "Davor Svetinović"
       ],
       "venue": "IEEE Transactions on Information Forensics and Security",
       "doi": "10.1109/tifs.2024.3364081",
@@ -11393,7 +11393,7 @@
       "year": 2020,
       "authors": [
         "Mohsen Minaei",
-        "Pedro Moreno-S\u00e1nchez",
+        "Pedro Moreno-Sánchez",
         "Aniket Kate"
       ],
       "venue": "Proceedings on Privacy Enhancing Technologies",
@@ -11531,7 +11531,7 @@
     },
     {
       "id": "doi:10.1109/csf51468.2021.00002",
-      "title": "KACHINA \u2013 Foundations of Private Smart Contracts",
+      "title": "KACHINA – Foundations of Private Smart Contracts",
       "year": 2021,
       "authors": [
         "Thomas Kerber",
@@ -11570,11 +11570,11 @@
       "title": "BaseSAP: Modular Stealth Address Protocol for Programmable Blockchains",
       "year": 2023,
       "authors": [
-        "Anton Wahrst\u00e4tter",
+        "Anton Wahrstätter",
         "Matthew D. Solomon",
         "Ben DiFrancesco",
         "Vitalik Buterin",
-        "Davor Svetinovi\u0107"
+        "Davor Svetinović"
       ],
       "venue": "arXiv (Cornell University)",
       "doi": "10.48550/arxiv.2306.14272",
@@ -11645,7 +11645,7 @@
       "title": "We Know What They've Been Put Through: Revisiting High-scalability Blockchain Transactions.",
       "year": 2020,
       "authors": [
-        "Daniel P\u00e9rez",
+        "Daniel Pérez",
         "Jiahua Xu",
         "Benjamin Livshits"
       ],
@@ -11862,7 +11862,7 @@
       "year": 2018,
       "authors": [
         "George Gui",
-        "Al\u0131 Horta\u00e7su",
+        "Alı Hortaçsu",
         "Jose Tudon"
       ],
       "venue": "arXiv (Cornell University)",
@@ -11973,7 +11973,7 @@
         "Serkan Seven",
         "Gang Yao",
         "Ahmet Soran",
-        "Ahmet \u00d6nen",
+        "Ahmet Önen",
         "S. M. Muyeen"
       ],
       "venue": "IEEE Access",
@@ -12131,7 +12131,7 @@
       "title": "SmartBugs",
       "year": 2020,
       "authors": [
-        "Jo\u00e3o F. Ferreira",
+        "João F. Ferreira",
         "Pedro E. D. Cruz",
         "Thomas Durieux",
         "Rui Abreu"
@@ -12328,8 +12328,8 @@
       "authors": [
         "Jiao Jiao",
         "Shuanglong Kan",
-        "Shang\u2010Wei Lin",
-        "David San\u00e1n",
+        "Shang‐Wei Lin",
+        "David Sanán",
         "Yang Liu",
         "Jun Sun"
       ],
@@ -12645,7 +12645,7 @@
       "authors": [
         "Daejun Park",
         "Yi Zhang",
-        "Grigore Ro\u015fu"
+        "Grigore Roşu"
       ],
       "venue": "Lecture notes in computer science",
       "doi": "10.1007/978-3-030-53288-8_8",
@@ -12844,7 +12844,7 @@
       "title": "How centralized is decentralized? Comparison of wealth distribution in coins and tokens",
       "year": 2022,
       "authors": [
-        "Bartosz Ku\u015bmierz",
+        "Bartosz Kuśmierz",
         "Roman Overko"
       ],
       "venue": null,
@@ -13069,7 +13069,7 @@
       "title": "MEV on Ethereum: A Policy Analysis",
       "year": 2023,
       "authors": [
-        "Miko\u0142aj Barczentewicz"
+        "Mikołaj Barczentewicz"
       ],
       "venue": "SSRN Electronic Journal",
       "doi": "10.2139/ssrn.4332703",
@@ -13142,7 +13142,7 @@
       "authors": [
         "Athanasios Koulianos",
         "Panagiotis Paraskevopoulos",
-        "\u0391\u03bd\u03c4\u03ce\u03bd\u03b9\u03bf\u03c2 \u039b\u03af\u03c4\u03ba\u03b5",
+        "Αντώνιος Λίτκε",
         "Nikolaos Papadakis"
       ],
       "venue": "Sensors",
@@ -13602,7 +13602,7 @@
     },
     {
       "id": "doi:10.1145/3543873.3587555",
-      "title": "Don\u2019t Trust, Verify: The Case of Slashing from a Popular Ethereum Explorer",
+      "title": "Don’t Trust, Verify: The Case of Slashing from a Popular Ethereum Explorer",
       "year": 2023,
       "authors": [
         "Zhiguo He",
@@ -13680,7 +13680,7 @@
       "authors": [
         "Jason Zhu",
         "Arijit Khan",
-        "C\u00fcneyt G\u00fcrcan Ak\u00e7ora"
+        "Cüneyt Gürcan Akçora"
       ],
       "venue": "Frontiers in Blockchain",
       "doi": "10.3389/fbloc.2024.1342956",
@@ -13714,9 +13714,9 @@
       "title": "Analyzing Large-Scale Blockchain Transaction Graphs for Fraudulent Activities",
       "year": 2021,
       "authors": [
-        "Baran K\u0131l\u0131\u00e7",
-        "Can \u00d6zturan",
-        "Alper \u015een"
+        "Baran Kılıç",
+        "Can Özturan",
+        "Alper Şen"
       ],
       "venue": null,
       "doi": "10.1007/978-3-030-94590-9_14",
@@ -13784,7 +13784,7 @@
     },
     {
       "id": "doi:10.3390/network4010002",
-      "title": "A Study of Ethereum\u2019s Transition from Proof-of-Work to Proof-of-Stake in Preventing Smart Contracts Criminal Activities",
+      "title": "A Study of Ethereum’s Transition from Proof-of-Work to Proof-of-Stake in Preventing Smart Contracts Criminal Activities",
       "year": 2024,
       "authors": [
         "Oliver J. Hall",
@@ -13824,13 +13824,13 @@
       "title": "Data Availability Sampling in Ethereum: Analysis of P2P Networking Requirements",
       "year": 2023,
       "authors": [
-        "Micha\u0142 Kr\u00f3l",
+        "Michał Król",
         "Onur Ascigil",
-        "Sergi Re\u00f1\u00e9",
-        "\u00c9tienne Rivi\u00e8re",
+        "Sergi Reñé",
+        "Étienne Rivière",
         "Matthieu Pigaglio",
         "Kaleem Peeroo",
-        "Vladimir Stankovi\u0107",
+        "Vladimir Stanković",
         "Ramin Sadre",
         "Felix Lange"
       ],
@@ -13945,7 +13945,7 @@
         "Theodoros Constantinides",
         "John Cartlidge"
       ],
-      "venue": "\u0098The \u009c...European modeling & simulation symposium",
+      "venue": "The ...European modeling & simulation symposium",
       "doi": "10.46354/i3m.2022.emss.041",
       "arxiv_id": null,
       "eprint_id": null,
@@ -14046,7 +14046,7 @@
     },
     {
       "id": "doi:10.3390/a16100472",
-      "title": "Blockchain PoS and PoW Consensus Algorithms for Airspace Management Application to the UAS-S4 Eh\u00e9catl",
+      "title": "Blockchain PoS and PoW Consensus Algorithms for Airspace Management Application to the UAS-S4 Ehécatl",
       "year": 2023,
       "authors": [
         "Seyed Mohammad Hashemi",
@@ -14327,8 +14327,8 @@
       "authors": [
         "Selma Steinhoff",
         "Chrysoula Stathakopoulou",
-        "Matej Pavlovi\u010d",
-        "Marko Vukoli\u0107"
+        "Matej Pavlovič",
+        "Marko Vukolić"
       ],
       "venue": "arXiv (Cornell University)",
       "doi": "10.48550/arxiv.2109.03913",
@@ -14543,9 +14543,9 @@
       "year": 2024,
       "authors": [
         "Mikel Cortes-Goicoechea",
-        "Csaba Kir\u00e1ly",
+        "Csaba Király",
         "Dmitriy Ryajov",
-        "Jos\u00e9 L. Mu\u00f1oz",
+        "José L. Muñoz",
         "Leonardo Bautista-Gomez"
       ],
       "venue": null,
@@ -14577,7 +14577,7 @@
     },
     {
       "id": "doi:10.1109/jiot.2024.3419932",
-      "title": "Scaling Ethereum 2.0\u2019s Cross-Shard Transactions With Efficient Verification and Aggregation of KZG Commitments",
+      "title": "Scaling Ethereum 2.0’s Cross-Shard Transactions With Efficient Verification and Aggregation of KZG Commitments",
       "year": 2024,
       "authors": [
         "Alexander Kudzin",
@@ -14622,7 +14622,7 @@
         "Jing Li",
         "Dusit Niyato",
         "Choong Seon Hong",
-        "Kyung\u2010Joon Park",
+        "Kyung‐Joon Park",
         "Li Wang",
         "Zhu Han"
       ],
@@ -14655,12 +14655,12 @@
     },
     {
       "id": "doi:10.1109/brains63024.2024.10732486",
-      "title": "On the Design of Ethereum\u2019s Data Availability Sampling: A Comprehensive Simulation Study",
+      "title": "On the Design of Ethereum’s Data Availability Sampling: A Comprehensive Simulation Study",
       "year": 2024,
       "authors": [
         "Arunima Chaudhuri",
         "Sudipta Basak",
-        "Csaba Kir\u00e1ly",
+        "Csaba Király",
         "Dmitriy Ryajov",
         "Leonardo Bautista-Gomez"
       ],
@@ -14998,12 +14998,12 @@
     },
     {
       "id": "doi:10.1002/nem.2133",
-      "title": "Editorial for special issue on \u201cchallenges and opportunities of Blockchain and Cryptocurrency\u201d",
+      "title": "Editorial for special issue on “challenges and opportunities of Blockchain and Cryptocurrency”",
       "year": 2020,
       "authors": [
         "Hongtaek Ju",
         "Raouf Boutaba",
-        "Myung\u2010Sup Kim",
+        "Myung‐Sup Kim",
         "Burkhard Stiller"
       ],
       "venue": "International Journal of Network Management",
@@ -15264,7 +15264,7 @@
       "title": "Systematization of knowledge: the advent of a new incentive, maximal extractable value",
       "year": 2024,
       "authors": [
-        "Burak \u00d6z",
+        "Burak Öz",
         "Felix Hoops"
       ],
       "venue": "Edward Elgar Publishing eBooks",
@@ -15627,7 +15627,7 @@
         "Yong Yuan",
         "Xiaochun Ni",
         "Xuan Han",
-        "Fei\u2010Yue Wang"
+        "Fei‐Yue Wang"
       ],
       "venue": "IEEE Transactions on Systems Man and Cybernetics Systems",
       "doi": "10.1109/tsmc.2019.2895123",
@@ -15797,7 +15797,7 @@
     },
     {
       "id": "doi:10.1002/isaf.1424",
-      "title": "Toward an ontology\u2010driven blockchain design for supply\u2010chain provenance",
+      "title": "Toward an ontology‐driven blockchain design for supply‐chain provenance",
       "year": 2018,
       "authors": [
         "Henry Kim",
@@ -15867,9 +15867,9 @@
       "title": "Blockchain technology, bitcoin, and Ethereum: A brief overview",
       "year": 2018,
       "authors": [
-        "Dejan Vuji\u010di\u0107",
-        "Dijana Jagodi\u0107",
-        "Sini\u0161a Ran\u0111i\u0107"
+        "Dejan Vujičić",
+        "Dijana Jagodić",
+        "Siniša Ranđić"
       ],
       "venue": null,
       "doi": "10.1109/infoteh.2018.8345547",
@@ -15975,11 +15975,11 @@
       "title": "Privacy-Preserving Solutions for Blockchain: Review and Challenges",
       "year": 2019,
       "authors": [
-        "Jorge Bernal Bernab\u00e9",
-        "Jos\u00e9 Luis C\u00e1novas",
-        "Jos\u00e9 L. Hern\u00e1ndez-Ramos",
+        "Jorge Bernal Bernabé",
+        "José Luis Cánovas",
+        "José L. Hernández-Ramos",
         "Rafael Torres Moreno",
-        "Antonio Sk\u00e1rmeta"
+        "Antonio Skármeta"
       ],
       "venue": "IEEE Access",
       "doi": "10.1109/access.2019.2950872",
@@ -16018,7 +16018,7 @@
         "Weili Chen",
         "Zibin Zheng",
         "Jiahui Cui",
-        "Edith C.\u2010H. Ngai",
+        "Edith C.‐H. Ngai",
         "Peilin Zheng",
         "Yuren Zhou"
       ],
@@ -16058,7 +16058,7 @@
         "Xiao Wang",
         "Juanjuan Li",
         "Rui Qin",
-        "Fei\u2010Yue Wang"
+        "Fei‐Yue Wang"
       ],
       "venue": null,
       "doi": "10.1109/ivs.2018.8500488",
@@ -16090,7 +16090,7 @@
       "title": "Smart contracts: security patterns in the ethereum ecosystem and solidity",
       "year": 2018,
       "authors": [
-        "Maximilian W\u00f6hrer",
+        "Maximilian Wöhrer",
         "Uwe Zdun"
       ],
       "venue": null,
@@ -16300,8 +16300,8 @@
       "authors": [
         "Emre Yavuz",
         "Ali Kaan Koc",
-        "Umut Can \u00c7abuk",
-        "G\u00f6khan Dalk\u0131l\u0131\u00e7"
+        "Umut Can Çabuk",
+        "Gökhan Dalkılıç"
       ],
       "venue": null,
       "doi": "10.1109/isdfs.2018.8355340",
@@ -16335,7 +16335,7 @@
       "authors": [
         "Yhlas Sovbetov"
       ],
-      "venue": "SHILAP Revista de lepidopterolog\u00eda",
+      "venue": "SHILAP Revista de lepidopterología",
       "doi": "10.1991/jefa.v2i2.a16",
       "arxiv_id": null,
       "eprint_id": null,
@@ -16406,7 +16406,7 @@
       "year": 2019,
       "authors": [
         "Dan Boneh",
-        "Benedikt B\u00fcnz",
+        "Benedikt Bünz",
         "Ben Fisch"
       ],
       "venue": "Lecture notes in computer science",
@@ -16433,7 +16433,7 @@
       ],
       "matched_queries": [
         "Ben Fisch",
-        "Benedikt B\u00fcnz",
+        "Benedikt Bünz",
         "Dan Boneh"
       ],
       "source_types": [
@@ -16449,7 +16449,7 @@
       "authors": [
         "Weili Chen",
         "Zibin Zheng",
-        "Edith C.\u2010H. Ngai",
+        "Edith C.‐H. Ngai",
         "Peilin Zheng",
         "Yuren Zhou"
       ],
@@ -16520,7 +16520,7 @@
       "year": 2018,
       "authors": [
         "Sidney Amani",
-        "Myriam B\u00e9gel",
+        "Myriam Bégel",
         "Maksym Bortin",
         "Mark Staples"
       ],
@@ -16696,7 +16696,7 @@
       "title": "Smart Contract Vulnerabilities: Vulnerable Does Not Imply Exploited",
       "year": 2019,
       "authors": [
-        "Daniel P\u00e9rez",
+        "Daniel Pérez",
         "Benjamin Livshits"
       ],
       "venue": "arXiv (Cornell University)",
@@ -16730,7 +16730,7 @@
       "title": "Smart Contract Vulnerabilities: Does Anyone Care?",
       "year": 2019,
       "authors": [
-        "Daniel P\u00e9rez",
+        "Daniel Pérez",
         "Benjamin Livshits"
       ],
       "venue": "arXiv (Cornell University)",
@@ -17044,7 +17044,7 @@
     },
     {
       "id": "openalex:W2951301891",
-      "title": "M\u00f6bius: Trustless Tumbling for Transaction Privacy.",
+      "title": "Möbius: Trustless Tumbling for Transaction Privacy.",
       "year": 2017,
       "authors": [
         "Sarah Meiklejohn",
@@ -17150,7 +17150,7 @@
       "title": "Finding The Greedy, Prodigal, and Suicidal Contracts at Scale",
       "year": 2018,
       "authors": [
-        "Ivica Nikoli\u0107",
+        "Ivica Nikolić",
         "Aashish Kolluri",
         "Ilya Sergey",
         "Prateek Saxena",
@@ -17224,7 +17224,7 @@
       "title": "Blockchain Based Autonomous Selection of Electric Vehicle Charging Station",
       "year": 2016,
       "authors": [
-        "Matev\u017e Pusti\u0161ek",
+        "Matevž Pustišek",
         "Andrej Kos",
         "Urban Sedlar"
       ],
@@ -17301,7 +17301,7 @@
       "title": "Design Patterns for Smart Contracts in the Ethereum Ecosystem",
       "year": 2018,
       "authors": [
-        "Maximilian W\u00f6hrer",
+        "Maximilian Wöhrer",
         "Uwe Zdun"
       ],
       "venue": null,
@@ -17374,7 +17374,7 @@
     },
     {
       "id": "openalex:W2887521127",
-      "title": "Integrating Innovation Diffusion Theory and the Technology Acceptance Model: The adoption of blockchain technology from business managers\u2019 perspective",
+      "title": "Integrating Innovation Diffusion Theory and the Technology Acceptance Model: The adoption of blockchain technology from business managers’ perspective",
       "year": 2017,
       "authors": [
         "Antonio T. F. Lou",
@@ -17948,7 +17948,7 @@
         "Zeli Wang",
         "Hai Jin",
         "Weiqi Dai",
-        "Kim\u2010Kwang Raymond Choo",
+        "Kim‐Kwang Raymond Choo",
         "Deqing Zou"
       ],
       "venue": "Frontiers of Computer Science",
@@ -17986,7 +17986,7 @@
         "Leili Soltanisehat",
         "Reza Alizadeh",
         "Haijing Hao",
-        "Kim\u2010Kwang Raymond Choo"
+        "Kim‐Kwang Raymond Choo"
       ],
       "venue": "IEEE Transactions on Engineering Management",
       "doi": "10.1109/tem.2020.3013507",
@@ -18201,7 +18201,7 @@
       "title": "Trade-offs between Distributed Ledger Technology Characteristics",
       "year": 2020,
       "authors": [
-        "Niclas Kannengie\u00dfer",
+        "Niclas Kannengießer",
         "Sebastian Lins",
         "Tobias Dehling",
         "Ali Sunyaev"
@@ -18538,7 +18538,7 @@
       "year": 2021,
       "authors": [
         "Mubashar Iqbal",
-        "Raimundas Matulevi\u010dius"
+        "Raimundas Matulevičius"
       ],
       "venue": "IEEE Access",
       "doi": "10.1109/access.2021.3081998",
@@ -18610,8 +18610,8 @@
       "year": 2021,
       "authors": [
         "Zaghum Umar",
-        "Francisco Jare\u00f1o",
-        "Mar\u00eda de la O Gonz\u00e1lez"
+        "Francisco Jareño",
+        "María de la O González"
       ],
       "venue": "Technological Forecasting and Social Change",
       "doi": "10.1016/j.techfore.2021.121025",
@@ -18645,7 +18645,7 @@
       "year": 2021,
       "authors": [
         "Lin Liu",
-        "Wei\u2010Tek Tsai",
+        "Wei‐Tek Tsai",
         "Md Zakirul Alam Bhuiyan",
         "Hao Peng",
         "Mingsheng Liu"
@@ -18682,7 +18682,7 @@
       "year": 2020,
       "authors": [
         "Volker Strobel",
-        "Eduardo Castell\u00f3 Ferrer",
+        "Eduardo Castelló Ferrer",
         "Marco Dorigo"
       ],
       "venue": "Frontiers in Robotics and AI",
@@ -18867,7 +18867,7 @@
       "authors": [
         "Rateb Jabbar",
         "Mohamed Kharbeche",
-        "Khalifa N. Al\u2010Khalifa",
+        "Khalifa N. Al‐Khalifa",
         "Moez Krichen",
         "Kamel Barkaoui"
       ],
@@ -18973,7 +18973,7 @@
     },
     {
       "id": "doi:10.1016/j.frl.2021.102049",
-      "title": "COVID-19 pandemic improves market signals of cryptocurrencies\u2013evidence from Bitcoin, Bitcoin Cash, Ethereum, and Litecoin",
+      "title": "COVID-19 pandemic improves market signals of cryptocurrencies–evidence from Bitcoin, Bitcoin Cash, Ethereum, and Litecoin",
       "year": 2021,
       "authors": [
         "Samuel Asumadu Sarkodie",
@@ -19300,7 +19300,7 @@
       "year": 2023,
       "authors": [
         "Binyi Chen",
-        "Benedikt B\u00fcnz",
+        "Benedikt Bünz",
         "Dan Boneh",
         "Zhenfei Zhang"
       ],
@@ -19327,7 +19327,7 @@
         "zk"
       ],
       "matched_queries": [
-        "Benedikt B\u00fcnz",
+        "Benedikt Bünz",
         "Binyi Chen",
         "Dan Boneh",
         "Zhenfei Zhang",
@@ -19383,7 +19383,7 @@
       "title": "Bridges Between Islands: Cross-Chain Technology for Distributed Ledger Technology",
       "year": 2020,
       "authors": [
-        "Niclas Kannengie\u00dfer",
+        "Niclas Kannengießer",
         "Michelle Pfister",
         "Malte Greulich",
         "Sebastian Lins",
@@ -19532,7 +19532,7 @@
       "year": 2021,
       "authors": [
         "Han-Min Kim",
-        "Gee\u2010Woo Bock",
+        "Gee‐Woo Bock",
         "Gunwoong Lee"
       ],
       "venue": "Expert Systems with Applications",
@@ -19786,7 +19786,7 @@
         "Jong-Hyuk Im",
         "Hee-Yong Kwon",
         "Seong-Yun Jeon",
-        "Mun\u2010Kyu Lee"
+        "Mun‐Kyu Lee"
       ],
       "venue": "Energies",
       "doi": "10.3390/en13061321",
@@ -20628,7 +20628,7 @@
     },
     {
       "id": "doi:10.1108/jrf-05-2022-0103",
-      "title": "Cryptocurrency liquidity during the Russia\u2013Ukraine war: the case of Bitcoin and Ethereum",
+      "title": "Cryptocurrency liquidity during the Russia–Ukraine war: the case of Bitcoin and Ethereum",
       "year": 2022,
       "authors": [
         "Saliha Theiri",
@@ -20740,7 +20740,7 @@
       "year": 2020,
       "authors": [
         "Ahmed Afif Monrat",
-        "Olov Schel\u00e9n",
+        "Olov Schelén",
         "Karl Andersson"
       ],
       "venue": "2020 IEEE Asia-Pacific Conference on Computer Science and Data Engineering (CSDE)",
@@ -20958,11 +20958,11 @@
       "title": "Forecasting bitcoin: Decomposition aided long short-term memory based time series modeling and its explanation with Shapley values",
       "year": 2024,
       "authors": [
-        "Vule Mizdrakovi\u0107",
-        "Maja Kljaji\u0107",
-        "Miodrag \u017divkovi\u0107",
-        "Neboj\u0161a Ba\u010danin",
-        "Luka Jovanovi\u0107",
+        "Vule Mizdraković",
+        "Maja Kljajić",
+        "Miodrag Živković",
+        "Nebojša Bačanin",
+        "Luka Jovanović",
         "Muhammet Deveci",
         "Witold Pedrycz"
       ],
@@ -21001,10 +21001,10 @@
         "Huili Chen",
         "Hossein Fereidooni",
         "Lukas Petzi",
-        "Jan K\u00f6nig",
+        "Jan König",
         "Jasper Stang",
         "Alexandra Dmitrienko",
-        "Ahmad\u2010Reza Sadeghi",
+        "Ahmad‐Reza Sadeghi",
         "Farinaz Koushanfar"
       ],
       "venue": null,
@@ -21039,7 +21039,7 @@
       "year": 2022,
       "authors": [
         "Rahmeh Ibrahim",
-        "Qasem Abu Al\u2010Haija",
+        "Qasem Abu Al‐Haija",
         "Ashraf Ahmad"
       ],
       "venue": "Sensors",
@@ -21405,7 +21405,7 @@
         "Nida Khan",
         "Bilal Kchouri",
         "Nissar Ahmad Yatoo",
-        "Zs\u00f3fia Kr\u00e4ussl",
+        "Zsófia Kräussl",
         "Anass Patel",
         "Radu State"
       ],
@@ -21437,12 +21437,12 @@
     },
     {
       "id": "doi:10.3390/su12031068",
-      "title": "Designing a Blockchain Model for the Paris Agreement\u2019s Carbon Market Mechanism",
+      "title": "Designing a Blockchain Model for the Paris Agreement’s Carbon Market Mechanism",
       "year": 2020,
       "authors": [
         "Laura A. Franke",
         "Marco Schletz",
-        "S\u00f8ren Salomo"
+        "Søren Salomo"
       ],
       "venue": "Sustainability",
       "doi": "10.3390/su12031068",
@@ -21586,7 +21586,7 @@
       "year": 2020,
       "authors": [
         "Anum Nawaz",
-        "Jorge Pe\u00f1a Queralta",
+        "Jorge Peña Queralta",
         "Jixin Guan",
         "Muhammad Awais",
         "Tuan Nguyen Gia",
@@ -21625,7 +21625,7 @@
       "title": "Using Ethereum blockchain to store and query pharmacogenomics data via smart contracts",
       "year": 2020,
       "authors": [
-        "Gamze G\u00fcrsoy",
+        "Gamze Gürsoy",
         "Charlotte M. Brannon",
         "Mark Gerstein"
       ],
@@ -21661,7 +21661,7 @@
       "title": "A Blockchain Ontology for DApps Development",
       "year": 2022,
       "authors": [
-        "L\u00e9o Besan\u00e7on",
+        "Léo Besançon",
         "Catarina Ferreira da Silva",
         "Parisa Ghodous",
         "Jean-Patrick Gelas"
@@ -21884,9 +21884,9 @@
       "title": "Long Memory in the Volatility of Selected Cryptocurrencies: Bitcoin, Ethereum and Ripple",
       "year": 2020,
       "authors": [
-        "P\u0131nar Kaya Soylu",
+        "Pınar Kaya Soylu",
         "Mustafa Okur",
-        "\u00d6zg\u00fcr \u00c7at\u0131kka\u015f",
+        "Özgür Çatıkkaş",
         "Ayca Altintig"
       ],
       "venue": "Journal of risk and financial management",
@@ -22177,7 +22177,7 @@
       "year": 2021,
       "authors": [
         "Yongshun Xu",
-        "Heap\u2010Yih Chong",
+        "Heap‐Yih Chong",
         "Ming Chi"
       ],
       "venue": "Advances in Civil Engineering",
@@ -22287,8 +22287,8 @@
       "year": 2022,
       "authors": [
         "Mantas Jurgelaitis",
-        "Lina \u010ceponien\u0117",
-        "Rita Butkien\u0117"
+        "Lina Čeponienė",
+        "Rita Butkienė"
       ],
       "venue": "IEEE Access",
       "doi": "10.1109/access.2022.3162227",
@@ -22408,7 +22408,7 @@
         "Junhoo Park",
         "Hyekjin Kim",
         "Geunyoung Kim",
-        "Jae\u2010Cheol Ryou"
+        "Jae‐Cheol Ryou"
       ],
       "venue": "Computers",
       "doi": "10.3390/computers10010007",
@@ -22595,7 +22595,7 @@
         "Elvira Albert",
         "Shelly Grossman",
         "Noam Rinetzky",
-        "Clara Rodr\u00edguez-N\u00fa\u00f1ez",
+        "Clara Rodríguez-Núñez",
         "Albert Rubio",
         "Mooly Sagiv"
       ],
@@ -22857,7 +22857,7 @@
     },
     {
       "id": "doi:10.4230/lipics.opodis.2024.7",
-      "title": "Incentive Compatibility of Ethereum\u2019s PoS Consensus Protocol",
+      "title": "Incentive Compatibility of Ethereum’s PoS Consensus Protocol",
       "year": 2025,
       "authors": [
         "Ittai Abraham",
@@ -23047,7 +23047,7 @@
       "year": 2023,
       "authors": [
         "Martin Westerkamp",
-        "Axel K\u00fcpper"
+        "Axel Küpper"
       ],
       "venue": "IEEE Transactions on Network and Service Management",
       "doi": "10.1109/tnsm.2023.3236437",
@@ -23237,7 +23237,7 @@
         "Jianfeng Ma",
         "Yinbin Miao",
         "Ximeng Liu",
-        "Kim\u2010Kwang Raymond Choo"
+        "Kim‐Kwang Raymond Choo"
       ],
       "venue": "IEEE Transactions on Services Computing",
       "doi": "10.1109/tsc.2022.3201568",
@@ -23273,7 +23273,7 @@
       "authors": [
         "Mikel Cortes-Goicoechea",
         "Tarun Mohandas-Daryanani",
-        "Jos\u00e9 L. Mu\u00f1oz",
+        "José L. Muñoz",
         "Leonardo Bautista-Gomez"
       ],
       "venue": null,
@@ -23375,7 +23375,7 @@
     },
     {
       "id": "doi:10.1002/spy2.178",
-      "title": "<scp>SDN\u2010chain</scp>: Privacy\u2010preserving protocol for software defined networks using blockchain",
+      "title": "<scp>SDN‐chain</scp>: Privacy‐preserving protocol for software defined networks using blockchain",
       "year": 2021,
       "authors": [
         "R. Shashidhara",
@@ -23454,7 +23454,7 @@
       "authors": [
         "Monika di Angelo",
         "Thomas Durieux",
-        "Jo\u00e3o F. Ferreira",
+        "João F. Ferreira",
         "Gernot Salzer"
       ],
       "venue": "Empirical Software Engineering",
@@ -23746,12 +23746,12 @@
       "title": "Bitcontracts: Supporting Smart Contracts in Legacy Blockchains",
       "year": 2021,
       "authors": [
-        "Karl W\u00fcst",
+        "Karl Wüst",
         "Loris Diana",
         "Kari Kostiainen",
         "Ghassan Karame",
-        "Sini\u0161a Mateti\u0107",
-        "Sr\u0111jan \u010capkun"
+        "Siniša Matetić",
+        "Srđjan Čapkun"
       ],
       "venue": null,
       "doi": "10.14722/ndss.2021.24294",
@@ -23860,12 +23860,12 @@
       "title": "Detection of Vulnerabilities in Smart Contracts Specifications in Ethereum Platforms",
       "year": 2020,
       "authors": [
-        "Mauro C. Arga\u00f1araz",
-        "Mario Ber\u00f3n",
-        "Maria Jo\u00e3o Varanda Pereira",
+        "Mauro C. Argañaraz",
+        "Mario Berón",
+        "Maria João Varanda Pereira",
         "Pedro Rangel Henriques"
       ],
-      "venue": "Leibniz-Zentrum f\u00fcr Informatik (Schloss Dagstuhl)",
+      "venue": "Leibniz-Zentrum für Informatik (Schloss Dagstuhl)",
       "doi": "10.4230/oasics.slate.2020.2",
       "arxiv_id": null,
       "eprint_id": null,
@@ -24202,7 +24202,7 @@
       "authors": [
         "M. Vijayalakshmi",
         "S. Mercy Shalinie",
-        "Ming\u2010Hour Yang",
+        "Ming‐Hour Yang",
         "Shou-Chuan Lai",
         "Jia-Ning Luo"
       ],
@@ -24421,7 +24421,7 @@
       "authors": [
         "Mikel Cortes-Goicoechea",
         "Tarun Mohandas-Daryanani",
-        "Jos\u00e9 L. Mu\u00f1oz",
+        "José L. Muñoz",
         "Leonardo Bautista-Gomez"
       ],
       "venue": "IEEE Access",
@@ -24576,7 +24576,7 @@
       "year": 2023,
       "authors": [
         "Emanuel Onica",
-        "Marius Georgic\u0103"
+        "Marius Georgică"
       ],
       "venue": null,
       "doi": "10.1145/3631310.3633492",
@@ -24835,7 +24835,7 @@
       "authors": [
         "Mwrwan Abubakar",
         "Zakwan Jaroucheh",
-        "Ahmed Al\u2010Dubai",
+        "Ahmed Al‐Dubai",
         "William J. Buchanan"
       ],
       "venue": null,
@@ -25013,7 +25013,7 @@
     },
     {
       "id": "doi:10.1155/2022/6998046",
-      "title": "Blockchain\u2010Based Self\u2010Auditing Scheme with Batch Verification for Decentralized Storage",
+      "title": "Blockchain‐Based Self‐Auditing Scheme with Batch Verification for Decentralized Storage",
       "year": 2022,
       "authors": [
         "Zhonghao Yuan",
@@ -25206,7 +25206,7 @@
         "Aqsa Tehseen",
         "Shaheen Kousar"
       ],
-      "venue": "\u0098The \u009cInternational journal of networked and distributed computing",
+      "venue": "The International journal of networked and distributed computing",
       "doi": "10.1007/s44227-024-00050-z",
       "arxiv_id": null,
       "eprint_id": null,
@@ -25453,7 +25453,7 @@
     },
     {
       "id": "doi:10.1002/dac.5709",
-      "title": "Cross\u2010blockchain decentralized asset transfer protocol for public blockchains",
+      "title": "Cross‐blockchain decentralized asset transfer protocol for public blockchains",
       "year": 2024,
       "authors": [
         "Monika",
@@ -25488,7 +25488,7 @@
     },
     {
       "id": "doi:10.2139/ssrn.4564717",
-      "title": "Is Ethereum Proof of Stake Sustainable? \u2014 Considering from the Perspective of Competition Among Smart Contract Platforms",
+      "title": "Is Ethereum Proof of Stake Sustainable? — Considering from the Perspective of Competition Among Smart Contract Platforms",
       "year": 2023,
       "authors": [
         "Kenji Saito",
@@ -25824,7 +25824,7 @@
     },
     {
       "id": "doi:10.3390/bdcc9060156",
-      "title": "An Empirical Study of Proposer\u2013Builder Separation (PBS) Effects on the Ethereum Ecosystem",
+      "title": "An Empirical Study of Proposer–Builder Separation (PBS) Effects on the Ethereum Ecosystem",
       "year": 2025,
       "authors": [
         "Liyi Zeng",
@@ -26043,8 +26043,8 @@
       "title": "Fully Decentralized Collection of Attestations for Single-Slot Finality in Ethereum",
       "year": 2025,
       "authors": [
-        "J\u00e1nos Tapolcai",
-        "Bence Lad\u00f3czki"
+        "János Tapolcai",
+        "Bence Ladóczki"
       ],
       "venue": null,
       "doi": "10.1109/icdcs63083.2025.00050",
@@ -26087,7 +26087,7 @@
         "Roger Wattenhofer",
         "Wattenhofer, Roger"
       ],
-      "venue": "Leibniz-Zentrum f\u00fcr Informatik (Schloss Dagstuhl)",
+      "venue": "Leibniz-Zentrum für Informatik (Schloss Dagstuhl)",
       "doi": "10.4230/lipics.aft.2025.23",
       "arxiv_id": null,
       "eprint_id": null,
@@ -26124,7 +26124,7 @@
       "authors": [
         "Anders Malta Jakobsen",
         "Oliver Holmgaard",
-        "Daniele Dell\u2019Aglio",
+        "Daniele Dell’Aglio",
         "Michele Albano"
       ],
       "venue": null,
@@ -26196,8 +26196,8 @@
       "year": 2024,
       "authors": [
         "Soosan Naderi Mighan",
-        "Jelena Mi\u0161i\u0107",
-        "Vojislav B. Mi\u0161i\u0107",
+        "Jelena Mišić",
+        "Vojislav B. Mišić",
         "Xiaolin Chang"
       ],
       "venue": null,
@@ -26264,7 +26264,7 @@
     },
     {
       "id": "doi:10.1109/tssa59948.2023.10367037",
-      "title": "The Effect of Ethereum\u2019s Proof of Stake Update on Ethereum Price Using the Long Short-Term Memory Method",
+      "title": "The Effect of Ethereum’s Proof of Stake Update on Ethereum Price Using the Long Short-Term Memory Method",
       "year": 2023,
       "authors": [
         "Rini Nuraini Sukmana",
