@@ -6,7 +6,7 @@
 
 From September 2017 to February 2026, the Ethereum research forum accumulated **2,903 topics** — a living record of how one of the most ambitious distributed systems projects evolved in the open.
 
-This analysis identifies **600 influential topics** connected by **1,197 cross-references**, organized into **11 research threads** across **5 eras**, spanning **17 mainnet forks** from Byzantium (2017) through Fusaka (2025).
+This analysis identifies **600 influential topics** connected by **1,197 cross-references**, organized into **10 research threads** across **5 eras**, spanning **17 mainnet forks** from Byzantium (2017) through Fusaka (2025).
 
 ### Key Findings
 
@@ -24,7 +24,7 @@ The ethresear.ch community evolved from a small group of core researchers into a
 
 **Focus areas:** Sharding (37), Proof-of-Stake (25), Economics (13)
 
-**Research threads:** Sharding & Data Availability, Consensus & Finality, Plasma & L2 Scaling
+**Research threads:** Consensus & PoS, Data Availability & Sharding, Layer 2 & Rollups
 
 **Most influential topics:**
 - [On-chain scaling to potentially ~500 tx/sec through mass tx validation](https://ethresear.ch/t/3477) (2018, influence: 1.00)
@@ -43,7 +43,7 @@ Vitalik's research presence on ethresear.ch is unmatched — spanning every majo
 
 **Focus areas:** Sharding (27), Proof-of-Stake (4), Layer 2 (3)
 
-**Research threads:** Sharding & Data Availability, Consensus & Finality, State & Execution Layer
+**Research threads:** Consensus & PoS, Data Availability & Sharding, Execution & State
 
 **Most influential topics:**
 - [Based rollups—superpowers from L1 sequencing](https://ethresear.ch/t/15016) (2023, influence: 1.00)
@@ -62,7 +62,7 @@ Justin Drake emerged as the second most prolific researcher, with deep contribut
 
 **Focus areas:** Proof-of-Stake (17), Uncategorized (1), Economics (1)
 
-**Research threads:** PBS, MEV & Block Production, Inclusion Lists & Censorship Resistance, Sharding & Data Availability
+**Research threads:** MEV, Block Production & Fees, Consensus & PoS, Data Availability & Sharding
 
 **Most influential topics:**
 - [Timing Games: Implications and Possible Mitigations](https://ethresear.ch/t/17612) (2023, influence: 1.00)
@@ -81,7 +81,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Proof-of-Stake (5), Consensus (5), Networking (2)
 
-**Research threads:** Consensus & Finality, Sharding & Data Availability, PBS, MEV & Block Production
+**Research threads:** Consensus & PoS, Data Availability & Sharding, MEV, Block Production & Fees
 
 **Most influential topics:**
 - [Increase the MAX_EFFECTIVE_BALANCE – a modest proposal](https://ethresear.ch/t/15801) (2023, influence: 0.99)
@@ -98,7 +98,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Sharding (5), Execution Layer Research (5), Economics (4)
 
-**Research threads:** PBS, MEV & Block Production, Sharding & Data Availability, State & Execution Layer
+**Research threads:** MEV, Block Production & Fees, Data Availability & Sharding, Consensus & PoS
 
 **Most influential topics:**
 - [On Block Sizes, Gas Limits and Scalability](https://ethresear.ch/t/18444) (2024, influence: 0.96)
@@ -115,7 +115,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Proof-of-Stake (6), Economics (5)
 
-**Research threads:** Consensus & Finality, Inclusion Lists & Censorship Resistance, Fee Markets & EIP-1559
+**Research threads:** Consensus & PoS, MEV, Block Production & Fees, Layer 2 & Rollups
 
 **Most influential topics:**
 - [Unbundling staking: Towards rainbow staking](https://ethresear.ch/t/18683) (2024, influence: 0.99)
@@ -132,7 +132,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Proof-of-Stake (10), Economics (2)
 
-**Research threads:** Issuance & Staking Economics, PBS, MEV & Block Production, Inclusion Lists & Censorship Resistance
+**Research threads:** Consensus & PoS, MEV, Block Production & Fees
 
 **Most influential topics:**
 - [Properties of issuance level: consensus incentives and variability across potential reward curves](https://ethresear.ch/t/18448) (2024, influence: 0.99)
@@ -149,7 +149,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Proof-of-Stake (6), Economics (4), Cryptography (1)
 
-**Research threads:** Inclusion Lists & Censorship Resistance, Plasma & L2 Scaling, PBS, MEV & Block Production
+**Research threads:** MEV, Block Production & Fees, Consensus & PoS, Layer 2 & Rollups
 
 **Most influential topics:**
 - [Fork-Choice enforced Inclusion Lists (FOCIL): A simple committee-based inclusion list proposal](https://ethresear.ch/t/19870) (2024, influence: 0.99)
@@ -166,7 +166,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Proof-of-Stake (6), Economics (2), Uncategorized (1)
 
-**Research threads:** Inclusion Lists & Censorship Resistance, Sharding & Data Availability, Issuance & Staking Economics
+**Research threads:** Consensus & PoS, MEV, Block Production & Fees, Data Availability & Sharding
 
 **Most influential topics:**
 - [Fork-Choice enforced Inclusion Lists (FOCIL): A simple committee-based inclusion list proposal](https://ethresear.ch/t/19870) (2024, influence: 0.99)
@@ -183,7 +183,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Layer 2 (5), zk-s[nt]arks (3), Miscellaneous (2)
 
-**Research threads:** Plasma & L2 Scaling, ZK Proofs & SNARKs/STARKs, Privacy & Identity
+**Research threads:** Layer 2 & Rollups, Cryptography, Privacy & Identity
 
 **Most influential topics:**
 - [Roll_up / roll_back snark side chain ~17000 tps](https://ethresear.ch/t/3675) (2018, influence: 0.98)
@@ -200,7 +200,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Proof-of-Stake (2), Consensus (1)
 
-**Research threads:** Issuance & Staking Economics, Consensus & Finality, PBS, MEV & Block Production
+**Research threads:** Consensus & PoS, MEV, Block Production & Fees
 
 **Most influential topics:**
 - [Timing Games: Implications and Possible Mitigations](https://ethresear.ch/t/17612) (2023, influence: 1.00)
@@ -215,7 +215,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Cryptography (7)
 
-**Research threads:** ZK Proofs & SNARKs/STARKs, Inclusion Lists & Censorship Resistance
+**Research threads:** Cryptography, Consensus & PoS, MEV, Block Production & Fees
 
 **Most influential topics:**
 - [So you wanna Post-Quantum Ethereum transaction signature](https://ethresear.ch/t/21291) (2024, influence: 0.98)
@@ -232,7 +232,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Layer 2 (4), Cryptography (1), Sharding (1)
 
-**Research threads:** Sharding & Data Availability, Plasma & L2 Scaling
+**Research threads:** Cryptography, Consensus & PoS, Data Availability & Sharding
 
 **Most influential topics:**
 - [Minimal Viable Merged Consensus](https://ethresear.ch/t/5617) (2019, influence: 0.95)
@@ -249,7 +249,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Layer 2 (5)
 
-**Research threads:** Plasma & L2 Scaling
+**Research threads:** Layer 2 & Rollups
 
 **Most influential topics:**
 - [More Viable Plasma](https://ethresear.ch/t/2160) (2018, influence: 0.98)
@@ -266,7 +266,7 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 **Focus areas:** Networking (4), Sharding (2)
 
-**Research threads:** Sharding & Data Availability
+**Research threads:** Data Availability & Sharding, Execution & State
 
 **Most influential topics:**
 - [Improving DAS performance with GossipSub Batch Publishing](https://ethresear.ch/t/21713) (2025, influence: 0.87)
@@ -283,237 +283,6 @@ Mike Neuder rose to prominence in the 2023–2025 period as a key voice on PBS, 
 
 Each thread traces a line of inquiry from early proposals through protocol deployment. Topics are connected by explicit cross-references — citations that researchers made when building on or responding to prior work.
 
-### Consensus & Finality
-
-**73 topics** · 2017–2025 · Top authors: vbuterin, JustinDrake, fradamt, kladkogex, barnabe
-
-**EIPs discussed:** [EIP-7251](https://eips.ethereum.org/EIPS/eip-7251), [EIP-7547](https://eips.ethereum.org/EIPS/eip-7547)
-
-The Proof-of-Stake thread is the bedrock of ethresear.ch. The forum launched in September 2017 with Casper as the central research question: how to replace proof-of-work with a provably secure proof-of-stake protocol. Early posts explored Casper FFG (the finality gadget) and Casper CBC (the correct-by-construction variant), with Vitalik and Justin Drake as the primary architects.
-
-The thread tracks the full arc from theoretical Casper designs through the beacon chain spec (Phase 0, launched December 2020) to the Merge itself (September 2022). Key inflection points include the pivot from Casper CBC to pure FFG+LMD-GHOST, the decision to separate the beacon chain from execution (leading to the Merge architecture), and the post-Merge focus on validator set management and attestation optimization.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [Sticking to 8192 signatures per slot post-SSF: how and why](https://ethresear.ch/t/17989) | vbuterin | 2023 | 0.99 | EIP-6914, EIP-7251, EIP-7549 |
-| [Unbundling staking: Towards rainbow staking](https://ethresear.ch/t/18683) | barnabe | 2024 | 0.99 | EIP-6110, EIP-7251, EIP-7547 |
-| [Shutterized Beacon Chain](https://ethresear.ch/t/12249) | cducrest | 2022 | 0.98 | EIP-1559 |
-| [Whisk: A practical shuffle-based SSLE protocol for Ethereum](https://ethresear.ch/t/11763) | asn | 2022 | 0.97 | — |
-| [Enshrined Eth2 price feeds](https://ethresear.ch/t/7391) | JustinDrake | 2020 | 0.97 | — |
-| [Orbit SSF: solo-staking-friendly validator set management for SSF](https://ethresear.ch/t/19928) | fradamt | 2024 | 0.97 | EIP-7251 |
-| [Simplified Active Validator Cap and Rotation Proposal](https://ethresear.ch/t/9022) | vbuterin | 2021 | 0.96 | EIP-1559, EIP-7251 |
-| [A model for cumulative committee-based finality](https://ethresear.ch/t/10259) | vbuterin | 2021 | 0.94 | — |
-
-### Sharding & Data Availability
-
-**92 topics** · 2017–2025 · Top authors: vbuterin, JustinDrake, cskiraly, kladkogex, musalbas
-
-**EIPs discussed:** [EIP-197](https://eips.ethereum.org/EIPS/eip-197), [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559), [EIP-4488](https://eips.ethereum.org/EIPS/eip-4488), [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844), [EIP-7594](https://eips.ethereum.org/EIPS/eip-7594), [EIP-7623](https://eips.ethereum.org/EIPS/eip-7623), [EIP-7691](https://eips.ethereum.org/EIPS/eip-7691)
-
-Sharding dominated ethresear.ch's first two years. The original vision was *execution sharding* — running the EVM across many parallel chains. This evolved through a series of increasingly sophisticated proposals: quadratic sharding, super-quadratic sharding, cross-shard transactions, and ultimately the realization that data availability was the core primitive to get right.
-
-By 2020, the pivot to *data availability sharding* was underway, culminating in Danksharding and its pragmatic first step, proto-danksharding (EIP-4844), which shipped in Cancun (March 2024). The thread continues through PeerDAS (EIP-7594), which shipped in Fusaka (December 2025), implementing distributed data availability sampling via data columns.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [Sharding phase 1 spec (RETIRED)](https://ethresear.ch/t/1407) | JustinDrake | 2018 | 0.99 | EIP-101 |
-| [Pragmatic signature aggregation with BLS](https://ethresear.ch/t/2105) | JustinDrake | 2018 | 0.98 | — |
-| [A simple and principled way to compute rent fees](https://ethresear.ch/t/1455) | vbuterin | 2018 | 0.98 | — |
-| [PeerDAS -- a simpler DAS approach using battle-tested p2p components](https://ethresear.ch/t/16541) | djrtwo | 2023 | 0.97 | — |
-| [Faster block/blob propagation in Ethereum](https://ethresear.ch/t/21370) | potuz | 2025 | 0.97 | EIP-7870, EIP-7934 |
-| [Using polynomial commitments to replace state roots](https://ethresear.ch/t/7095) | vbuterin | 2020 | 0.97 | — |
-| [A minimal sharding protocol that may be worthwhile as a development target now](https://ethresear.ch/t/1650) | vbuterin | 2018 | 0.97 | — |
-| [Alternative proposal for early eth1 <-> eth2 merge](https://ethresear.ch/t/6666) | vbuterin | 2019 | 0.96 | — |
-
-### Plasma & L2 Scaling
-
-**88 topics** · 2018–2025 · Top authors: vbuterin, ldct, kfichter, kladkogex, danrobinson
-
-**EIPs discussed:** [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559), [EIP-7547](https://eips.ethereum.org/EIPS/eip-7547), [EIP-7805](https://eips.ethereum.org/EIPS/eip-7805)
-
-The Plasma thread captures one of Ethereum's most dramatic pivots. In 2018, Plasma was the primary L2 scaling solution — Minimal Viable Plasma, Plasma Cash, and Plasma Debit generated enormous discussion. But fundamental data availability challenges led to the rise of rollups by 2019–2020.
-
-The thread traces this transition through optimistic rollups, zk-rollups, and eventually the rollup-centric roadmap that defines Ethereum today. Recent developments include *based rollups* (sequenced by L1 proposers) and *native rollups* — ideas that may eventually dissolve the L1/L2 boundary.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [Based rollups—superpowers from L1 sequencing](https://ethresear.ch/t/15016) | JustinDrake | 2023 | 1.00 | EIP-1559, EIP-4844 |
-| [Plasma Cash: Plasma with much less per-user data checking](https://ethresear.ch/t/1298) | vbuterin | 2018 | 1.00 | — |
-| [Minimal Viable Plasma](https://ethresear.ch/t/426) | vbuterin | 2018 | 1.00 | — |
-| [RSA Accumulators for Plasma Cash history reduction](https://ethresear.ch/t/3739) | vbuterin | 2018 | 0.98 | — |
-| [Plasma snapp - fully verified plasma chain](https://ethresear.ch/t/3391) | josojo | 2018 | 0.98 | — |
-| [More Viable Plasma](https://ethresear.ch/t/2160) | kfichter | 2018 | 0.98 | — |
-| [Native rollups—superpowers from L1 execution](https://ethresear.ch/t/21517) | JustinDrake | 2025 | 0.98 | EIP-1559, EIP-7623, EIP-7862, EIP-7864 |
-| [Plasma XT: Plasma Cash with much less per-user data checking](https://ethresear.ch/t/1926) | kfichter | 2018 | 0.96 | — |
-
-### Fee Markets & EIP-1559
-
-**19 topics** · 2018–2025 · Top authors: vbuterin, barnabe, MicahZoltu, Nero_eth, danfinlay
-
-**EIPs discussed:** [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559), [EIP-4488](https://eips.ethereum.org/EIPS/eip-4488), [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844), [EIP-7623](https://eips.ethereum.org/EIPS/eip-7623), [EIP-7691](https://eips.ethereum.org/EIPS/eip-7691), [EIP-7762](https://eips.ethereum.org/EIPS/eip-7762), [EIP-7778](https://eips.ethereum.org/EIPS/eip-7778), [EIP-7961](https://eips.ethereum.org/EIPS/eip-7961)
-
-Fee market research on ethresear.ch predates EIP-1559 and continues well beyond it. The thread began with analysis of first-price auction inefficiencies and gas price volatility, leading to the base fee mechanism that shipped in London (August 2021). But the bigger story is the evolution toward *multidimensional* resource pricing.
-
-EIP-4844 introduced a separate blob gas market in Cancun, and research continues on further resource dimensions (state access, computation, bandwidth). The thread connects directly to EIP-8037 (state growth metering), still in development, which would add a third gas dimension.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [On Block Sizes, Gas Limits and Scalability](https://ethresear.ch/t/18444) | Nero_eth | 2024 | 0.96 | EIP-145, EIP-150, EIP-160, EIP-1052 |
-| [Multidimensional EIP 1559](https://ethresear.ch/t/11651) | vbuterin | 2022 | 0.95 | EIP-1559, EIP-4337 |
-| [On Increasing the Block Gas Limit](https://ethresear.ch/t/18567) | Nero_eth | 2024 | 0.95 | EIP-1559, EIP-4444, EIP-4488, EIP-4844 |
-| [First and second-price auctions and improved transaction-fee markets](https://ethresear.ch/t/2410) | vbuterin | 2018 | 0.94 | EIP-1559 |
-| [A local-node-favoring delta to the scaling roadmap](https://ethresear.ch/t/22368) | vbuterin | 2025 | 0.93 | EIP-4444, EIP-7701 |
-| [Make EIP 1559 more like an AMM curve](https://ethresear.ch/t/9082) | vbuterin | 2021 | 0.90 | EIP-1559 |
-| [Prover Killers Killer: You Build it, You Prove it](https://ethresear.ch/t/22308) | Julian | 2025 | 0.87 | EIP-7805, EIP-7886 |
-| [Embedded fee markets and ERC-4337 (part 1)](https://ethresear.ch/t/19542) | DavideRezzoli | 2024 | 0.85 | EIP-1559, EIP-4337 |
-
-### PBS, MEV & Block Production
-
-**75 topics** · 2018–2025 · Top authors: mikeneuder, terence, Nero_eth, aelowsson, potuz
-
-**EIPs discussed:** [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559), [EIP-2930](https://eips.ethereum.org/EIPS/eip-2930), [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844), [EIP-7002](https://eips.ethereum.org/EIPS/eip-7002), [EIP-7251](https://eips.ethereum.org/EIPS/eip-7251), [EIP-7547](https://eips.ethereum.org/EIPS/eip-7547)
-
-Proposer-builder separation emerged from the MEV crisis of 2021. As MEV extraction became systematic, researchers recognized that block building and block proposing needed to be separated to preserve validator decentralization. The thread tracks the evolution from external PBS (via MEV-Boost and Flashbots) to enshrined PBS (ePBS).
-
-Key developments include the original PBS proposal, MEV burn mechanisms (returning MEV value to the protocol), payload timeliness committees, and the ongoing debate about inclusion lists as a complement to ePBS. EIP-7732 (ePBS) is targeted for Glamsterdam, making this one of the longest-running research-to-deployment pipelines on ethresear.ch.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [MEV burn—a simple design](https://ethresear.ch/t/15590) | JustinDrake | 2023 | 1.00 | EIP-1559 |
-| [Timing Games: Implications and Possible Mitigations](https://ethresear.ch/t/17612) | casparschwa | 2023 | 1.00 | EIP-4844 |
-| [Proposer/block builder separation-friendly fee market designs](https://ethresear.ch/t/9725) | vbuterin | 2021 | 0.99 | EIP-1559 |
-| [Why enshrine Proposer-Builder Separation? A viable path to ePBS](https://ethresear.ch/t/15710) | mikeneuder | 2023 | 0.99 | — |
-| [Execution Tickets](https://ethresear.ch/t/17944) | mikeneuder | 2023 | 0.99 | EIP-1559, EIP-7547 |
-| [Unbundling PBS: Towards protocol-enforced proposer commitments (PEPC)](https://ethresear.ch/t/13879) | barnabe | 2022 | 0.99 | EIP-1559 |
-| [Dr. changestuff or: how i learned to stop worrying and love mev-burn](https://ethresear.ch/t/17384) | mikeneuder | 2023 | 0.99 | EIP-1559 |
-| [MEV Auction: Auctioning transaction ordering rights as a solution to Miner Extractable Value](https://ethresear.ch/t/6788) | karl | 2020 | 0.98 | — |
-
-### Issuance & Staking Economics
-
-**15 topics** · 2018–2024 · Top authors: aelowsson, vbuterin, pa7x1, adiasg, jpitts
-
-**EIPs discussed:** [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
-
-The issuance and staking economics thread gained momentum post-Merge, when Ethereum's monetary policy became a live research question. Core debates include the optimal staking ratio, minimum viable issuance (reducing ETH inflation to the minimum needed for security), and the effects of liquid staking derivatives.
-
-Anders Elowsson, Caspar Schwarz-Schilling, and Barnabé Monnot are the primary contributors, producing detailed quantitative analyses of reward curves and staking equilibria. EIP-7251 (MaxEB increase, shipped in Pectra) emerged partly from this thread's work on validator consolidation economics.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [Endgame Staking Economics: A Case for Targeting](https://ethresear.ch/t/18751) | casparschwa | 2024 | 1.00 | EIP-1556, EIP-1559, EIP-4844, EIP-7002 |
-| [Increase the MAX_EFFECTIVE_BALANCE – a modest proposal](https://ethresear.ch/t/15801) | mikeneuder | 2023 | 0.99 | EIP-4844, EIP-7002, EIP-7251 |
-| [Properties of issuance level: consensus incentives and variability across potential reward curves](https://ethresear.ch/t/18448) | aelowsson | 2024 | 0.99 | — |
-| [Practical endgame on issuance policy](https://ethresear.ch/t/20747) | aelowsson | 2024 | 0.94 | EIP-1559, EIP-7002, EIP-7251, EIP-7549 |
-| [Circulating Supply Equilibrium for Ethereum and Minimum Viable Issuance during the Proof-of-Stake Era](https://ethresear.ch/t/10954) | aelowsson | 2021 | 0.94 | EIP-1559 |
-| [Initial Analysis of Stake Distribution](https://ethresear.ch/t/19014) | Julian | 2024 | 0.93 | — |
-| [Reward curve with tempered issuance: EIP research post](https://ethresear.ch/t/19171) | aelowsson | 2024 | 0.91 | — |
-| [FAQ: Ethereum issuance reduction](https://ethresear.ch/t/19675) | aelowsson | 2024 | 0.88 | EIP-1559 |
-
-### Inclusion Lists & Censorship Resistance
-
-**17 topics** · 2023–2025 · Top authors: soispoke, Nero_eth, terence, mikeneuder, barnabe
-
-**EIPs discussed:** [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559), [EIP-7547](https://eips.ethereum.org/EIPS/eip-7547), [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702), [EIP-7805](https://eips.ethereum.org/EIPS/eip-7805)
-
-Inclusion lists address censorship resistance — ensuring that even a compromised or extractive builder cannot indefinitely exclude valid transactions. The thread tracks the evolution from simple CR-lists through unconditional inclusion lists to the FOCIL (Fork-Choice Enforced Inclusion Lists) proposal.
-
-Mike Neuder and Francesco (fradamt) are the primary researchers, with contributions examining the interaction between inclusion lists, PBS, and the fork-choice rule. EIP-7805 (FOCIL) is a leading candidate for Glamsterdam, making this an active research-to-deployment pipeline.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [Fork-Choice enforced Inclusion Lists (FOCIL): A simple committee-based inclusion list proposal](https://ethresear.ch/t/19870) | soispoke | 2024 | 0.99 | EIP-1559, EIP-3074, EIP-7547, EIP-7702 |
-| [Unconditional inclusion lists](https://ethresear.ch/t/18500) | mikeneuder | 2024 | 0.99 | EIP-1559, EIP-7547 |
-| [No free lunch – a new inclusion list design](https://ethresear.ch/t/16389) | mikeneuder | 2023 | 0.96 | EIP-6493 |
-| [Fun and games with inclusion lists](https://ethresear.ch/t/16557) | barnabe | 2023 | 0.90 | EIP-1559 |
-| [Cumulative, Non-Expiring Inclusion Lists](https://ethresear.ch/t/16520) | Nero_eth | 2023 | 0.89 | — |
-| [One-bit-per-attester inclusion lists](https://ethresear.ch/t/19797) | vbuterin | 2024 | 0.88 | EIP-7547 |
-| [AUCIL: An Auction-Based Inclusion List Design for Enhanced Censorship Resistance on Ethereum](https://ethresear.ch/t/20422) | sarisht | 2024 | 0.81 | EIP-1559, EIP-7547 |
-| [Anonymous Inclusion Lists (anon-ILs)](https://ethresear.ch/t/19627) | soispoke | 2024 | 0.80 | EIP-7547 |
-
-### Based Sequencing & Preconfirmations
-
-**12 topics** · 2023–2025 · Top authors: linoscope, DrewVanderWerff, The-CTra1n, FabrizioRomanoGenove, diego
-
-**EIPs discussed:** [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702)
-
-Based sequencing and preconfirmations represent a frontier research area that gained traction in 2023–2024. "Based rollups" are rollups that use L1 proposers as their sequencer, inheriting L1's liveness and censorship resistance guarantees. Preconfirmations extend this with fast commitments from proposers about future block contents.
-
-Justin Drake is the primary architect of this research direction, which connects to PBS (proposers making commitments) and the broader question of Ethereum's role as a settlement layer. No EIPs have shipped yet, but the area is actively explored for future forks.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [Based preconfirmations](https://ethresear.ch/t/17353) | JustinDrake | 2023 | 1.00 | — |
-| [Strawmanning Based Preconfirmations](https://ethresear.ch/t/19695) | linoscope | 2024 | 0.95 | — |
-| [PEPC-DVT: PEPC with no changes to the consensus protocol](https://ethresear.ch/t/16514) | diego | 2023 | 0.86 | EIP-712 |
-| [Fabric - Fabric to Accelerate Based Rollup Infrastructure & Connectivity](https://ethresear.ch/t/21640) | DrewVanderWerff | 2025 | 0.80 | — |
-| [A simple, small, mev-boost compatible preconfirmation idea](https://ethresear.ch/t/19800) | FabrizioRomanoGenove | 2024 | 0.78 | — |
-| [A Taxonomy of Preconfirmation Guarantees and Their Slashing Conditions in Rollups](https://ethresear.ch/t/22130) | Joseph | 2025 | 0.77 | — |
-| [Understanding Based Rollups: PGA Challenges, Total Anarchy, and Potential Solutions](https://ethresear.ch/t/21320) | DavideRezzoli | 2024 | 0.74 | — |
-| [Preconfirmation Fair Exchange](https://ethresear.ch/t/21891) | The-CTra1n | 2025 | 0.71 | — |
-
-### ZK Proofs & SNARKs/STARKs
-
-**29 topics** · 2018–2024 · Top authors: vbuterin, bobbinth, barryWhiteHat, AlexandreBelling, JustinDrake
-
-**EIPs discussed:** [EIP-150](https://eips.ethereum.org/EIPS/eip-150), [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844)
-
-Zero-knowledge proof research on ethresear.ch spans the theoretical foundations (PLONK, STARKs, recursive proofs) and practical applications (zk-rollups, private transactions, proof-of-identity). Barry WhiteHat was an early champion, with posts on Semaphore, MACI, and various mixer designs.
-
-The thread connects to multiple deployment paths: zk-rollups as L2 scaling (zkSync, Scroll, Polygon zkEVM), BLS12-381 precompiles (EIP-2537, shipped in Pectra), and the long-term vision of ZK-proving the entire EVM state transition to enable fully trustless light clients.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [On-chain scaling to potentially ~500 tx/sec through mass tx validation](https://ethresear.ch/t/3477) | vbuterin | 2018 | 1.00 | — |
-| [Roll_up / roll_back snark side chain ~17000 tps](https://ethresear.ch/t/3675) | barryWhiteHat | 2018 | 0.98 | — |
-| [How to hard-fork to save most users' funds in a quantum emergency](https://ethresear.ch/t/18901) | vbuterin | 2024 | 0.97 | EIP-7693, EIP-7702 |
-| [Why you can't build a private uniswap with ZKPs](https://ethresear.ch/t/7754) | barryWhiteHat | 2020 | 0.95 | — |
-| [2FA zk-rollups using SGX](https://ethresear.ch/t/14462) | JustinDrake | 2022 | 0.93 | EIP-7212 |
-| [A zk-evm specification](https://ethresear.ch/t/11549) | OlivierBBB | 2021 | 0.93 | — |
-| [Batch Deposits for [op/zk] rollup / mixers / MACI](https://ethresear.ch/t/6883) | barryWhiteHat | 2020 | 0.91 | — |
-| [Using GKR inside a SNARK to reduce the cost of hash verification down to 3 constraints](https://ethresear.ch/t/7550) | AlexandreBelling | 2020 | 0.90 | — |
-
-### State & Execution Layer
-
-**37 topics** · 2017–2025 · Top authors: vbuterin, JustinDrake, pipermerriam, lithp, Nero_eth
-
-**EIPs discussed:** [EIP-210](https://eips.ethereum.org/EIPS/eip-210), [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559), [EIP-2930](https://eips.ethereum.org/EIPS/eip-2930), [EIP-7701](https://eips.ethereum.org/EIPS/eip-7701), [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702), [EIP-7928](https://eips.ethereum.org/EIPS/eip-7928)
-
-State and execution layer research addresses Ethereum's growing state size and the viability of stateless execution. The thread covers Verkle trees (EIP-6800, targeted for Glamsterdam), state expiry mechanisms, history expiry, and portal networks for distributed state access.
-
-This thread has one of the longest research-to-deployment timelines. Stateless client proposals date to 2017 (among the very first ethresear.ch posts), and the Verkle transition has been discussed since 2020. The execution layer's conservative upgrade approach means state structure changes require extensive testing and coordination across all clients.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [The Stateless Client Concept](https://ethresear.ch/t/172) | vbuterin | 2017 | 0.99 | EIP-648 |
-| [Double-batched Merkle log accumulator](https://ethresear.ch/t/571) | JustinDrake | 2018 | 0.95 | — |
-| [State Provider Models in Ethereum 2.0](https://ethresear.ch/t/6750) | adietrichs | 2020 | 0.94 | — |
-| [Trustless Bitcoin Bridge Creation with Witness Encryption](https://ethresear.ch/t/11953) | leohio | 2022 | 0.91 | — |
-| [Block-level Access Lists (BALs)](https://ethresear.ch/t/22331) | Nero_eth | 2025 | 0.90 | EIP-2930, EIP-7928 |
-| [Resurrection-conflict-minimized state bounding, take 2](https://ethresear.ch/t/8739) | vbuterin | 2021 | 0.89 | EIP-2930 |
-| [The Data Availability Problem under Stateless Ethereum](https://ethresear.ch/t/6973) | pipermerriam | 2020 | 0.88 | EIP-2124 |
-| [Octopus Contract and its Applications](https://ethresear.ch/t/17844) | SoraSuegami | 2023 | 0.87 | — |
-
-### Privacy & Identity
-
-**17 topics** · 2018–2025 · Top authors: Mikerah, vbuterin, barryWhiteHat, EugeRe, HarryR
-
-**EIPs discussed:** [EIP-7212](https://eips.ethereum.org/EIPS/eip-7212), [EIP-7701](https://eips.ethereum.org/EIPS/eip-7701), [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702)
-
-The privacy thread covers both technical mechanisms (mixers, ring signatures, stealth addresses) and identity systems (MACI for anti-collusion voting, zk-passport for citizenship proofs). Barry WhiteHat and the Applied ZK team were early contributors.
-
-While privacy features haven't shipped as core protocol changes, the research influenced application-layer tools (Tornado Cash, Semaphore) and the growing interest in account abstraction (EIP-7702) as a pathway to better privacy at the wallet level.
-
-| Topic | Author | Year | Influence | EIPs |
-|-------|--------|------|-----------|------|
-| [Ethereum Privacy: The Road to Self-Sovereignty](https://ethresear.ch/t/22115) | pcaversaccio | 2025 | 0.97 | EIP-7503 |
-| [Self-Sovereign Identity and Account Abstraction for Privacy-Preserving cross chain user operations across roll ups](https://ethresear.ch/t/19599) | EugeRe | 2024 | 0.95 | EIP-1271, EIP-4337, EIP-6492, EIP-7562 |
-| [Packetology: Validator Privacy](https://ethresear.ch/t/7547) | jrhea | 2020 | 0.94 | — |
-| [Open problem: improving stealth addresses](https://ethresear.ch/t/7438) | vbuterin | 2020 | 0.92 | — |
-| [How (optional, non-KYC) validator metadata can improve staking decentralization](https://ethresear.ch/t/17032) | ComfyGummy | 2023 | 0.86 | — |
-| [Proof of Validator: A simple anonymous credential scheme for Ethereum's DHT](https://ethresear.ch/t/16454) | asn | 2023 | 0.86 | — |
-| [Privacy/Anonymity on Ethereum is Doomed](https://ethresear.ch/t/5430) | HarryR | 2019 | 0.84 | — |
-| [Cryptoeconomic "ring signatures"](https://ethresear.ch/t/966) | vbuterin | 2018 | 0.84 | — |
-
 ## 4. Era Analysis
 
 ### Early Research (2017–2017)
@@ -525,7 +294,7 @@ While privacy features haven't shipped as core protocol changes, the research in
 **What shipped:**
 - **Byzantium** (2017-10-16): EIP-100, EIP-140, EIP-196, EIP-197, EIP-198, EIP-211
 
-**Dominant threads:** State & Execution Layer (6), Sharding & Data Availability (2), Consensus & Finality (2)
+**Dominant threads:** Execution & State (7), Data Availability & Sharding (2), Consensus & PoS (2)
 
 Ethresear.ch launched in September 2017, just weeks before the Byzantium fork brought BN256 precompiles and REVERT to mainnet. The earliest posts read like a brain dump of everything the research team had been thinking about: Casper FFG fundamentals, early sharding designs, and the first sketches of stateless client architectures. The community was small and the discourse was dense — nearly every post was a technical proposal by a core researcher.
 
@@ -547,7 +316,7 @@ Notably, many ideas from this era took years to mature. The proposer/builder sep
 **What shipped:**
 - **Constantinople** (2019-02-28): EIP-145, EIP-1014, EIP-1052, EIP-1234, EIP-1283
 
-**Dominant threads:** Plasma & L2 Scaling (45), Sharding & Data Availability (30), Consensus & Finality (21), ZK Proofs & SNARKs/STARKs (6), State & Execution Layer (5)
+**Dominant threads:** Layer 2 & Rollups (41), Consensus & PoS (30), Data Availability & Sharding (23), Cryptography (14), Execution & State (6)
 
 2018 was ethresear.ch's most prolific year by topic count, driven by the urgent question: how does Ethereum scale? The Scaling Wars played out across two fronts. On-chain, sharding proposals grew increasingly sophisticated — quadratic sharding gave way to super-quadratic designs, cross-shard communication protocols multiplied, and the first data availability schemes appeared.
 
@@ -572,7 +341,7 @@ In retrospect, this era's most lasting contribution was the data availability pr
 - **Istanbul** (2019-12-08): EIP-152, EIP-1108, EIP-1344, EIP-1884, EIP-2028, EIP-2200
 - **Phase 0** (2020-12-01): beacon chain genesis
 
-**Dominant threads:** Sharding & Data Availability (31), Consensus & Finality (14), ZK Proofs & SNARKs/STARKs (13), Plasma & L2 Scaling (13), State & Execution Layer (9)
+**Dominant threads:** Cryptography (25), Data Availability & Sharding (22), Consensus & PoS (20), Layer 2 & Rollups (13), Execution & State (10)
 
 The Eth2 Design era (2019–2020) saw the research community transition from exploration to specification. The beacon chain spec (Phase 0) was finalized and launched in December 2020, marking the first time ethresear.ch research shipped as production code. Phase 1 (data sharding) spec work continued, though it would later be superseded by Danksharding.
 
@@ -597,7 +366,7 @@ Two pivotal shifts happened in this era. First, the rollup-centric roadmap emerg
 - **Altair** (2021-10-27): beacon chain genesis
 - **The Merge** (2022-09-15): EIP-3675, EIP-4399
 
-**Dominant threads:** PBS, MEV & Block Production (18), Consensus & Finality (13), State & Execution Layer (7), Plasma & L2 Scaling (7), ZK Proofs & SNARKs/STARKs (6)
+**Dominant threads:** MEV, Block Production & Fees (20), Consensus & PoS (15), Cryptography (8), Execution & State (7), Layer 2 & Rollups (6)
 
 The 2021–2022 era was bookended by two landmark deployments: EIP-1559 in London (August 2021) and the Merge itself (September 2022). Research during this period focused on making these transitions safe while laying groundwork for the next phase.
 
@@ -623,7 +392,7 @@ PBS emerged as a major research thread, driven by the MEV crisis. The proposer/b
 - **Fusaka** (2025-12-03): EIP-7594, EIP-7823, EIP-7825, EIP-7883, EIP-7917, EIP-7918
 - **Glamsterdam** (TBD): EIP-7732, EIP-7928
 
-**Dominant threads:** PBS, MEV & Block Production (54), Sharding & Data Availability (27), Plasma & L2 Scaling (23), Consensus & Finality (23), Inclusion Lists & Censorship Resistance (17)
+**Dominant threads:** MEV, Block Production & Fees (72), Consensus & PoS (40), Layer 2 & Rollups (37), Data Availability & Sharding (27), Execution & State (20)
 
 The Endgame Architecture era (2023–2026) is defined by protocol maturity. With the Merge complete and blobs live (Dencun, March 2024), research shifted to the "endgame" questions: what does Ethereum look like at steady state?
 
@@ -672,106 +441,106 @@ EIP numbers extracted via regex from topic titles and post content (HTML). Prima
 
 | # | Topic | Author | Date | Score | In° | Likes | Thread |
 |---|-------|--------|------|-------|-----|-------|--------|
-| 1 | [Based rollups—superpowers from L1 sequencing](https://ethresear.ch/t/15016) | JustinDrake | 2023-03-10 | 1.00 | 24 | 143 | Plasma & L2 Scaling |
-| 2 | [On-chain scaling to potentially ~500 tx/sec through mass tx validation](https://ethresear.ch/t/3477) | vbuterin | 2018-09-22 | 1.00 | 20 | 119 | ZK Proofs & SNARKs/STARKs |
-| 3 | [Based preconfirmations](https://ethresear.ch/t/17353) | JustinDrake | 2023-11-08 | 1.00 | 29 | 85 | Based Sequencing & Preconfirmations |
-| 4 | [Plasma Cash: Plasma with much less per-user data checking](https://ethresear.ch/t/1298) | vbuterin | 2018-03-04 | 1.00 | 19 | 72 | Plasma & L2 Scaling |
-| 5 | [MEV burn—a simple design](https://ethresear.ch/t/15590) | JustinDrake | 2023-05-15 | 1.00 | 33 | 69 | PBS, MEV & Block Production |
-| 6 | [Minimal Viable Plasma](https://ethresear.ch/t/426) | vbuterin | 2018-01-03 | 1.00 | 11 | 288 | Plasma & L2 Scaling |
-| 7 | [Timing Games: Implications and Possible Mitigations](https://ethresear.ch/t/17612) | casparschwa | 2023-12-05 | 1.00 | 14 | 75 | PBS, MEV & Block Production |
-| 8 | [Endgame Staking Economics: A Case for Targeting](https://ethresear.ch/t/18751) | casparschwa | 2024-02-22 | 1.00 | 13 | 77 | Issuance & Staking Economics |
-| 9 | [Sticking to 8192 signatures per slot post-SSF: how and why](https://ethresear.ch/t/17989) | vbuterin | 2023-12-27 | 0.99 | 9 | 241 | Consensus & Finality |
-| 10 | [Increase the MAX_EFFECTIVE_BALANCE – a modest proposal](https://ethresear.ch/t/15801) | mikeneuder | 2023-06-06 | 0.99 | 10 | 86 | Issuance & Staking Economics |
-| 11 | [Proposer/block builder separation-friendly fee market designs](https://ethresear.ch/t/9725) | vbuterin | 2021-06-04 | 0.99 | 10 | 86 | PBS, MEV & Block Production |
-| 12 | [Why enshrine Proposer-Builder Separation? A viable path to ePBS](https://ethresear.ch/t/15710) | mikeneuder | 2023-05-25 | 0.99 | 14 | 63 | PBS, MEV & Block Production |
-| 13 | [Unbundling staking: Towards rainbow staking](https://ethresear.ch/t/18683) | barnabe | 2024-02-15 | 0.99 | 22 | 57 | Consensus & Finality |
-| 14 | [Fork-Choice enforced Inclusion Lists (FOCIL): A simple committee-based inclusion list proposal](https://ethresear.ch/t/19870) | soispoke | 2024-06-19 | 0.99 | 19 | 58 | Inclusion Lists & Censorship Resistance |
-| 15 | [Sharding phase 1 spec (RETIRED)](https://ethresear.ch/t/1407) | JustinDrake | 2018-03-16 | 0.99 | 11 | 62 | Sharding & Data Availability |
+| 1 | [Based rollups—superpowers from L1 sequencing](https://ethresear.ch/t/15016) | JustinDrake | 2023-03-10 | 1.00 | 24 | 143 | Layer 2 & Rollups |
+| 2 | [On-chain scaling to potentially ~500 tx/sec through mass tx validation](https://ethresear.ch/t/3477) | vbuterin | 2018-09-22 | 1.00 | 20 | 119 | Cryptography |
+| 3 | [Based preconfirmations](https://ethresear.ch/t/17353) | JustinDrake | 2023-11-08 | 1.00 | 29 | 85 | Layer 2 & Rollups |
+| 4 | [Plasma Cash: Plasma with much less per-user data checking](https://ethresear.ch/t/1298) | vbuterin | 2018-03-04 | 1.00 | 19 | 72 | Layer 2 & Rollups |
+| 5 | [MEV burn—a simple design](https://ethresear.ch/t/15590) | JustinDrake | 2023-05-15 | 1.00 | 33 | 69 | MEV, Block Production & Fees |
+| 6 | [Minimal Viable Plasma](https://ethresear.ch/t/426) | vbuterin | 2018-01-03 | 1.00 | 11 | 288 | Layer 2 & Rollups |
+| 7 | [Timing Games: Implications and Possible Mitigations](https://ethresear.ch/t/17612) | casparschwa | 2023-12-05 | 1.00 | 14 | 75 | MEV, Block Production & Fees |
+| 8 | [Endgame Staking Economics: A Case for Targeting](https://ethresear.ch/t/18751) | casparschwa | 2024-02-22 | 1.00 | 13 | 77 | Consensus & PoS |
+| 9 | [Sticking to 8192 signatures per slot post-SSF: how and why](https://ethresear.ch/t/17989) | vbuterin | 2023-12-27 | 0.99 | 9 | 241 | Consensus & PoS |
+| 10 | [Increase the MAX_EFFECTIVE_BALANCE – a modest proposal](https://ethresear.ch/t/15801) | mikeneuder | 2023-06-06 | 0.99 | 10 | 86 | Consensus & PoS |
+| 11 | [Proposer/block builder separation-friendly fee market designs](https://ethresear.ch/t/9725) | vbuterin | 2021-06-04 | 0.99 | 10 | 86 | MEV, Block Production & Fees |
+| 12 | [Why enshrine Proposer-Builder Separation? A viable path to ePBS](https://ethresear.ch/t/15710) | mikeneuder | 2023-05-25 | 0.99 | 14 | 63 | MEV, Block Production & Fees |
+| 13 | [Unbundling staking: Towards rainbow staking](https://ethresear.ch/t/18683) | barnabe | 2024-02-15 | 0.99 | 22 | 57 | Consensus & PoS |
+| 14 | [Fork-Choice enforced Inclusion Lists (FOCIL): A simple committee-based inclusion list proposal](https://ethresear.ch/t/19870) | soispoke | 2024-06-19 | 0.99 | 19 | 58 | Consensus & PoS |
+| 15 | [Sharding phase 1 spec (RETIRED)](https://ethresear.ch/t/1407) | JustinDrake | 2018-03-16 | 0.99 | 11 | 62 | Data Availability & Sharding |
 | 16 | [Minimal anti-collusion infrastructure](https://ethresear.ch/t/5413) | vbuterin | 2019-05-04 | 0.99 | 11 | 66 | — |
-| 17 | [Properties of issuance level: consensus incentives and variability across potential reward curves](https://ethresear.ch/t/18448) | aelowsson | 2024-01-24 | 0.99 | 12 | 62 | Issuance & Staking Economics |
-| 18 | [Unconditional inclusion lists](https://ethresear.ch/t/18500) | mikeneuder | 2024-01-30 | 0.99 | 10 | 69 | Inclusion Lists & Censorship Resistance |
-| 19 | [Execution Tickets](https://ethresear.ch/t/17944) | mikeneuder | 2023-12-23 | 0.99 | 28 | 51 | PBS, MEV & Block Production |
-| 20 | [Unbundling PBS: Towards protocol-enforced proposer commitments (PEPC)](https://ethresear.ch/t/13879) | barnabe | 2022-10-08 | 0.99 | 19 | 53 | PBS, MEV & Block Production |
-| 21 | [The Stateless Client Concept](https://ethresear.ch/t/172) | vbuterin | 2017-10-24 | 0.99 | 18 | 48 | State & Execution Layer |
-| 22 | [Dr. changestuff or: how i learned to stop worrying and love mev-burn](https://ethresear.ch/t/17384) | mikeneuder | 2023-11-10 | 0.99 | 12 | 54 | PBS, MEV & Block Production |
-| 23 | [Pragmatic signature aggregation with BLS](https://ethresear.ch/t/2105) | JustinDrake | 2018-05-31 | 0.98 | 10 | 55 | Sharding & Data Availability |
-| 24 | [MEV Auction: Auctioning transaction ordering rights as a solution to Miner Extractable Value](https://ethresear.ch/t/6788) | karl | 2020-01-15 | 0.98 | 6 | 92 | PBS, MEV & Block Production |
-| 25 | [RSA Accumulators for Plasma Cash history reduction](https://ethresear.ch/t/3739) | vbuterin | 2018-10-08 | 0.98 | 16 | 42 | Plasma & L2 Scaling |
-| 26 | [Plasma snapp - fully verified plasma chain](https://ethresear.ch/t/3391) | josojo | 2018-09-15 | 0.98 | 10 | 41 | Plasma & L2 Scaling |
-| 27 | [MEV-Boost: Merge ready Flashbots Architecture](https://ethresear.ch/t/11177) | thegostep | 2021-11-04 | 0.98 | 7 | 53 | PBS, MEV & Block Production |
+| 17 | [Properties of issuance level: consensus incentives and variability across potential reward curves](https://ethresear.ch/t/18448) | aelowsson | 2024-01-24 | 0.99 | 12 | 62 | Consensus & PoS |
+| 18 | [Unconditional inclusion lists](https://ethresear.ch/t/18500) | mikeneuder | 2024-01-30 | 0.99 | 10 | 69 | MEV, Block Production & Fees |
+| 19 | [Execution Tickets](https://ethresear.ch/t/17944) | mikeneuder | 2023-12-23 | 0.99 | 28 | 51 | MEV, Block Production & Fees |
+| 20 | [Unbundling PBS: Towards protocol-enforced proposer commitments (PEPC)](https://ethresear.ch/t/13879) | barnabe | 2022-10-08 | 0.99 | 19 | 53 | MEV, Block Production & Fees |
+| 21 | [The Stateless Client Concept](https://ethresear.ch/t/172) | vbuterin | 2017-10-24 | 0.99 | 18 | 48 | Execution & State |
+| 22 | [Dr. changestuff or: how i learned to stop worrying and love mev-burn](https://ethresear.ch/t/17384) | mikeneuder | 2023-11-10 | 0.99 | 12 | 54 | MEV, Block Production & Fees |
+| 23 | [Pragmatic signature aggregation with BLS](https://ethresear.ch/t/2105) | JustinDrake | 2018-05-31 | 0.98 | 10 | 55 | Cryptography |
+| 24 | [MEV Auction: Auctioning transaction ordering rights as a solution to Miner Extractable Value](https://ethresear.ch/t/6788) | karl | 2020-01-15 | 0.98 | 6 | 92 | MEV, Block Production & Fees |
+| 25 | [RSA Accumulators for Plasma Cash history reduction](https://ethresear.ch/t/3739) | vbuterin | 2018-10-08 | 0.98 | 16 | 42 | Layer 2 & Rollups |
+| 26 | [Plasma snapp - fully verified plasma chain](https://ethresear.ch/t/3391) | josojo | 2018-09-15 | 0.98 | 10 | 41 | Layer 2 & Rollups |
+| 27 | [MEV-Boost: Merge ready Flashbots Architecture](https://ethresear.ch/t/11177) | thegostep | 2021-11-04 | 0.98 | 7 | 53 | MEV, Block Production & Fees |
 | 28 | [DRAFT: Position paper on resource pricing](https://ethresear.ch/t/2838) | vbuterin | 2018-08-07 | 0.98 | 11 | 36 | — |
-| 29 | [A simple and principled way to compute rent fees](https://ethresear.ch/t/1455) | vbuterin | 2018-03-22 | 0.98 | 5 | 67 | Sharding & Data Availability |
-| 30 | [More Viable Plasma](https://ethresear.ch/t/2160) | kfichter | 2018-06-07 | 0.98 | 8 | 39 | Plasma & L2 Scaling |
-| 31 | [MEV capturing AMM (McAMM)](https://ethresear.ch/t/13336) | josojo | 2022-08-10 | 0.98 | 5 | 59 | PBS, MEV & Block Production |
-| 32 | [Shutterized Beacon Chain](https://ethresear.ch/t/12249) | cducrest | 2022-03-24 | 0.98 | 6 | 47 | Consensus & Finality |
-| 33 | [How much can we constrain builders without bringing back heavy burdens to proposers?](https://ethresear.ch/t/13808) | vbuterin | 2022-10-01 | 0.98 | 9 | 35 | PBS, MEV & Block Production |
-| 34 | [Roll_up / roll_back snark side chain ~17000 tps](https://ethresear.ch/t/3675) | barryWhiteHat | 2018-10-03 | 0.98 | 6 | 47 | ZK Proofs & SNARKs/STARKs |
-| 35 | [Two-slot proposer/builder separation](https://ethresear.ch/t/10980) | vbuterin | 2021-10-10 | 0.98 | 19 | 28 | PBS, MEV & Block Production |
-| 36 | [Native rollups—superpowers from L1 execution](https://ethresear.ch/t/21517) | JustinDrake | 2025-01-20 | 0.98 | 4 | 203 | Plasma & L2 Scaling |
-| 37 | [So you wanna Post-Quantum Ethereum transaction signature](https://ethresear.ch/t/21291) | asanso | 2024-12-18 | 0.98 | 5 | 56 | — |
-| 38 | [How to hard-fork to save most users' funds in a quantum emergency](https://ethresear.ch/t/18901) | vbuterin | 2024-03-09 | 0.97 | 4 | 106 | ZK Proofs & SNARKs/STARKs |
-| 39 | [PeerDAS -- a simpler DAS approach using battle-tested p2p components](https://ethresear.ch/t/16541) | djrtwo | 2023-09-04 | 0.97 | 13 | 31 | Sharding & Data Availability |
-| 40 | [Faster block/blob propagation in Ethereum](https://ethresear.ch/t/21370) | potuz | 2025-01-03 | 0.97 | 4 | 103 | Sharding & Data Availability |
-| 41 | [Burning MEV through block proposer auctions](https://ethresear.ch/t/14029) | domothy | 2022-10-26 | 0.97 | 7 | 38 | PBS, MEV & Block Production |
-| 42 | [Whisk: A practical shuffle-based SSLE protocol for Ethereum](https://ethresear.ch/t/11763) | asn | 2022-01-13 | 0.97 | 8 | 32 | Consensus & Finality |
-| 43 | [Using polynomial commitments to replace state roots](https://ethresear.ch/t/7095) | vbuterin | 2020-03-10 | 0.97 | 9 | 32 | Sharding & Data Availability |
+| 29 | [A simple and principled way to compute rent fees](https://ethresear.ch/t/1455) | vbuterin | 2018-03-22 | 0.98 | 5 | 67 | Consensus & PoS |
+| 30 | [More Viable Plasma](https://ethresear.ch/t/2160) | kfichter | 2018-06-07 | 0.98 | 8 | 39 | Layer 2 & Rollups |
+| 31 | [MEV capturing AMM (McAMM)](https://ethresear.ch/t/13336) | josojo | 2022-08-10 | 0.98 | 5 | 59 | MEV, Block Production & Fees |
+| 32 | [Shutterized Beacon Chain](https://ethresear.ch/t/12249) | cducrest | 2022-03-24 | 0.98 | 6 | 47 | Consensus & PoS |
+| 33 | [How much can we constrain builders without bringing back heavy burdens to proposers?](https://ethresear.ch/t/13808) | vbuterin | 2022-10-01 | 0.98 | 9 | 35 | MEV, Block Production & Fees |
+| 34 | [Roll_up / roll_back snark side chain ~17000 tps](https://ethresear.ch/t/3675) | barryWhiteHat | 2018-10-03 | 0.98 | 6 | 47 | Cryptography |
+| 35 | [Two-slot proposer/builder separation](https://ethresear.ch/t/10980) | vbuterin | 2021-10-10 | 0.98 | 19 | 28 | MEV, Block Production & Fees |
+| 36 | [Native rollups—superpowers from L1 execution](https://ethresear.ch/t/21517) | JustinDrake | 2025-01-20 | 0.98 | 4 | 203 | Layer 2 & Rollups |
+| 37 | [So you wanna Post-Quantum Ethereum transaction signature](https://ethresear.ch/t/21291) | asanso | 2024-12-18 | 0.98 | 5 | 56 | Cryptography |
+| 38 | [How to hard-fork to save most users' funds in a quantum emergency](https://ethresear.ch/t/18901) | vbuterin | 2024-03-09 | 0.97 | 4 | 106 | Execution & State |
+| 39 | [PeerDAS -- a simpler DAS approach using battle-tested p2p components](https://ethresear.ch/t/16541) | djrtwo | 2023-09-04 | 0.97 | 13 | 31 | Data Availability & Sharding |
+| 40 | [Faster block/blob propagation in Ethereum](https://ethresear.ch/t/21370) | potuz | 2025-01-03 | 0.97 | 4 | 103 | Data Availability & Sharding |
+| 41 | [Burning MEV through block proposer auctions](https://ethresear.ch/t/14029) | domothy | 2022-10-26 | 0.97 | 7 | 38 | MEV, Block Production & Fees |
+| 42 | [Whisk: A practical shuffle-based SSLE protocol for Ethereum](https://ethresear.ch/t/11763) | asn | 2022-01-13 | 0.97 | 8 | 32 | Consensus & PoS |
+| 43 | [Using polynomial commitments to replace state roots](https://ethresear.ch/t/7095) | vbuterin | 2020-03-10 | 0.97 | 9 | 32 | Cryptography |
 | 44 | [Incentives for running full Ethereum nodes](https://ethresear.ch/t/1239) | jpitts | 2018-02-27 | 0.97 | 4 | 68 | — |
 | 45 | [Decoupling throughput from local building](https://ethresear.ch/t/22004) | barnabe | 2025-03-25 | 0.97 | 5 | 49 | — |
-| 46 | [A minimal sharding protocol that may be worthwhile as a development target now](https://ethresear.ch/t/1650) | vbuterin | 2018-04-07 | 0.97 | 7 | 33 | Sharding & Data Availability |
+| 46 | [A minimal sharding protocol that may be worthwhile as a development target now](https://ethresear.ch/t/1650) | vbuterin | 2018-04-07 | 0.97 | 7 | 33 | Data Availability & Sharding |
 | 47 | [Ethereum Privacy: The Road to Self-Sovereignty](https://ethresear.ch/t/22115) | pcaversaccio | 2025-04-09 | 0.97 | 4 | 64 | Privacy & Identity |
-| 48 | [Enshrined Eth2 price feeds](https://ethresear.ch/t/7391) | JustinDrake | 2020-05-11 | 0.97 | 4 | 59 | Consensus & Finality |
-| 49 | [Orbit SSF: solo-staking-friendly validator set management for SSF](https://ethresear.ch/t/19928) | fradamt | 2024-06-28 | 0.97 | 13 | 29 | Consensus & Finality |
-| 50 | [Payload-timeliness committee (PTC) – an ePBS design](https://ethresear.ch/t/16054) | mikeneuder | 2023-07-06 | 0.97 | 20 | 27 | PBS, MEV & Block Production |
-| 51 | [Committee-driven MEV smoothing](https://ethresear.ch/t/10408) | fradamt | 2021-08-23 | 0.97 | 12 | 27 | PBS, MEV & Block Production |
-| 52 | [Relays in a post-ePBS world](https://ethresear.ch/t/16278) | mikeneuder | 2023-08-04 | 0.97 | 8 | 30 | PBS, MEV & Block Production |
-| 53 | [Simplified Active Validator Cap and Rotation Proposal](https://ethresear.ch/t/9022) | vbuterin | 2021-03-27 | 0.96 | 6 | 32 | Consensus & Finality |
-| 54 | [Alternative proposal for early eth1 <-> eth2 merge](https://ethresear.ch/t/6666) | vbuterin | 2019-12-23 | 0.96 | 5 | 36 | Sharding & Data Availability |
+| 48 | [Enshrined Eth2 price feeds](https://ethresear.ch/t/7391) | JustinDrake | 2020-05-11 | 0.97 | 4 | 59 | Consensus & PoS |
+| 49 | [Orbit SSF: solo-staking-friendly validator set management for SSF](https://ethresear.ch/t/19928) | fradamt | 2024-06-28 | 0.97 | 13 | 29 | Consensus & PoS |
+| 50 | [Payload-timeliness committee (PTC) – an ePBS design](https://ethresear.ch/t/16054) | mikeneuder | 2023-07-06 | 0.97 | 20 | 27 | MEV, Block Production & Fees |
+| 51 | [Committee-driven MEV smoothing](https://ethresear.ch/t/10408) | fradamt | 2021-08-23 | 0.97 | 12 | 27 | MEV, Block Production & Fees |
+| 52 | [Relays in a post-ePBS world](https://ethresear.ch/t/16278) | mikeneuder | 2023-08-04 | 0.97 | 8 | 30 | MEV, Block Production & Fees |
+| 53 | [Simplified Active Validator Cap and Rotation Proposal](https://ethresear.ch/t/9022) | vbuterin | 2021-03-27 | 0.96 | 6 | 32 | Consensus & PoS |
+| 54 | [Alternative proposal for early eth1 <-> eth2 merge](https://ethresear.ch/t/6666) | vbuterin | 2019-12-23 | 0.96 | 5 | 36 | Consensus & PoS |
 | 55 | [ReGenesis - resetting Ethereum to reduce the burden of large blockchain and state](https://ethresear.ch/t/7582) | AlexeyAkhunov | 2020-06-24 | 0.96 | 4 | 48 | — |
-| 56 | [No free lunch – a new inclusion list design](https://ethresear.ch/t/16389) | mikeneuder | 2023-08-15 | 0.96 | 14 | 25 | Inclusion Lists & Censorship Resistance |
-| 57 | [On Block Sizes, Gas Limits and Scalability](https://ethresear.ch/t/18444) | Nero_eth | 2024-01-24 | 0.96 | 4 | 48 | Fee Markets & EIP-1559 |
-| 58 | [Bid cancellations considered harmful](https://ethresear.ch/t/15500) | mikeneuder | 2023-05-05 | 0.96 | 10 | 27 | PBS, MEV & Block Production |
-| 59 | [Optimizing sparse Merkle trees](https://ethresear.ch/t/3751) | vbuterin | 2018-10-09 | 0.96 | 8 | 25 | — |
-| 60 | [From 4844 to Danksharding: a path to scaling Ethereum DA](https://ethresear.ch/t/18046) | fradamt | 2023-12-28 | 0.96 | 5 | 36 | Sharding & Data Availability |
-| 61 | [Plasma XT: Plasma Cash with much less per-user data checking](https://ethresear.ch/t/1926) | kfichter | 2018-05-07 | 0.96 | 7 | 26 | Plasma & L2 Scaling |
+| 56 | [No free lunch – a new inclusion list design](https://ethresear.ch/t/16389) | mikeneuder | 2023-08-15 | 0.96 | 14 | 25 | MEV, Block Production & Fees |
+| 57 | [On Block Sizes, Gas Limits and Scalability](https://ethresear.ch/t/18444) | Nero_eth | 2024-01-24 | 0.96 | 4 | 48 | MEV, Block Production & Fees |
+| 58 | [Bid cancellations considered harmful](https://ethresear.ch/t/15500) | mikeneuder | 2023-05-05 | 0.96 | 10 | 27 | MEV, Block Production & Fees |
+| 59 | [Optimizing sparse Merkle trees](https://ethresear.ch/t/3751) | vbuterin | 2018-10-09 | 0.96 | 8 | 25 | Cryptography |
+| 60 | [From 4844 to Danksharding: a path to scaling Ethereum DA](https://ethresear.ch/t/18046) | fradamt | 2023-12-28 | 0.96 | 5 | 36 | Data Availability & Sharding |
+| 61 | [Plasma XT: Plasma Cash with much less per-user data checking](https://ethresear.ch/t/1926) | kfichter | 2018-05-07 | 0.96 | 7 | 26 | Layer 2 & Rollups |
 | 62 | [Simple Fast Withdrawals](https://ethresear.ch/t/2128) | kfichter | 2018-06-03 | 0.96 | 8 | 24 | — |
-| 63 | [MEV-resistant ZK-Rollups with Practical VDE (PVDE)](https://ethresear.ch/t/12677) | zeroknight | 2022-05-20 | 0.96 | 4 | 41 | PBS, MEV & Block Production |
-| 64 | [Why Smart Contracts are NOT feasible on Plasma](https://ethresear.ch/t/2598) | johba | 2018-07-18 | 0.96 | 4 | 41 | Plasma & L2 Scaling |
-| 65 | [Uncrowdable Inclusion Lists: The Tension between Chain Neutrality, Preconfirmations and Proposer Commitments](https://ethresear.ch/t/19372) | Julian | 2024-04-25 | 0.96 | 9 | 25 | Plasma & L2 Scaling |
-| 66 | [Supporting decentralized staking through more anti-correlation incentives](https://ethresear.ch/t/19116) | vbuterin | 2024-03-26 | 0.96 | 3 | 84 | — |
-| 67 | [Multidimensional EIP 1559](https://ethresear.ch/t/11651) | vbuterin | 2022-01-05 | 0.95 | 3 | 76 | Fee Markets & EIP-1559 |
-| 68 | [Fast (and Slow) L2→L1 Withdrawals](https://ethresear.ch/t/21161) | The-CTra1n | 2024-12-05 | 0.95 | 5 | 33 | Plasma & L2 Scaling |
-| 69 | [Double-batched Merkle log accumulator](https://ethresear.ch/t/571) | JustinDrake | 2018-01-10 | 0.95 | 10 | 22 | State & Execution Layer |
-| 70 | [Plasma EVM 2.0: state-enforceable construction](https://ethresear.ch/t/3025) | 4000D | 2018-08-21 | 0.95 | 5 | 29 | Plasma & L2 Scaling |
-| 71 | [Minimal Viable Merged Consensus](https://ethresear.ch/t/5617) | adlerjohn | 2019-06-15 | 0.95 | 15 | 20 | Sharding & Data Availability |
-| 72 | [Self-Sovereign Identity and Account Abstraction for Privacy-Preserving cross chain user operations across roll ups](https://ethresear.ch/t/19599) | EugeRe | 2024-05-20 | 0.95 | 6 | 26 | Privacy & Identity |
+| 63 | [MEV-resistant ZK-Rollups with Practical VDE (PVDE)](https://ethresear.ch/t/12677) | zeroknight | 2022-05-20 | 0.96 | 4 | 41 | MEV, Block Production & Fees |
+| 64 | [Why Smart Contracts are NOT feasible on Plasma](https://ethresear.ch/t/2598) | johba | 2018-07-18 | 0.96 | 4 | 41 | Layer 2 & Rollups |
+| 65 | [Uncrowdable Inclusion Lists: The Tension between Chain Neutrality, Preconfirmations and Proposer Commitments](https://ethresear.ch/t/19372) | Julian | 2024-04-25 | 0.96 | 9 | 25 | Layer 2 & Rollups |
+| 66 | [Supporting decentralized staking through more anti-correlation incentives](https://ethresear.ch/t/19116) | vbuterin | 2024-03-26 | 0.96 | 3 | 84 | Consensus & PoS |
+| 67 | [Multidimensional EIP 1559](https://ethresear.ch/t/11651) | vbuterin | 2022-01-05 | 0.95 | 3 | 76 | MEV, Block Production & Fees |
+| 68 | [Fast (and Slow) L2→L1 Withdrawals](https://ethresear.ch/t/21161) | The-CTra1n | 2024-12-05 | 0.95 | 5 | 33 | Layer 2 & Rollups |
+| 69 | [Double-batched Merkle log accumulator](https://ethresear.ch/t/571) | JustinDrake | 2018-01-10 | 0.95 | 10 | 22 | Execution & State |
+| 70 | [Plasma EVM 2.0: state-enforceable construction](https://ethresear.ch/t/3025) | 4000D | 2018-08-21 | 0.95 | 5 | 29 | Layer 2 & Rollups |
+| 71 | [Minimal Viable Merged Consensus](https://ethresear.ch/t/5617) | adlerjohn | 2019-06-15 | 0.95 | 15 | 20 | Consensus & PoS |
+| 72 | [Self-Sovereign Identity and Account Abstraction for Privacy-Preserving cross chain user operations across roll ups](https://ethresear.ch/t/19599) | EugeRe | 2024-05-20 | 0.95 | 6 | 26 | Execution & State |
 | 73 | [The eth1 -> eth2 transition](https://ethresear.ch/t/6265) | vbuterin | 2019-10-10 | 0.95 | 4 | 30 | — |
 | 74 | [Spam resistant block creator selection via burn auction](https://ethresear.ch/t/5851) | barryWhiteHat | 2019-07-21 | 0.95 | 5 | 26 | — |
-| 75 | [Minimal VDF randomness beacon](https://ethresear.ch/t/3566) | JustinDrake | 2018-09-26 | 0.95 | 3 | 47 | — |
-| 76 | [On Increasing the Block Gas Limit](https://ethresear.ch/t/18567) | Nero_eth | 2024-02-05 | 0.95 | 3 | 48 | Fee Markets & EIP-1559 |
+| 75 | [Minimal VDF randomness beacon](https://ethresear.ch/t/3566) | JustinDrake | 2018-09-26 | 0.95 | 3 | 47 | Consensus & PoS |
+| 76 | [On Increasing the Block Gas Limit](https://ethresear.ch/t/18567) | Nero_eth | 2024-02-05 | 0.95 | 3 | 48 | MEV, Block Production & Fees |
 | 77 | [Pairwise coordination subsidies: a new quadratic funding design](https://ethresear.ch/t/5553) | vbuterin | 2019-06-04 | 0.95 | 3 | 44 | — |
-| 78 | [Strawmanning Based Preconfirmations](https://ethresear.ch/t/19695) | linoscope | 2024-05-31 | 0.95 | 4 | 31 | Based Sequencing & Preconfirmations |
-| 79 | [Tradeoffs in Account Abstraction Proposals](https://ethresear.ch/t/263) | vbuterin | 2017-11-28 | 0.95 | 5 | 20 | — |
-| 80 | [Why you can't build a private uniswap with ZKPs](https://ethresear.ch/t/7754) | barryWhiteHat | 2020-07-24 | 0.95 | 3 | 39 | ZK Proofs & SNARKs/STARKs |
-| 81 | [Plasma Debit: Arbitrary-denomination payments in Plasma Cash](https://ethresear.ch/t/2198) | danrobinson | 2018-06-10 | 0.95 | 3 | 36 | Plasma & L2 Scaling |
+| 78 | [Strawmanning Based Preconfirmations](https://ethresear.ch/t/19695) | linoscope | 2024-05-31 | 0.95 | 4 | 31 | Layer 2 & Rollups |
+| 79 | [Tradeoffs in Account Abstraction Proposals](https://ethresear.ch/t/263) | vbuterin | 2017-11-28 | 0.95 | 5 | 20 | Execution & State |
+| 80 | [Why you can't build a private uniswap with ZKPs](https://ethresear.ch/t/7754) | barryWhiteHat | 2020-07-24 | 0.95 | 3 | 39 | Cryptography |
+| 81 | [Plasma Debit: Arbitrary-denomination payments in Plasma Cash](https://ethresear.ch/t/2198) | danrobinson | 2018-06-10 | 0.95 | 3 | 36 | Layer 2 & Rollups |
 | 82 | [0x03 Withdrawal Credentials: Simple Eth1-triggerable withdrawals](https://ethresear.ch/t/10021) | gakonst | 2021-07-07 | 0.94 | 3 | 39 | — |
-| 83 | [State Provider Models in Ethereum 2.0](https://ethresear.ch/t/6750) | adietrichs | 2020-01-09 | 0.94 | 5 | 24 | State & Execution Layer |
-| 84 | [Exploring the proposer/collator split](https://ethresear.ch/t/1632) | benjaminion | 2018-04-06 | 0.94 | 5 | 21 | Sharding & Data Availability |
-| 85 | [Practical endgame on issuance policy](https://ethresear.ch/t/20747) | aelowsson | 2024-10-23 | 0.94 | 5 | 23 | Issuance & Staking Economics |
-| 86 | [A nearly-trivial-on-zero-inputs 32-bytes-long collision-resistant hash function](https://ethresear.ch/t/5511) | vbuterin | 2019-05-25 | 0.94 | 4 | 24 | — |
-| 87 | [Against proof of stake for [zk/op]rollup leader election](https://ethresear.ch/t/7698) | barryWhiteHat | 2020-07-17 | 0.94 | 7 | 19 | Plasma & L2 Scaling |
-| 88 | [A model for cumulative committee-based finality](https://ethresear.ch/t/10259) | vbuterin | 2021-08-05 | 0.94 | 3 | 34 | Consensus & Finality |
+| 83 | [State Provider Models in Ethereum 2.0](https://ethresear.ch/t/6750) | adietrichs | 2020-01-09 | 0.94 | 5 | 24 | Execution & State |
+| 84 | [Exploring the proposer/collator split](https://ethresear.ch/t/1632) | benjaminion | 2018-04-06 | 0.94 | 5 | 21 | Data Availability & Sharding |
+| 85 | [Practical endgame on issuance policy](https://ethresear.ch/t/20747) | aelowsson | 2024-10-23 | 0.94 | 5 | 23 | Consensus & PoS |
+| 86 | [A nearly-trivial-on-zero-inputs 32-bytes-long collision-resistant hash function](https://ethresear.ch/t/5511) | vbuterin | 2019-05-25 | 0.94 | 4 | 24 | Cryptography |
+| 87 | [Against proof of stake for [zk/op]rollup leader election](https://ethresear.ch/t/7698) | barryWhiteHat | 2020-07-17 | 0.94 | 7 | 19 | Layer 2 & Rollups |
+| 88 | [A model for cumulative committee-based finality](https://ethresear.ch/t/10259) | vbuterin | 2021-08-05 | 0.94 | 3 | 34 | Consensus & PoS |
 | 89 | [Packetology: Validator Privacy](https://ethresear.ch/t/7547) | jrhea | 2020-06-16 | 0.94 | 4 | 26 | Privacy & Identity |
-| 90 | [ePBS design constraints](https://ethresear.ch/t/18728) | potuz | 2024-02-20 | 0.94 | 6 | 22 | PBS, MEV & Block Production |
+| 90 | [ePBS design constraints](https://ethresear.ch/t/18728) | potuz | 2024-02-20 | 0.94 | 6 | 22 | MEV, Block Production & Fees |
 | 91 | [Concurrent Block Proposers in Ethereum](https://ethresear.ch/t/18777) | mikeneuder | 2024-02-23 | 0.94 | 10 | 17 | — |
 | 92 | [Ethereum 2.0 Data Model: Actors and Assets](https://ethresear.ch/t/4117) | fubuloubu | 2018-11-04 | 0.94 | 3 | 30 | — |
-| 93 | [Circulating Supply Equilibrium for Ethereum and Minimum Viable Issuance during the Proof-of-Stake Era](https://ethresear.ch/t/10954) | aelowsson | 2021-10-07 | 0.94 | 6 | 17 | Issuance & Staking Economics |
-| 94 | [First and second-price auctions and improved transaction-fee markets](https://ethresear.ch/t/2410) | vbuterin | 2018-07-02 | 0.94 | 3 | 27 | Fee Markets & EIP-1559 |
-| 95 | [Block Arrivals, Home Stakers & Bumping the blob count](https://ethresear.ch/t/21096) | samcm | 2024-11-27 | 0.94 | 3 | 34 | Sharding & Data Availability |
-| 96 | [Log(coins)-sized proofs of inclusion and exclusion for RSA accumulators](https://ethresear.ch/t/3839) | vbuterin | 2018-10-17 | 0.94 | 7 | 17 | Plasma & L2 Scaling |
-| 97 | [Liquid solo validating](https://ethresear.ch/t/12779) | JustinDrake | 2022-06-03 | 0.93 | 3 | 31 | Consensus & Finality |
+| 93 | [Circulating Supply Equilibrium for Ethereum and Minimum Viable Issuance during the Proof-of-Stake Era](https://ethresear.ch/t/10954) | aelowsson | 2021-10-07 | 0.94 | 6 | 17 | Consensus & PoS |
+| 94 | [First and second-price auctions and improved transaction-fee markets](https://ethresear.ch/t/2410) | vbuterin | 2018-07-02 | 0.94 | 3 | 27 | MEV, Block Production & Fees |
+| 95 | [Block Arrivals, Home Stakers & Bumping the blob count](https://ethresear.ch/t/21096) | samcm | 2024-11-27 | 0.94 | 3 | 34 | Data Availability & Sharding |
+| 96 | [Log(coins)-sized proofs of inclusion and exclusion for RSA accumulators](https://ethresear.ch/t/3839) | vbuterin | 2018-10-17 | 0.94 | 7 | 17 | Cryptography |
+| 97 | [Liquid solo validating](https://ethresear.ch/t/12779) | JustinDrake | 2022-06-03 | 0.93 | 3 | 31 | Consensus & PoS |
 | 98 | [Explanation of DAICOs](https://ethresear.ch/t/465) | vbuterin | 2018-01-06 | 0.93 | 2 | 185 | — |
-| 99 | [2FA zk-rollups using SGX](https://ethresear.ch/t/14462) | JustinDrake | 2022-12-21 | 0.93 | 2 | 100 | ZK Proofs & SNARKs/STARKs |
-| 100 | [A local-node-favoring delta to the scaling roadmap](https://ethresear.ch/t/22368) | vbuterin | 2025-05-19 | 0.93 | 2 | 89 | Fee Markets & EIP-1559 |
+| 99 | [2FA zk-rollups using SGX](https://ethresear.ch/t/14462) | JustinDrake | 2022-12-21 | 0.93 | 2 | 100 | Cryptography |
+| 100 | [A local-node-favoring delta to the scaling roadmap](https://ethresear.ch/t/22368) | vbuterin | 2025-05-19 | 0.93 | 2 | 89 | MEV, Block Production & Fees |
 
 ## Appendix B: Fork Timeline with Topic Cross-References
 

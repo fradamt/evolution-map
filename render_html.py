@@ -20,24 +20,22 @@ PAPERS_DB_PATH = SCRIPT_DIR / "papers-db.json"
 
 # Thread display order and colors
 THREAD_COLORS = {
-    "pos_casper": "#e63946",
-    "sharding_da": "#457b9d",
-    "plasma_l2": "#2a9d8f",
-    "fee_markets": "#e9c46a",
-    "pbs_mev": "#f4a261",
-    "ssf": "#d62828",
-    "issuance_economics": "#6a994e",
-    "inclusion_lists": "#bc6c25",
-    "based_preconf": "#7209b7",
-    "zk_proofs": "#4361ee",
-    "state_execution": "#606c38",
-    "privacy_identity": "#9d4edd",
+    "consensus": "#e63946",
+    "scaling": "#457b9d",
+    "layer2": "#2a9d8f",
+    "mev": "#f4a261",
+    "execution": "#606c38",
+    "cryptography": "#4361ee",
+    "defi": "#7209b7",
+    "privacy": "#9d4edd",
+    "security": "#a4161a",
+    "governance": "#bc6c25",
 }
 
 THREAD_ORDER = [
-    "pos_casper", "sharding_da", "plasma_l2", "fee_markets",
-    "pbs_mev", "ssf", "issuance_economics", "inclusion_lists",
-    "based_preconf", "zk_proofs", "state_execution", "privacy_identity",
+    "consensus", "scaling", "layer2", "mev",
+    "execution", "cryptography", "defi", "privacy",
+    "security", "governance",
 ]
 
 # Top author colors (up to 15, rest gray)

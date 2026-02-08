@@ -122,165 +122,272 @@ def era_for_date(date_str):
 # ---------------------------------------------------------------------------
 # Research thread seeds
 # ---------------------------------------------------------------------------
+# Each thread defines patterns for matching topics, EIPs, and papers.
+# "paper_patterns" are additional patterns used only for paper assignment
+# (papers lack tags/authors from ethresear.ch so need broader matching).
+# "paper_tags" match against paper tags from papers-db.json.
 THREAD_SEEDS = {
-    "pbs_mev": {
-        "name": "PBS, MEV & Block Production",
+    "consensus": {
+        "name": "Consensus & PoS",
         "title_patterns": [
-            r"proposer.builder", r"\bpbs\b", r"\bmev\b", r"block.?build",
-            r"mev.?burn", r"epbs", r"enshrined.*proposer", r"builder.?separation",
-            r"auction", r"block.?production", r"payload.?timeliness",
-            # Broader PBS/MEV patterns
-            r"proposer.?builder", r"block.?builder", r"mev.?boost",
-            r"order.?flow", r"block.?auction", r"timing.?game",
+            # Core consensus
+            r"casper", r"proof.?of.?stake", r"\bpos\b", r"beacon.?chain",
+            r"finality", r"fork.?choice", r"lmd.?ghost", r"ffg",
+            r"cbc", r"slashing", r"attestat",
+            # SSF
+            r"single.?slot.?final", r"\bssf\b", r"orbit.?ssf",
+            r"3sf", r"slot.?final",
+            # Validator design
+            r"finality.?gadget", r"committee", r"validator.?set",
+            r"rainbow.?staking", r"liquid.?staking",
+            # Issuance & economics (merged from issuance_economics)
+            r"issuance", r"staking.?econom", r"endgame.?stak", r"yield",
+            r"minimum.?viable.?issuance", r"reward.?curve", r"staking.?ratio",
+            r"max.?eb\b", r"max_effective_balance", r"validator.?economics",
+            r"consolidat", r"staking.?reward", r"issuance.?curve",
+            # Broader
+            r"longest.?chain", r"tendermint", r"randomness.?beacon",
+            r"\bvdf\b", r"randao", r"leader.?election",
+            r"incentiv.*full.?node", r"anti.?correlation",
         ],
-        "tag_patterns": [r"pbs", r"mev", r"builder"],
+        "tag_patterns": [
+            r"casper", r"pos", r"beacon", r"ssf",
+            r"issuance", r"staking", r"economics",
+        ],
+        "paper_tags": ["consensus", "proof-of-stake", "consensus-security"],
+        "paper_patterns": [
+            r"proof.of.stake", r"consensus", r"fork.choice", r"finality",
+            r"validator", r"longest.chain", r"\bbft\b", r"pbft",
+            r"tendermint", r"casper", r"beacon", r"slashing",
+        ],
         "category_hints": [],
-        "key_authors": ["vbuterin", "JustinDrake", "mikeneuder", "quintus", "barnabe"],
+        "key_authors": [
+            "vbuterin", "JustinDrake", "djrtwo", "fradamt",
+            "barnabe", "casparschwa", "aelowsson", "anderselowsson",
+        ],
     },
-    "sharding_da": {
-        "name": "Sharding & Data Availability",
+    "scaling": {
+        "name": "Data Availability & Sharding",
         "title_patterns": [
             r"\bshard", r"data.?availab", r"\bdas\b", r"danksharding", r"proto.?dank",
             r"blob", r"4844", r"peer.?das", r"data.?column", r"erasure.?cod",
-            r"kzg", r"kate.?commitment", r"stateless.?client",
-            # Broader DA patterns
-            r"fulldas", r"full.?das", r"peerdas", r"peer.?das",
+            r"kate.?commitment",
+            r"fulldas", r"full.?das", r"peerdas",
             r"big.?block", r"block.?size", r"blob.?count", r"target.?blob",
             r"blob.?market", r"data.?column",
         ],
         "tag_patterns": [r"shard", r"data-availab", r"blob", r"das"],
+        "paper_tags": ["data-availability"],
+        "paper_patterns": [
+            r"data.availab", r"sharding", r"erasure.cod", r"\bdas\b",
+            r"danksharding", r"blob", r"sampling",
+        ],
         "category_hints": [],
         "key_authors": ["vbuterin", "JustinDrake", "dankrad"],
     },
-    "plasma_l2": {
-        "name": "Plasma & L2 Scaling",
+    "layer2": {
+        "name": "Layer 2 & Rollups",
         "title_patterns": [
             r"\bplasma\b", r"rollup", r"\bl2\b", r"layer.?2", r"based.?rollup",
             r"native.?rollup", r"optimistic.?roll", r"zk.?roll", r"state.?channel",
-            r"pre.?confirmation", r"sequenc",
-            # Broader L2 patterns
             r"layer.?2", r"optimistic", r"based.?rollup", r"native.?rollup",
             r"sequenc", r"bridge", r"cross.?chain",
+            # Based preconf (merged from based_preconf)
+            r"based.?sequenc", r"pre.?confirm", r"preconf",
+            r"proposer.?commit",
         ],
-        "tag_patterns": [r"plasma", r"rollup", r"layer-2"],
+        "tag_patterns": [r"plasma", r"rollup", r"layer-2", r"preconf", r"based"],
+        "paper_tags": ["rollups"],
+        "paper_patterns": [
+            r"rollup", r"\bl2\b", r"layer.2", r"plasma", r"state.channel",
+            r"bridge", r"cross.chain", r"interop", r"optimistic",
+            r"fraud.proof", r"dispute", r"sequenc", r"preconf",
+        ],
         "category_hints": [],
         "key_authors": ["vbuterin", "JustinDrake", "karl"],
     },
-    "pos_casper": {
-        "name": "Consensus & Finality",
+    "mev": {
+        "name": "MEV, Block Production & Fees",
         "title_patterns": [
-            r"casper", r"proof.?of.?stake", r"\bpos\b", r"beacon.?chain",
-            r"finality", r"fork.?choice", r"lmd.?ghost", r"ffg",
-            r"cbc", r"slashing", r"attestat",
-            # SSF patterns (merged from ssf thread)
-            r"single.?slot.?final", r"\bssf\b", r"orbit.?ssf",
-            r"3sf", r"slot.?final",
-            # Broader consensus patterns
-            r"finality.?gadget", r"committee", r"validator.?set",
-            r"rainbow.?staking", r"liquid.?staking",
-        ],
-        "tag_patterns": [r"casper", r"pos", r"beacon", r"ssf"],
-        "category_hints": [],
-        "key_authors": ["vbuterin", "JustinDrake", "djrtwo", "fradamt"],
-    },
-    "issuance_economics": {
-        "name": "Issuance & Staking Economics",
-        "title_patterns": [
-            r"issuance", r"staking.?econom", r"endgame.?stak", r"yield",
-            r"minimum.?viable.?issuance", r"reward.?curve", r"staking.?ratio",
-            r"max.?eb\b", r"max_effective_balance", r"validator.?economics",
-            r"consolidat",
-            # Broader economics patterns
-            r"staking.?reward", r"issuance.?curve",
-            r"endgame.*stak", r"minimum.?viable.?issuance",
-        ],
-        "tag_patterns": [r"issuance", r"staking", r"economics"],
-        "category_hints": [],
-        "key_authors": ["barnabe", "casparschwa", "aelowsson", "anderselowsson"],
-    },
-    "inclusion_lists": {
-        "name": "Inclusion Lists & Censorship Resistance",
-        "title_patterns": [
+            # PBS/MEV core
+            r"proposer.builder", r"\bpbs\b", r"\bmev\b", r"block.?build",
+            r"mev.?burn", r"epbs", r"enshrined.*proposer", r"builder.?separation",
+            r"block.?production", r"payload.?timeliness",
+            r"proposer.?builder", r"block.?builder", r"mev.?boost",
+            r"order.?flow", r"block.?auction", r"timing.?game",
+            # Inclusion lists / censorship (merged from inclusion_lists)
             r"inclusion.?list", r"\bfocil\b", r"censorship.?resist",
             r"unconditional.?inclusion", r"crlist", r"force.?inclus",
-            # Broader censorship resistance patterns
-            r"censorship", r"inclusion.?list", r"il.?design",
-            r"focil", r"unconditional",
-        ],
-        "tag_patterns": [r"inclusion-list", r"censorship"],
-        "category_hints": [],
-        "key_authors": ["mikeneuder", "fradamt", "vbuterin"],
-    },
-    "based_preconf": {
-        "name": "Based Sequencing & Preconfirmations",
-        "title_patterns": [
-            r"based.?sequenc", r"pre.?confirm", r"preconf",
-            r"based.?rollup", r"proposer.?commit",
-            # Broader preconf patterns
-            r"based.?sequenc", r"preconf", r"pre.?conf",
-        ],
-        "tag_patterns": [r"preconf", r"based"],
-        "category_hints": [],
-        "key_authors": ["JustinDrake"],
-    },
-    "zk_proofs": {
-        "name": "ZK Proofs & SNARKs/STARKs",
-        "title_patterns": [
-            r"\bzk\b", r"snark", r"stark", r"plonk", r"zero.?knowledge",
-            r"zkp", r"groth16", r"proof.?system", r"verifiable.?comput",
-            r"recursive.?proof",
-            # Broader ZK patterns
-            r"zero.?knowledge", r"recursive", r"folding",
-            r"plonk", r"halo", r"groth16", r"kzg",
-        ],
-        "tag_patterns": [r"zk", r"snark", r"stark"],
-        "category_hints": [],
-        "key_authors": ["barryWhiteHat"],
-    },
-    "fee_markets": {
-        "name": "Fee Markets & EIP-1559",
-        "title_patterns": [
+            r"censorship", r"il.?design", r"unconditional",
+            # Fee markets (merged from fee_markets)
             r"1559", r"fee.?market", r"base.?fee", r"gas.?price",
             r"multidimensional", r"resource.?pric", r"eip.?4844.*fee",
-            r"blob.?fee", r"gas.?limit",
-            # Broader fee market patterns
-            r"gas.?price", r"gas.?cost", r"gas.?limit",
-            r"resource.?pric", r"blob.?fee", r"base.?fee",
+            r"blob.?fee", r"gas.?limit", r"gas.?cost",
         ],
-        "tag_patterns": [r"1559", r"fee-market", r"gas"],
-        "category_hints": [],
-        "key_authors": ["vbuterin", "barnabe"],
-    },
-    "privacy_identity": {
-        "name": "Privacy & Identity",
-        "title_patterns": [
-            r"privacy", r"\bmaci\b", r"mixer", r"anonymous", r"stealth.?addr",
-            r"tornado", r"ring.?sig", r"zk.?passport", r"identity",
-            r"semaphore",
-            # Broader privacy patterns
-            r"stealth.?address", r"zk.?passport", r"anonymous",
-            r"rln", r"semaphore",
+        "tag_patterns": [
+            r"pbs", r"mev", r"builder",
+            r"inclusion-list", r"censorship",
+            r"1559", r"fee-market", r"gas",
         ],
-        "tag_patterns": [r"privacy", r"identity"],
+        "paper_tags": ["mev", "fee-market", "eip-1559", "timing-games"],
+        "paper_patterns": [
+            r"mev", r"maximal.extractable", r"miner.extractable",
+            r"proposer.build", r"block.build", r"sandwich",
+            r"frontrun", r"front.run", r"order.flow", r"flash.boy",
+            r"timing.game", r"backrun", r"censorship",
+            r"1559", r"fee.market", r"base.fee", r"gas.price",
+            r"transaction.fee", r"resource.pric", r"congestion",
+        ],
         "category_hints": [],
-        "key_authors": ["barryWhiteHat"],
+        "key_authors": [
+            "vbuterin", "JustinDrake", "mikeneuder", "quintus", "barnabe",
+            "fradamt",
+        ],
     },
-    "state_execution": {
-        "name": "State & Execution Layer",
+    "execution": {
+        "name": "Execution & State",
         "title_patterns": [
             r"verkle", r"stateless", r"state.?expir", r"state.?growth",
             r"state.?size", r"trie", r"witness", r"binary.?trie",
             r"portal.?network", r"history.?expir", r"purge",
             r"evm.*improv", r"eof\b",
-            # Broader state/execution patterns
-            r"verkle", r"state.?expir", r"state.?rent",
-            r"access.?list", r"stateless", r"witness",
-            r"trie", r"state.?growth",
+            r"state.?rent", r"access.?list",
+            r"account.?abstract", r"erc.?4337", r"eip.?7702",
+            r"\bopcode\b", r"precompile",
+            r"gossipsub", r"devp2p", r"light.?client",
         ],
-        "tag_patterns": [r"verkle", r"stateless", r"state"],
+        "tag_patterns": [r"verkle", r"stateless", r"state", r"evm", r"account-abstraction"],
+        "paper_tags": ["stateless"],
+        "paper_patterns": [
+            r"verkle", r"stateless", r"state.expir", r"evm", r"opcode",
+            r"smart.contract", r"solidity", r"account.abstract", r"bytecode",
+            r"trie", r"state.growth", r"witness",
+        ],
         "category_hints": [],
         "key_authors": ["vbuterin", "Nero_eth", "gballet"],
     },
+    "cryptography": {
+        "name": "Cryptography",
+        "title_patterns": [
+            r"\bzk\b", r"snark", r"stark", r"plonk", r"zero.?knowledge",
+            r"zkp", r"groth16", r"proof.?system", r"verifiable.?comput",
+            r"recursive.?proof",
+            r"zero.?knowledge", r"recursive", r"folding",
+            r"plonk", r"halo", r"groth16", r"kzg",
+            r"polynomial.?commit", r"inner.?product",
+            r"\bbls\b", r"aggregate.?sig", r"threshold.?sig",
+            r"hash.?function", r"collision.?resist",
+            r"merkle", r"accumulator", r"commitment.?scheme",
+            r"post.?quantum", r"falcon",
+        ],
+        "tag_patterns": [r"zk", r"snark", r"stark", r"cryptography", r"kzg"],
+        "paper_tags": [
+            "zk", "cryptography", "proof-systems", "plonk", "snark",
+            "kzg", "polynomial-commitments", "signatures", "recursive-proofs",
+            "lookup-arguments",
+        ],
+        "paper_patterns": [
+            r"zk.snark", r"zk.stark", r"plonk", r"zero.knowledge",
+            r"proof.system", r"groth16", r"kzg", r"polynomial.commit",
+            r"bls", r"aggregate.sig", r"threshold.sig", r"hash.function",
+            r"accumulator", r"commitment.scheme", r"recursive.proof",
+            r"folding.scheme", r"lookup", r"sumcheck", r"inner.product",
+            r"multi.signature", r"compact.*signature",
+        ],
+        "category_hints": [],
+        "key_authors": ["barryWhiteHat"],
+    },
+    "defi": {
+        "name": "DeFi & Markets",
+        "title_patterns": [
+            r"\bamm\b", r"automated.?market", r"\bdex\b", r"decentralized.?exchange",
+            r"arbitrage", r"impermanent", r"uniswap",
+            r"market.?maker", r"lending", r"stablecoin",
+            r"\bdefi\b", r"liquidity", r"loss.?versus", r"\blvr\b",
+            r"flash.?loan", r"token.?economics",
+        ],
+        "tag_patterns": [r"defi", r"amm", r"dex", r"liquidity"],
+        "paper_tags": [
+            "defi", "amm", "dex", "arbitrage", "lvr",
+            "concentrated-liquidity",
+        ],
+        "paper_patterns": [
+            r"amm", r"automated.market", r"\bdex\b", r"decentralized.exchange",
+            r"arbitrage", r"impermanent", r"uniswap", r"market.maker",
+            r"lending", r"stablecoin", r"\bdefi\b", r"liquidity",
+            r"loss.versus", r"\blvr\b", r"flash.loan", r"token.economics",
+        ],
+        "category_hints": [],
+        "key_authors": [],
+    },
+    "privacy": {
+        "name": "Privacy & Identity",
+        "title_patterns": [
+            r"privacy", r"\bmaci\b", r"mixer", r"anonymous", r"stealth.?addr",
+            r"tornado", r"ring.?sig", r"zk.?passport", r"identity",
+            r"semaphore", r"stealth.?address", r"rln",
+            r"confidential",
+        ],
+        "tag_patterns": [r"privacy", r"identity"],
+        "paper_tags": [],
+        "paper_patterns": [
+            r"privacy", r"mixer", r"anonymous", r"stealth",
+            r"tornado", r"ring.sig", r"identity", r"credential",
+            r"confidential", r"zk.passport",
+        ],
+        "category_hints": [],
+        "key_authors": ["barryWhiteHat"],
+    },
+    "security": {
+        "name": "Security & Analysis",
+        "title_patterns": [
+            r"attack(?!.*sandwich)", r"vulnerab", r"exploit",
+            r"formal.?verif", r"honeypot", r"reentrancy",
+            r"selfdestruct", r"scam", r"security.?analysis",
+            r"smart.?contract.?security",
+        ],
+        "tag_patterns": [r"security", r"attack", r"audit"],
+        "paper_tags": [],
+        "paper_patterns": [
+            r"attack", r"vulnerab", r"exploit", r"security",
+            r"formal.verif", r"honeypot", r"reentrancy", r"selfdestruct",
+            r"scam", r"phishing",
+        ],
+        "category_hints": [],
+        "key_authors": [],
+    },
+    "governance": {
+        "name": "Governance & Standards",
+        "title_patterns": [
+            r"governance", r"voting", r"\bdao\b", r"quadratic",
+            r"mechanism.?design", r"daico", r"signaling",
+            r"futarchy", r"prediction.?market",
+        ],
+        "tag_patterns": [r"governance", r"dao", r"voting"],
+        "paper_tags": ["economics", "incentives"],
+        "paper_patterns": [
+            r"governance", r"voting", r"\bdao\b", r"quadratic",
+            r"mechanism.design", r"auction",
+        ],
+        "category_hints": [],
+        "key_authors": [],
+    },
+}
+
+# Legacy thread ID mapping: old thread IDs → new thread IDs.
+# Used for backward compatibility in any cached data or references.
+THREAD_LEGACY_MAP = {
+    "pos_casper": "consensus",
+    "sharding_da": "scaling",
+    "plasma_l2": "layer2",
+    "pbs_mev": "mev",
+    "fee_markets": "mev",
+    "issuance_economics": "consensus",
+    "inclusion_lists": "mev",
+    "based_preconf": "layer2",
+    "zk_proofs": "cryptography",
+    "state_execution": "execution",
+    "privacy_identity": "privacy",
 }
 
 # Global protocol relevance guardrail.
@@ -2552,6 +2659,43 @@ def main():
         print(f"  {len(paper_ids_list)} papers scored, {above_030} above 0.30")
     else:
         print("  No papers to score")
+
+    # -----------------------------------------------------------------------
+    # Assign paper research threads (using paper_tags + paper_patterns)
+    # -----------------------------------------------------------------------
+    print("Assigning paper research threads...")
+    paper_thread_assigned = 0
+    for pid, p in papers_output.items():
+        title_lower = p.get("title", "").lower()
+        paper_tags = [t.lower() for t in p.get("tags", [])]
+        best_thread = None
+        best_score = 0
+        for thread_id, thread_def in THREAD_SEEDS.items():
+            s = 0
+            # Match against paper_tags from thread definition
+            for tag in thread_def.get("paper_tags", []):
+                if tag.lower() in paper_tags:
+                    s += 3
+                    break
+            # Match against paper_patterns on title
+            for pat in thread_def.get("paper_patterns", []):
+                if re.search(pat, title_lower):
+                    s += 2
+                    break
+            # Also check standard title_patterns (covers shared patterns)
+            if s == 0:
+                for pat in thread_def["title_patterns"]:
+                    if re.search(pat, title_lower):
+                        s += 1
+                        break
+            if s > best_score:
+                best_score = s
+                best_thread = thread_id
+        p["research_thread"] = best_thread if best_score >= 1 else None
+        if p["research_thread"]:
+            paper_thread_assigned += 1
+    paper_unassigned = len(papers_output) - paper_thread_assigned
+    print(f"  {paper_thread_assigned} papers assigned, {paper_unassigned} unassigned")
 
     print("Writing analysis.json...")
     output = {

@@ -9,7 +9,7 @@ An analysis pipeline over a scraped archive of **ethresear.ch** (Ethereum's Disc
 - **~2,903 topics** scraped via the Discourse API (stdlib-only Python) — scraped data lives in the parent directory (`../topics/`, `../index.json`)
 - **All 2,903 topics** in a unified dict — influence slider controls visibility (no separate "minor topics" toggle)
 - **550 influential topics** with **1,007 cross-references**, **2,353 lower-influence topics** (flagged `mn: true`)
-- **12 research threads** (PBS/MEV, Sharding/DA, Casper/PoS, Fee Markets, etc.) across **5 eras** (Early Research, PoS Transition, Rollup-centric, Danksharding, Endgame)
+- **10 research categories** (Consensus, Scaling, L2, MEV/Fees, Execution, Cryptography, DeFi, Privacy, Security, Governance) across **5 eras** — universal categories that apply to topics, EIPs, and papers
 - **18 forks** on timeline (Genesis through Osaka, including early pre-ethresearch forks)
 - **Cross-forum entities**: EIP catalog + first-class `magicians_topics` + explicit `cross_forum_edges` links for topic/EIP/Magicians traversal
 
@@ -83,10 +83,13 @@ python3 render_markdown.py
 
 Tier 1 topics have influence ≥ 0.70 or in-degree ≥ 3; Tier 2 are referenced by Tier 1 with influence ≥ 0.30. Combined top 50: 30 Topics, 9 EIPs, 7 Papers. Paper influence is pre-computed in Python (not JavaScript); `render_html.py` has a fallback JS formula for any unscored papers but it should never trigger.
 
-**Research thread assignment**: Pattern-matching on title, tags, post excerpt, and author identity against seed definitions in `THREAD_SEEDS`. A topic must pass both:
-- Thread seed score (`>= 1.0`)
-- Global protocol relevance guardrail (`is_protocol_relevant_topic`)
-The guardrail combines protocol anchors, non-protocol negatives, EIP signals, and category penalties to avoid assigning non-protocol topics to protocol threads. Era is assigned to all topics based on date.
+**Research category assignment**: 10 universal categories replace the old 11 threads. Each THREAD_SEEDS entry defines `title_patterns`, `tag_patterns`, `paper_tags`, `paper_patterns`, `key_authors`.
+
+- **Topics**: Pattern-matching on title, tags, post excerpt, and author identity. Score ≥ 1.0 required, plus global protocol relevance guardrail (`is_protocol_relevant_topic`).
+- **EIPs**: Title pattern matching + boost from related ethresearch topics' assignments. Score ≥ 1.0 required.
+- **Papers**: `paper_tags` match (score 3) + `paper_patterns` on title (score 2) + fallback to standard `title_patterns` (score 1). Score ≥ 1 required. ~75% coverage.
+
+`THREAD_LEGACY_MAP` maps old thread IDs to new ones for backward compatibility. Era is assigned to all topics based on date.
 
 **Corpus exclusions (hard filter)**: `excluded_corpus_reason(...)` removes topics before influence scoring/thread assignment/graph build when:
 - Category is excluded (default includes `Protocol Calls`)
