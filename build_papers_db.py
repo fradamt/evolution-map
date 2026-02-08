@@ -571,6 +571,13 @@ def paper_from_openalex(work):
     except (TypeError, ValueError):
         cited_by_count = 0
 
+    # Extract referenced OpenAlex work IDs (short form) for citation graph.
+    referenced_works = []
+    for ref_id in work.get("referenced_works") or []:
+        short = short_openalex_id(ref_id)
+        if short:
+            referenced_works.append(short)
+
     return {
         "id": canonical_paper_id(doi, arxiv_id, openalex_id, title, year),
         "title": title,
@@ -583,6 +590,7 @@ def paper_from_openalex(work):
         "url": url,
         "openalex_id": openalex_id,
         "cited_by_count": cited_by_count,
+        "referenced_works": referenced_works,
         "type": work.get("type"),
         "abstract_text": abstract_text,
         "concept_terms": concept_terms,
@@ -733,6 +741,10 @@ def merge_paper_rows(existing, incoming):
     existing["ss_cited_by_count"] = max(existing.get("ss_cited_by_count") or 0, incoming.get("ss_cited_by_count") or 0)
     existing["relevance_score"] = max(existing.get("relevance_score") or 0, incoming.get("relevance_score") or 0)
 
+    # Keep richer referenced_works list
+    if len(incoming.get("referenced_works") or []) > len(existing.get("referenced_works") or []):
+        existing["referenced_works"] = incoming["referenced_works"]
+
     for k in ("authors", "tags", "relevance_reasons", "matched_queries", "source_types"):
         vals = set(existing.get(k) or [])
         vals.update(incoming.get(k) or [])
@@ -818,6 +830,9 @@ def build_database(min_score, min_year, query_pages, author_pages, per_page):
             existing["cited_by_count"] = paper.get("cited_by_count")
         if not existing.get("abstract_text") and paper.get("abstract_text"):
             existing["abstract_text"] = paper["abstract_text"]
+        # Keep richer referenced_works list
+        if len(paper.get("referenced_works") or []) > len(existing.get("referenced_works") or []):
+            existing["referenced_works"] = paper["referenced_works"]
         if not existing.get("venue") and paper.get("venue"):
             existing["venue"] = paper["venue"]
         if not existing.get("url") and paper.get("url"):
@@ -857,6 +872,7 @@ def build_database(min_score, min_year, query_pages, author_pages, per_page):
         "abstract_inverted_index",
         "concepts",
         "keywords",
+        "referenced_works",
     ])
 
     print("Fetching keyword-based candidates from OpenAlex...", flush=True)

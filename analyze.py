@@ -1091,6 +1091,13 @@ def normalize_papers_seed(raw):
             except (ValueError, TypeError):
                 cited_by = None
 
+        # Carry through referenced_works (short OpenAlex IDs) for citation graph
+        referenced_works = []
+        for ref in row.get("referenced_works") or []:
+            r = str(ref).strip()
+            if r:
+                referenced_works.append(r)
+
         papers[pid] = {
             "id": pid,
             "title": title,
@@ -1103,6 +1110,7 @@ def normalize_papers_seed(raw):
             "url": str(row.get("url", "")).strip() or None,
             "openalex_id": str(row.get("openalex_id", "")).strip() or None,
             "cited_by_count": cited_by,
+            "referenced_works": referenced_works,
             "source": str(row.get("source", "")).strip() or "seed",
             "tags": tags,
         }
@@ -2823,6 +2831,54 @@ def main():
     paper_unassigned = len(papers_output) - paper_thread_assigned
     print(f"  {paper_thread_assigned} papers assigned, {paper_unassigned} unassigned")
 
+    # -----------------------------------------------------------------------
+    # Build paper citation graph from referenced_works
+    # -----------------------------------------------------------------------
+    print("Building paper citation graph...")
+    # Build reverse lookup: short OpenAlex ID → paper ID in our corpus
+    openalex_to_pid = {}
+    for pid, p in papers_output.items():
+        oa_id = p.get("openalex_id", "")
+        if oa_id:
+            # Store both full URL form and short form
+            short = oa_id.replace("https://openalex.org/", "")
+            openalex_to_pid[short] = pid
+            openalex_to_pid[oa_id] = pid
+
+    paper_graph_nodes = []
+    paper_graph_edges = []
+    paper_ids_with_edges = set()
+
+    for pid, p in papers_output.items():
+        for ref_oa_id in p.get("referenced_works") or []:
+            target_pid = openalex_to_pid.get(ref_oa_id)
+            if target_pid and target_pid != pid:
+                paper_graph_edges.append({
+                    "source": pid,
+                    "target": target_pid,
+                    "type": "cites",
+                })
+                paper_ids_with_edges.add(pid)
+                paper_ids_with_edges.add(target_pid)
+
+    # Include all papers with edges as nodes (minimum influence threshold 0.0)
+    for pid in paper_ids_with_edges:
+        p = papers_output[pid]
+        paper_graph_nodes.append({
+            "id": pid,
+            "title": p.get("title", ""),
+            "year": p.get("year"),
+            "influence": p.get("influence_score", 0),
+            "thread": p.get("research_thread"),
+            "cited_by_count": p.get("cited_by_count", 0),
+        })
+
+    print(f"  {len(paper_graph_nodes)} paper nodes, {len(paper_graph_edges)} citation edges")
+
+    # Strip referenced_works from output (graph captures the internal links)
+    for p in papers_output.values():
+        p.pop("referenced_works", None)
+
     print("Writing analysis.json...")
     output = {
         "metadata": {
@@ -2840,6 +2896,8 @@ def main():
             "magicians_topics": len(magicians_topics_output),
             "cross_forum_edges": len(cross_forum_edges),
             "papers_count": len(papers_output),
+            "paper_graph_nodes": len(paper_graph_nodes),
+            "paper_graph_edges": len(paper_graph_edges),
             "generated_at": datetime.now().isoformat()[:19],
         },
         "eras": ERAS,
@@ -2852,6 +2910,10 @@ def main():
         "eip_graph": {
             "nodes": eip_graph_nodes,
             "edges": eip_graph_edges,
+        },
+        "paper_graph": {
+            "nodes": paper_graph_nodes,
+            "edges": paper_graph_edges,
         },
         "topics": topics_output,
         "minor_topics": minor_topics_output,

@@ -27,9 +27,9 @@ THREAD_COLORS = {
     "execution": "#606c38",
     "cryptography": "#4361ee",
     "defi": "#7209b7",
-    "privacy": "#9d4edd",
-    "security": "#a4161a",
-    "governance": "#bc6c25",
+    "privacy": "#06b6d4",
+    "security": "#b45309",
+    "governance": "#eab308",
 }
 
 THREAD_ORDER = [
@@ -1069,6 +1069,9 @@ def prepare_viz_data(data):
     # Compact EIP graph
     eip_graph = data.get("eip_graph", {"nodes": [], "edges": []})
 
+    # Paper citation graph
+    paper_graph = data.get("paper_graph", {"nodes": [], "edges": []})
+
     # Compact Magicians topic entities
     compact_magicians = {}
     for mtid, mt in data.get("magicians_topics", {}).items():
@@ -1120,6 +1123,7 @@ def prepare_viz_data(data):
         "eipCatalog": compact_eips,
         "eipAuthors": compact_eip_authors,
         "eipGraph": eip_graph,
+        "paperGraph": paper_graph,
         "magiciansTopics": compact_magicians,
         "crossForumEdges": compact_cross_edges,
         "papers": compact_papers,
@@ -1408,7 +1412,7 @@ header .stats span { white-space: nowrap; }
 .net-node { cursor: pointer; }
 .net-link { stroke: #334; }
 .fork-diamond { fill: #ffcc00; stroke: #aa8800; stroke-width: 1.5; cursor: pointer; }
-.net-paper-shape { fill: #2f4f77; stroke: #8fb8ef; stroke-width: 0.9; }
+.net-paper-shape { stroke-width: 0.9; }
 
 /* Co-Author Network */
 .coauthor-node { cursor: pointer; }
@@ -3834,6 +3838,21 @@ function buildNetworkPaperAugment(baseNodeMap) {
   });
   paperLinks = paperLinks.concat(paperPairRows);
 
+  // Add citation edges from paper_graph (OpenAlex referenced_works)
+  var pgEdges = ((DATA.paperGraph || {}).edges || []);
+  pgEdges.forEach(function(edge) {
+    var srcId = String(edge.source || '');
+    var tgtId = String(edge.target || '');
+    if (!keep.has(srcId) || !keep.has(tgtId)) return;
+    paperLinks.push({
+      source: paperNodeId(srcId),
+      target: paperNodeId(tgtId),
+      edgeType: 'paper_cites',
+      score: 0.8,
+      reason: 'citation',
+    });
+  });
+
   return {nodes: paperNodes, links: paperLinks};
 }
 
@@ -4595,9 +4614,9 @@ const PAPER_LAYER_MODES = {
   broad: {label: 'broad'},
 };
 const PAPER_TIMELINE_LIMITS = {
-  focus: 45,
-  context: 80,
-  broad: 130,
+  focus: 200,
+  context: 400,
+  broad: 651,
 };
 let paperTimelineVisibleIds = new Set();
 let paperTimelineVisibleKey = '';
@@ -7940,8 +7959,8 @@ function buildNetwork() {
     .attr('x', function(d) { return -rScale(d.influence || 0) * 0.7; })
     .attr('y', function(d) { return -rScale(d.influence || 0) * 0.7; })
     .attr('rx', 3)
-    .attr('fill', function(d) { return EIP_STATUS_COLORS[d.status] || '#555'; })
-    .attr('stroke', function(d) { return EIP_STATUS_COLORS[d.status] || '#555'; })
+    .attr('fill', function(d) { return THREAD_COLORS[d.thread] || EIP_STATUS_COLORS[d.status] || '#555'; })
+    .attr('stroke', function(d) { return THREAD_COLORS[d.thread] || EIP_STATUS_COLORS[d.status] || '#555'; })
     .attr('stroke-width', 0.5)
     .attr('opacity', 0.7);
 
@@ -7953,8 +7972,8 @@ function buildNetwork() {
       return 'M0,' + (-r.toFixed(2)) + ' L' + r.toFixed(2) + ',' + r.toFixed(2) +
         ' L' + (-r.toFixed(2)) + ',' + r.toFixed(2) + ' Z';
     })
-    .attr('fill', '#bb88cc')
-    .attr('stroke', '#bb88cc')
+    .attr('fill', function(d) { return THREAD_COLORS[d.thread] || '#bb88cc'; })
+    .attr('stroke', function(d) { return THREAD_COLORS[d.thread] || '#bb88cc'; })
     .attr('stroke-width', 0.5)
     .attr('opacity', 0.78);
 
@@ -7964,6 +7983,8 @@ function buildNetwork() {
     .attr('r', function(d) {
       return Math.max(4, rScale(d.influence || 0) * 0.78);
     })
+    .attr('fill', function(d) { return THREAD_COLORS[d.thread] || '#2f4f77'; })
+    .attr('stroke', function(d) { return THREAD_COLORS[d.thread] || '#8fb8ef'; })
     .attr('opacity', 0.72);
 
   // Network node labels for top 20 by influence
@@ -9746,10 +9767,56 @@ function showPaperDetail(paper, node) {
     (paper.ax ? '<div class="detail-stat"><span class="label">ArXiv/ePrint</span><span class="value">' + escHtml(paper.ax) + '</span></div>' : '') +
     (eipChips ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#888">EIP Mentions</strong> ' + eipChips + '</div>' : '') +
     (tagChips ? '<div style="margin:8px 0"><strong style="font-size:11px;color:#666">Tags</strong> ' + tagChips + '</div>' : '') +
-    (linkedRows ? '<div class="detail-refs"><h4>Linked in Network</h4>' + linkedRows + '</div>' : '');
+    (linkedRows ? '<div class="detail-refs"><h4>Linked in Network</h4>' + linkedRows + '</div>' : '') +
+    buildPaperCitationHtml(pid);
 
   panel.classList.add('open');
   updateHash();
+}
+
+function buildPaperCitationHtml(pid) {
+  var pgEdges = ((DATA.paperGraph || {}).edges || []);
+  var cites = [];
+  var citedBy = [];
+  pgEdges.forEach(function(edge) {
+    var src = String(edge.source || '');
+    var tgt = String(edge.target || '');
+    if (src === pid && tgt !== pid) cites.push(tgt);
+    if (tgt === pid && src !== pid) citedBy.push(src);
+  });
+  if (cites.length === 0 && citedBy.length === 0) return '';
+  var html = '';
+  function paperChip(otherId) {
+    var p = (DATA.papers || {})[otherId];
+    if (!p) return '';
+    var label = (p.t || 'Untitled').slice(0, 60);
+    if ((p.t || '').length > 60) label += '\u2026';
+    return '<div class="ref-item"><a onclick="showPaperDetail((DATA.papers||{})[&quot;' + escHtml(otherId) + '&quot;])">' + escHtml(label) + '</a>' +
+      (p.y ? ' <span style="color:#666;font-size:10px">(' + p.y + ')</span>' : '') + '</div>';
+  }
+  if (citedBy.length > 0) {
+    citedBy.sort(function(a, b) {
+      var pa = (DATA.papers || {})[a] || {};
+      var pb = (DATA.papers || {})[b] || {};
+      return (pb.inf || 0) - (pa.inf || 0);
+    });
+    html += '<div class="detail-refs"><h4>Cited by (' + citedBy.length + ')</h4>';
+    html += citedBy.slice(0, 10).map(paperChip).filter(Boolean).join('');
+    if (citedBy.length > 10) html += '<div style="color:#666;font-size:10px">+' + (citedBy.length - 10) + ' more</div>';
+    html += '</div>';
+  }
+  if (cites.length > 0) {
+    cites.sort(function(a, b) {
+      var pa = (DATA.papers || {})[a] || {};
+      var pb = (DATA.papers || {})[b] || {};
+      return (pb.inf || 0) - (pa.inf || 0);
+    });
+    html += '<div class="detail-refs"><h4>References (' + cites.length + ')</h4>';
+    html += cites.slice(0, 10).map(paperChip).filter(Boolean).join('');
+    if (cites.length > 10) html += '<div style="color:#666;font-size:10px">+' + (cites.length - 10) + ' more</div>';
+    html += '</div>';
+  }
+  return html;
 }
 
 function magiciansTopicUrl(mt) {
@@ -10418,7 +10485,7 @@ function drawEipTimeline() {
   var squareG = eipG.append('g');
   eipData.forEach(function(e) {
     var sz = eipRScale(e.inf) * 1.4;
-    var color = eipColor(e);
+    var color = (e._eipThread && THREAD_COLORS[e._eipThread]) ? THREAD_COLORS[e._eipThread] : eipColor(e);
     var eipClickTimer = null;
     squareG.append('rect')
       .attr('class', 'eip-square')
@@ -10522,11 +10589,12 @@ function drawMagiciansTimeline() {
   magData.forEach(function(mt) {
     var r = magiciansRScale(mt._magInf);
     var magClickTimer = null;
+    var magColor = (mt._magThread && THREAD_COLORS[mt._magThread]) ? THREAD_COLORS[mt._magThread] : '#bb88cc';
     triG.append('path')
       .attr('class', 'magicians-triangle')
       .attr('d', trianglePath(tlXScale(mt._magDate), mt._magYPos, r))
-      .attr('fill', '#bb88cc')
-      .attr('stroke', '#bb88cc')
+      .attr('fill', magColor)
+      .attr('stroke', magColor)
       .attr('stroke-width', 0.5)
       .attr('opacity', 0.78)
       .datum(mt)
@@ -10667,6 +10735,27 @@ function drawPaperTimeline() {
         paperMatchesTimelineFilter((DATA.papers || {})[String(ed.paperB)] || {})) ? null : 'none');
   });
 
+  // Draw citation edges from paper_graph (OpenAlex referenced_works)
+  var paperLookup = {};
+  paperData.forEach(function(p) { paperLookup[String(p._paperId || '')] = p; });
+  var pgEdges = ((DATA.paperGraph || {}).edges || []);
+  pgEdges.forEach(function(edge) {
+    var srcP = paperLookup[String(edge.source || '')];
+    var tgtP = paperLookup[String(edge.target || '')];
+    if (!srcP || !tgtP) return;
+    addPaperPairAdj(srcP._paperId, tgtP._paperId, 1.5);
+    addPaperPairAdj(tgtP._paperId, srcP._paperId, 1.5);
+    paperRefG.append('line')
+      .attr('class', 'paper-paper-edge paper-cite-edge')
+      .attr('x1', tlXScale(srcP._paperDate)).attr('y1', srcP._paperYPos)
+      .attr('x2', tlXScale(tgtP._paperDate)).attr('y2', tgtP._paperYPos)
+      .attr('stroke', '#8fb7ef').attr('stroke-opacity', 0.16).attr('stroke-width', 0.7)
+      .datum({paperA: srcP._paperId, paperB: tgtP._paperId, score: 1.5, reason: 'citation'})
+      .style('display', (showPapers &&
+        paperMatchesTimelineFilter((DATA.papers || {})[String(srcP._paperId)] || {}) &&
+        paperMatchesTimelineFilter((DATA.papers || {})[String(tgtP._paperId)] || {})) ? null : 'none');
+  });
+
   paperData.forEach(function(paper) {
     var pid = String(paper._paperId || '');
     var pDate = paper._paperDate;
@@ -10768,8 +10857,8 @@ function drawPaperTimeline() {
     shapeG.append('path')
       .attr('class', 'paper-diamond')
       .attr('d', diamondPath(tlXScale(paper._paperDate), paper._paperYPos, r))
-      .attr('fill', '#6fa3df')
-      .attr('stroke', '#afd1ff')
+      .attr('fill', (paper._paperThread && THREAD_COLORS[paper._paperThread]) ? THREAD_COLORS[paper._paperThread] : '#6fa3df')
+      .attr('stroke', (paper._paperThread && THREAD_COLORS[paper._paperThread]) ? THREAD_COLORS[paper._paperThread] : '#afd1ff')
       .attr('stroke-width', 0.7)
       .attr('opacity', 0.76)
       .datum(paper)
