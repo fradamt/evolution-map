@@ -1744,6 +1744,7 @@ let paperFilterYearMax = null;
 let paperFilterMinCitations = 0;
 let paperFilterTag = '';
 let paperSidebarSort = 'relevance'; // 'relevance' | 'citations' | 'recent'
+let paperTimelinePairAdjacency = {};
 
 // --- Prevent macOS trackpad swipe-back/forward ---
 // On macOS, the browser compositor may detect navigation gestures from
@@ -3082,41 +3083,20 @@ function paperMatchesTimelineFilter(nodeOrPaper) {
   return true;
 }
 
-function paperPeerIdsForFocus(paperId, limit) {
+function paperTimelinePairNeighbors(paperId, limit) {
   var pid = String(paperId || '').trim();
   if (!pid) return [];
-  var target = (DATA.papers || {})[pid];
-  if (!target) return [];
   var maxCount = Math.max(1, Number(limit || 12));
-  var targetMeta = paperPairMeta(pid, target);
-  var candidates = [];
-
-  Object.values(DATA.papers || {}).forEach(function(other) {
-    if (!other || !other.id) return;
-    var otherId = String(other.id || '').trim();
-    if (!otherId || otherId === pid) return;
-    if (!paperMatchesTimelineFilterBase(other)) return;
-    var sim = paperPairSimilarity(targetMeta, paperPairMeta(otherId, other));
-    var score = Number((sim || {}).score || 0);
-    if (score < 1.95) return;
-    candidates.push({
-      id: otherId,
-      score: score,
-      inf: paperTimelineInfluence(other),
-      cites: Number(other.cb || 0),
-      rel: Number(other.rs || 0),
-    });
-  });
-
-  candidates.sort(function(a, b) {
-    if (b.score !== a.score) return b.score - a.score;
-    if (b.inf !== a.inf) return b.inf - a.inf;
-    if (b.cites !== a.cites) return b.cites - a.cites;
-    if (b.rel !== a.rel) return b.rel - a.rel;
-    return String(a.id).localeCompare(String(b.id));
-  });
-
-  return candidates.slice(0, maxCount).map(function(row) { return row.id; });
+  var neighbors = paperTimelinePairAdjacency[pid] || [];
+  var out = [];
+  for (var i = 0; i < neighbors.length && out.length < maxCount; i++) {
+    var otherId = String(neighbors[i].id || '').trim();
+    if (!otherId || otherId === pid) continue;
+    var other = (DATA.papers || {})[otherId];
+    if (!other || !paperMatchesTimelineFilter(other)) continue;
+    out.push(otherId);
+  }
+  return out;
 }
 
 const RELATED_PAPERS_CACHE = {
@@ -6482,9 +6462,9 @@ function buildEntityFocusContext(kind, node) {
     if (!p) return null;
     entityPaperId = pid;
     linkedPapers.add(pid);
-    // Keep direct peer-paper neighbors visible when focusing a paper; otherwise
-    // edges can appear to end in empty space because peer nodes are dimmed away.
-    paperPeerIdsForFocus(pid, 18).forEach(function(peerPid) {
+    // Keep direct peer-paper neighbors (from actually drawn timeline paper edges)
+    // visible when focusing a paper.
+    paperTimelinePairNeighbors(pid, 18).forEach(function(peerPid) {
       if (peerPid) linkedPapers.add(String(peerPid));
     });
     (PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(p.eq || [])).forEach(function(eipNum) {
@@ -10262,6 +10242,31 @@ function drawPaperTimeline() {
     limit: 280,
     ensurePerPaper: 1,
     extraBudget: 80,
+  });
+
+  paperTimelinePairAdjacency = {};
+  function addPaperPairAdj(a, b, score) {
+    var left = String(a || '').trim();
+    var right = String(b || '').trim();
+    if (!left || !right || left === right) return;
+    if (!paperTimelinePairAdjacency[left]) paperTimelinePairAdjacency[left] = [];
+    paperTimelinePairAdjacency[left].push({id: right, score: Number(score || 0)});
+  }
+  paperPairRows.forEach(function(ed) {
+    if (!ed) return;
+    addPaperPairAdj(ed.paperA, ed.paperB, ed.score);
+    addPaperPairAdj(ed.paperB, ed.paperA, ed.score);
+  });
+  Object.keys(paperTimelinePairAdjacency).forEach(function(pid) {
+    var seen = new Set();
+    var rows = paperTimelinePairAdjacency[pid].filter(function(row) {
+      var key = String((row || {}).id || '');
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    rows.sort(function(a, b) { return Number(b.score || 0) - Number(a.score || 0); });
+    paperTimelinePairAdjacency[pid] = rows;
   });
 
   paperPairRows.forEach(function(ed) {
