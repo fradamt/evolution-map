@@ -4441,13 +4441,19 @@ function magiciansInfluenceScore(mt) {
   return magiciansRawEngagementScore(mt);
 }
 
-function timelineTopicVisible(topicId) {
+function timelineTopicVisibleForFocus(topicId, primaryFocusId, secondaryFocusId) {
   if (!showPosts) return false;
   var tid = Number(topicId);
   if (!isFinite(tid)) return false;
   var t = DATA.topics[tid];
   if (!t) return false;
+  if (primaryFocusId !== null && primaryFocusId !== undefined && Number(primaryFocusId) === tid) return true;
+  if (secondaryFocusId !== null && secondaryFocusId !== undefined && Number(secondaryFocusId) === tid) return true;
   return topicMatchesFilter(t);
+}
+
+function timelineTopicVisible(topicId) {
+  return timelineTopicVisibleForFocus(topicId, null, null);
 }
 
 function timelineEipVisibleByNum(eipNum) {
@@ -6514,41 +6520,73 @@ function applyEntityFocusTimeline(context) {
     });
   syncLabelsFromMap(topicOp);
 
+  var focusTopicId = (context.kind === 'topic' && context.entityTopicId !== null && context.entityTopicId !== undefined)
+    ? Number(context.entityTopicId)
+    : null;
+  function focusEdgeEndpointVisible(topicId) {
+    return timelineTopicVisibleForFocus(topicId, focusTopicId, null);
+  }
+
   d3.selectAll('.edge-line')
-    .style('display', isPaperFocus ? 'none' : null)
+    .style('display', function(e) {
+      if (isPaperFocus || !e) return 'none';
+      var sourceVisible = focusEdgeEndpointVisible(e.source);
+      var targetVisible = focusEdgeEndpointVisible(e.target);
+      return (sourceVisible && targetVisible) ? null : 'none';
+    })
     .attr('stroke-opacity', function(e) {
-      if (isPaperFocus) return 0;
-      if (context.kind === 'topic' && context.entityTopicId !== null) {
-        var isFocusEdge = (Number(e.source) === Number(context.entityTopicId) || Number(e.target) === Number(context.entityTopicId));
+      if (isPaperFocus || !e) return 0;
+      var sourceVisible = focusEdgeEndpointVisible(e.source);
+      var targetVisible = focusEdgeEndpointVisible(e.target);
+      if (!sourceVisible || !targetVisible) return 0;
+      var sourceId = Number(e.source);
+      var targetId = Number(e.target);
+      if (focusTopicId !== null) {
+        var isFocusEdge = (sourceId === focusTopicId || targetId === focusTopicId);
         if (isFocusEdge) return 0.86;
       }
-      if (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) return 0.62;
+      if (context.linkedTopics.has(sourceId) && context.linkedTopics.has(targetId)) return 0.62;
       return 0.02;
     })
     .attr('stroke-width', function(e) {
-      if (isPaperFocus) return 0.6;
-      if (context.kind === 'topic' && context.entityTopicId !== null) {
-        var isFocusEdge = (Number(e.source) === Number(context.entityTopicId) || Number(e.target) === Number(context.entityTopicId));
+      if (isPaperFocus || !e) return 0.6;
+      var sourceVisible = focusEdgeEndpointVisible(e.source);
+      var targetVisible = focusEdgeEndpointVisible(e.target);
+      if (!sourceVisible || !targetVisible) return 0.6;
+      var sourceId = Number(e.source);
+      var targetId = Number(e.target);
+      if (focusTopicId !== null) {
+        var isFocusEdge = (sourceId === focusTopicId || targetId === focusTopicId);
         if (isFocusEdge) return 2.0;
       }
-      return (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) ? 1.9 : 0.9;
+      return (context.linkedTopics.has(sourceId) && context.linkedTopics.has(targetId)) ? 1.9 : 0.9;
     })
     .attr('stroke', function(e) {
-      if (isPaperFocus) return '#556';
-      if (context.kind === 'topic' && context.entityTopicId !== null) {
-        var isFocusEdge = (Number(e.source) === Number(context.entityTopicId) || Number(e.target) === Number(context.entityTopicId));
+      if (isPaperFocus || !e) return '#556';
+      var sourceVisible = focusEdgeEndpointVisible(e.source);
+      var targetVisible = focusEdgeEndpointVisible(e.target);
+      if (!sourceVisible || !targetVisible) return '#556';
+      var sourceId = Number(e.source);
+      var targetId = Number(e.target);
+      if (focusTopicId !== null) {
+        var isFocusEdge = (sourceId === focusTopicId || targetId === focusTopicId);
         if (isFocusEdge) return '#9fc0ff';
       }
-      if (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) return '#9fc0ff';
+      if (context.linkedTopics.has(sourceId) && context.linkedTopics.has(targetId)) return '#9fc0ff';
       return '#556';
     })
     .attr('marker-end', function(e) {
-      if (isPaperFocus) return null;
-      if (context.kind === 'topic' && context.entityTopicId !== null) {
-        var isFocusEdge = (Number(e.source) === Number(context.entityTopicId) || Number(e.target) === Number(context.entityTopicId));
+      if (isPaperFocus || !e) return null;
+      var sourceVisible = focusEdgeEndpointVisible(e.source);
+      var targetVisible = focusEdgeEndpointVisible(e.target);
+      if (!sourceVisible || !targetVisible) return null;
+      var sourceId = Number(e.source);
+      var targetId = Number(e.target);
+      if (focusTopicId !== null) {
+        var isFocusEdge = (sourceId === focusTopicId || targetId === focusTopicId);
         if (isFocusEdge) return 'url(#arrow-highlight)';
       }
-      return (context.linkedTopics.has(e.source) && context.linkedTopics.has(e.target)) ? 'url(#arrow-highlight)' : 'url(#arrow-default)';
+      return (context.linkedTopics.has(sourceId) && context.linkedTopics.has(targetId)) ? 'url(#arrow-highlight)' : 'url(#arrow-default)';
     });
 
   d3.selectAll('.eip-square').attr('opacity', function(e) {
@@ -6909,7 +6947,7 @@ function applyFocusedEntityHighlight() {
 }
 
 function onTimelineHover(ev, d, entering) {
-  var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag;
+  var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
   if (entering) {
     hoveredTopicId = d.id;
     showTooltip(ev, d);
@@ -6920,30 +6958,53 @@ function onTimelineHover(ev, d, entering) {
 
     // Highlight this topic and its direct connections
     const connected = topicEdgeIndex[String(d.id)] || new Set();
+    var hoverTopicId = Number(d.id);
 
     var targetOp = {};
     d3.selectAll('.topic-circle').each(function(t) {
       if (t.id === d.id) { targetOp[t.id] = 1; return; }
-      if (connected.has(t.id) && (!hasFilter || topicMatchesFilter(t))) { targetOp[t.id] = 0.8; return; }
-      if (hasFilter && !topicMatchesFilter(t)) { targetOp[t.id] = 0.03; return; }
+      if (connected.has(t.id) && timelineTopicVisibleForFocus(t.id, hoverTopicId, null)) { targetOp[t.id] = 0.8; return; }
+      if (hasFilter && !timelineTopicVisibleForFocus(t.id, hoverTopicId, null)) { targetOp[t.id] = 0.03; return; }
       targetOp[t.id] = 0.12;
     });
     d3.selectAll('.topic-circle').attr('opacity', function(t) { return targetOp[t.id]; });
 
     d3.selectAll('.edge-line')
+      .style('display', function(e) {
+        if (!e) return 'none';
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, hoverTopicId, null);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, hoverTopicId, null);
+        return (sourceVisible && targetVisible) ? null : 'none';
+      })
       .attr('stroke-opacity', function(e) {
-        if (e.source === d.id || e.target === d.id) return 0.85;
+        if (!e) return 0;
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, hoverTopicId, null);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, hoverTopicId, null);
+        if (!sourceVisible || !targetVisible) return 0;
+        if (Number(e.source) === hoverTopicId || Number(e.target) === hoverTopicId) return 0.85;
         return 0.02;
       })
       .attr('stroke-width', function(e) {
-        return (e.source === d.id || e.target === d.id) ? 2.0 : 0.9;
+        if (!e) return 0.6;
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, hoverTopicId, null);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, hoverTopicId, null);
+        if (!sourceVisible || !targetVisible) return 0.6;
+        return (Number(e.source) === hoverTopicId || Number(e.target) === hoverTopicId) ? 2.0 : 0.9;
       })
       .attr('stroke', function(e) {
-        if (e.source === d.id || e.target === d.id) return '#9fc0ff';
+        if (!e) return '#556';
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, hoverTopicId, null);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, hoverTopicId, null);
+        if (!sourceVisible || !targetVisible) return '#556';
+        if (Number(e.source) === hoverTopicId || Number(e.target) === hoverTopicId) return '#9fc0ff';
         return '#556';
       })
       .attr('marker-end', function(e) {
-        if (e.source === d.id || e.target === d.id) return 'url(#arrow-highlight)';
+        if (!e) return null;
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, hoverTopicId, null);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, hoverTopicId, null);
+        if (!sourceVisible || !targetVisible) return null;
+        if (Number(e.source) === hoverTopicId || Number(e.target) === hoverTopicId) return 'url(#arrow-highlight)';
         return 'url(#arrow-default)';
       });
     syncLabelsFromMap(targetOp);
@@ -7082,34 +7143,59 @@ function highlightTopicInView(topicId) {
   // Temporarily highlight a topic (for reference link hover)
   if (activeView === 'timeline') {
     var connected = topicEdgeIndex[String(topicId)] || new Set();
+    var previewTopicId = Number(topicId);
+    var pinnedPreviewId = (pinnedTopicId === null || pinnedTopicId === undefined) ? null : Number(pinnedTopicId);
+    const hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
     d3.selectAll('.topic-circle')
       .attr('opacity', function(t) {
-        if (t.id === topicId) return 1;
-        if (t.id === pinnedTopicId) return 0.7;
-        if (connected.has(t.id)) return 0.8;
-        if (!topicMatchesFilter(t)) return 0.03;
+        if (Number(t.id) === previewTopicId) return 1;
+        if (pinnedPreviewId !== null && Number(t.id) === pinnedPreviewId) return 0.7;
+        if (connected.has(t.id) && timelineTopicVisibleForFocus(t.id, previewTopicId, pinnedPreviewId)) return 0.8;
+        if (hasFilter && !timelineTopicVisibleForFocus(t.id, previewTopicId, pinnedPreviewId)) return 0.03;
         return 0.12;
       })
-      .attr('stroke-width', function(t) { return t.id === topicId ? 2.5 : 0.5; });
+      .attr('stroke-width', function(t) { return Number(t.id) === previewTopicId ? 2.5 : 0.5; });
     d3.selectAll('.edge-line')
+      .style('display', function(e) {
+        if (!e) return 'none';
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, previewTopicId, pinnedPreviewId);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, previewTopicId, pinnedPreviewId);
+        return (sourceVisible && targetVisible) ? null : 'none';
+      })
       .attr('stroke-opacity', function(e) {
-        if (e.source === topicId || e.target === topicId) return 0.88;
-        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 0.48;
+        if (!e) return 0;
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, previewTopicId, pinnedPreviewId);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, previewTopicId, pinnedPreviewId);
+        if (!sourceVisible || !targetVisible) return 0;
+        if (Number(e.source) === previewTopicId || Number(e.target) === previewTopicId) return 0.88;
+        if (pinnedPreviewId !== null && (Number(e.source) === pinnedPreviewId || Number(e.target) === pinnedPreviewId)) return 0.48;
         return 0.02;
       })
       .attr('stroke-width', function(e) {
-        if (e.source === topicId || e.target === topicId) return 2.1;
-        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 1.4;
+        if (!e) return 0.6;
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, previewTopicId, pinnedPreviewId);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, previewTopicId, pinnedPreviewId);
+        if (!sourceVisible || !targetVisible) return 0.6;
+        if (Number(e.source) === previewTopicId || Number(e.target) === previewTopicId) return 2.1;
+        if (pinnedPreviewId !== null && (Number(e.source) === pinnedPreviewId || Number(e.target) === pinnedPreviewId)) return 1.4;
         return 0.9;
       })
       .attr('stroke', function(e) {
-        if (e.source === topicId || e.target === topicId) return '#ffc26a';
-        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return '#9fc0ff';
+        if (!e) return '#556';
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, previewTopicId, pinnedPreviewId);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, previewTopicId, pinnedPreviewId);
+        if (!sourceVisible || !targetVisible) return '#556';
+        if (Number(e.source) === previewTopicId || Number(e.target) === previewTopicId) return '#ffc26a';
+        if (pinnedPreviewId !== null && (Number(e.source) === pinnedPreviewId || Number(e.target) === pinnedPreviewId)) return '#9fc0ff';
         return '#556';
       })
       .attr('marker-end', function(e) {
-        if (e.source === topicId || e.target === topicId) return 'url(#arrow-highlight)';
-        if (e.source === pinnedTopicId || e.target === pinnedTopicId) return 'url(#arrow-highlight)';
+        if (!e) return null;
+        var sourceVisible = timelineTopicVisibleForFocus(e.source, previewTopicId, pinnedPreviewId);
+        var targetVisible = timelineTopicVisibleForFocus(e.target, previewTopicId, pinnedPreviewId);
+        if (!sourceVisible || !targetVisible) return null;
+        if (Number(e.source) === previewTopicId || Number(e.target) === previewTopicId) return 'url(#arrow-highlight)';
+        if (pinnedPreviewId !== null && (Number(e.source) === pinnedPreviewId || Number(e.target) === pinnedPreviewId)) return 'url(#arrow-highlight)';
         return 'url(#arrow-default)';
       });
     syncLabels();
