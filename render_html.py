@@ -2540,6 +2540,7 @@ const EIP_TO_PAPER_IDS = {};
 const PAPER_TO_EIP_IDS = {};
 const PAPER_TO_TOPIC_IDS = {};
 const PAPER_TO_MAGICIANS_IDS = {};
+const PAPER_TO_PAPER_IDS = {};
 const TOPIC_TITLE_TOKEN_SET = {};
 const TOPIC_TAG_SET = {};
 const TOPIC_EIP_SET = {};
@@ -2876,6 +2877,47 @@ function buildPaperPairRows(paperRows, options) {
       return Number(tb.inf || 0) - Number(ta.inf || 0);
     });
     PAPER_TO_MAGICIANS_IDS[pid] = Array.from(magSet);
+  });
+})();
+
+(function buildPaperPeerIndex() {
+  var rows = buildPaperPairRows(PAPER_LIST.map(function(paper) {
+    var pid = String((paper && paper.id) || '').trim();
+    if (!pid) return null;
+    return {
+      id: pid,
+      paper: paper,
+      meta: paperPairMeta(pid, paper),
+    };
+  }).filter(Boolean), {
+    candidateMin: 1.2,
+    minScore: 1.95,
+    limit: 280,
+    ensurePerPaper: 1,
+    extraBudget: 80,
+  });
+
+  var bucket = {};
+  function add(a, b, score) {
+    if (!a || !b) return;
+    if (!bucket[a]) bucket[a] = {};
+    var prev = Number(bucket[a][b] || 0);
+    if (score > prev) bucket[a][b] = score;
+  }
+
+  rows.forEach(function(ed) {
+    if (!ed) return;
+    var a = String(ed.paperA || '').trim();
+    var b = String(ed.paperB || '').trim();
+    var score = Number(ed.score || 0);
+    add(a, b, score);
+    add(b, a, score);
+  });
+
+  Object.keys(bucket).forEach(function(pid) {
+    PAPER_TO_PAPER_IDS[pid] = Object.entries(bucket[pid])
+      .sort(function(a, b) { return Number(b[1] || 0) - Number(a[1] || 0); })
+      .map(function(entry) { return entry[0]; });
   });
 })();
 
@@ -6445,6 +6487,11 @@ function buildEntityFocusContext(kind, node) {
     if (!p) return null;
     entityPaperId = pid;
     linkedPapers.add(pid);
+    // Keep direct peer-paper neighbors visible when focusing a paper; otherwise
+    // edges can appear to end in empty space because peer nodes are dimmed away.
+    (PAPER_TO_PAPER_IDS[pid] || []).slice(0, 18).forEach(function(peerPid) {
+      if (peerPid) linkedPapers.add(String(peerPid));
+    });
     (PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(p.eq || [])).forEach(function(eipNum) {
       linkedEips.add('eip_' + String(eipNum));
     });
