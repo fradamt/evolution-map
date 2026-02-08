@@ -2540,7 +2540,6 @@ const EIP_TO_PAPER_IDS = {};
 const PAPER_TO_EIP_IDS = {};
 const PAPER_TO_TOPIC_IDS = {};
 const PAPER_TO_MAGICIANS_IDS = {};
-const PAPER_TO_PAPER_IDS = {};
 const TOPIC_TITLE_TOKEN_SET = {};
 const TOPIC_TAG_SET = {};
 const TOPIC_EIP_SET = {};
@@ -2880,47 +2879,6 @@ function buildPaperPairRows(paperRows, options) {
   });
 })();
 
-(function buildPaperPeerIndex() {
-  var rows = buildPaperPairRows(PAPER_LIST.map(function(paper) {
-    var pid = String((paper && paper.id) || '').trim();
-    if (!pid) return null;
-    return {
-      id: pid,
-      paper: paper,
-      meta: paperPairMeta(pid, paper),
-    };
-  }).filter(Boolean), {
-    candidateMin: 1.2,
-    minScore: 1.95,
-    limit: 280,
-    ensurePerPaper: 1,
-    extraBudget: 80,
-  });
-
-  var bucket = {};
-  function add(a, b, score) {
-    if (!a || !b) return;
-    if (!bucket[a]) bucket[a] = {};
-    var prev = Number(bucket[a][b] || 0);
-    if (score > prev) bucket[a][b] = score;
-  }
-
-  rows.forEach(function(ed) {
-    if (!ed) return;
-    var a = String(ed.paperA || '').trim();
-    var b = String(ed.paperB || '').trim();
-    var score = Number(ed.score || 0);
-    add(a, b, score);
-    add(b, a, score);
-  });
-
-  Object.keys(bucket).forEach(function(pid) {
-    PAPER_TO_PAPER_IDS[pid] = Object.entries(bucket[pid])
-      .sort(function(a, b) { return Number(b[1] || 0) - Number(a[1] || 0); })
-      .map(function(entry) { return entry[0]; });
-  });
-})();
-
 const PAPER_TAG_TO_THREADS = (function() {
   var out = {};
   Object.entries(THREAD_PAPER_TAG_HINTS || {}).forEach(function(entry) {
@@ -3122,6 +3080,43 @@ function paperMatchesTimelineFilter(nodeOrPaper) {
   recomputePaperTimelineVisibleSet();
   if (!paperTimelineVisibleIds.has(String(paper.id || ''))) return false;
   return true;
+}
+
+function paperPeerIdsForFocus(paperId, limit) {
+  var pid = String(paperId || '').trim();
+  if (!pid) return [];
+  var target = (DATA.papers || {})[pid];
+  if (!target) return [];
+  var maxCount = Math.max(1, Number(limit || 12));
+  var targetMeta = paperPairMeta(pid, target);
+  var candidates = [];
+
+  Object.values(DATA.papers || {}).forEach(function(other) {
+    if (!other || !other.id) return;
+    var otherId = String(other.id || '').trim();
+    if (!otherId || otherId === pid) return;
+    if (!paperMatchesTimelineFilterBase(other)) return;
+    var sim = paperPairSimilarity(targetMeta, paperPairMeta(otherId, other));
+    var score = Number((sim || {}).score || 0);
+    if (score < 1.95) return;
+    candidates.push({
+      id: otherId,
+      score: score,
+      inf: paperTimelineInfluence(other),
+      cites: Number(other.cb || 0),
+      rel: Number(other.rs || 0),
+    });
+  });
+
+  candidates.sort(function(a, b) {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.inf !== a.inf) return b.inf - a.inf;
+    if (b.cites !== a.cites) return b.cites - a.cites;
+    if (b.rel !== a.rel) return b.rel - a.rel;
+    return String(a.id).localeCompare(String(b.id));
+  });
+
+  return candidates.slice(0, maxCount).map(function(row) { return row.id; });
 }
 
 const RELATED_PAPERS_CACHE = {
@@ -6489,7 +6484,7 @@ function buildEntityFocusContext(kind, node) {
     linkedPapers.add(pid);
     // Keep direct peer-paper neighbors visible when focusing a paper; otherwise
     // edges can appear to end in empty space because peer nodes are dimmed away.
-    (PAPER_TO_PAPER_IDS[pid] || []).slice(0, 18).forEach(function(peerPid) {
+    paperPeerIdsForFocus(pid, 18).forEach(function(peerPid) {
       if (peerPid) linkedPapers.add(String(peerPid));
     });
     (PAPER_TO_EIP_IDS[pid] || uniqueSortedNumbers(p.eq || [])).forEach(function(eipNum) {
