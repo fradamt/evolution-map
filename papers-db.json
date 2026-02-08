@@ -375,7 +375,12 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 13,
-      "referenced_works": []
+      "referenced_works": [
+        "W3152829963",
+        "W3120405143",
+        "W1909324101",
+        "W4365808257"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2502.12966",
@@ -416,7 +421,15 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 9,
-      "referenced_works": []
+      "referenced_works": [
+        "W4403706356",
+        "W4387322764",
+        "W4387880972",
+        "W4221147467",
+        "W3206260386",
+        "W3151460710",
+        "W3132662786"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2601.12989",
@@ -709,7 +722,16 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 41,
-      "referenced_works": []
+      "referenced_works": [
+        "W4307837975",
+        "W3206329751",
+        "W3169690650",
+        "W3168113290",
+        "W3152829963",
+        "W3120405143",
+        "W3155854917",
+        "W3016124762"
+      ]
     },
     {
       "id": "doi:10.1109/tnse.2025.3594281",
@@ -729,7 +751,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2405.03183",
-      "openalex_id": "https://openalex.org/W4396787024",
+      "openalex_id": "https://openalex.org/W4412939614",
       "cited_by_count": 13,
       "type": "preprint",
       "relevance_score": 16.9,
@@ -758,7 +780,40 @@
         "doi:10.48550/arxiv.2405.03183"
       ],
       "ss_cited_by_count": 13,
-      "referenced_works": []
+      "referenced_works": [
+        "W2057248704",
+        "W2114242548",
+        "W2141019942",
+        "W2770019680",
+        "W2891853972",
+        "W2944383645",
+        "W3008336424",
+        "W3090500064",
+        "W3161687493",
+        "W3206329751",
+        "W3210402189",
+        "W3215658158",
+        "W3216317686",
+        "W4221147467",
+        "W4225714529",
+        "W4226245973",
+        "W4292387255",
+        "W4308632307",
+        "W4312895177",
+        "W4319996352",
+        "W4386321977",
+        "W4387247664",
+        "W4388857735",
+        "W4389168141",
+        "W4389304797",
+        "W4391341419",
+        "W4392248561",
+        "W4404863600",
+        "W4404863698",
+        "W4406309593",
+        "W4407828370",
+        "W4416873260"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2409.11043",
@@ -802,7 +857,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 2,
-      "referenced_works": []
+      "referenced_works": [
+        "W4412939614",
+        "W4387322764"
+      ]
     },
     {
       "id": "doi:10.1109/sp40001.2021.00113",
@@ -1155,7 +1213,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 13,
-      "referenced_works": []
+      "referenced_works": [
+        "W3206260386",
+        "W3151460710"
+      ]
     },
     {
       "id": "doi:10.4230/lipics.aft.2025.24",
@@ -1274,7 +1335,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2209.03255",
-      "openalex_id": "https://openalex.org/W4297677807",
+      "openalex_id": "https://openalex.org/W4407827803",
       "cited_by_count": 17,
       "type": "preprint",
       "relevance_score": 16.3,
@@ -1310,7 +1371,49 @@
         "doi:10.48550/arxiv.2209.03255"
       ],
       "ss_cited_by_count": 17,
-      "referenced_works": []
+      "referenced_works": [
+        "W851575271",
+        "W1498063506",
+        "W1579435243",
+        "W1892798954",
+        "W2014239329",
+        "W2038345682",
+        "W2054584570",
+        "W2098104887",
+        "W2103863878",
+        "W2165297797",
+        "W2295940006",
+        "W2535029869",
+        "W2739845435",
+        "W2763398287",
+        "W2770149261",
+        "W2770587351",
+        "W2794717484",
+        "W2795222609",
+        "W2889627320",
+        "W2914554654",
+        "W2964159515",
+        "W2979777917",
+        "W2986418087",
+        "W3013530784",
+        "W3015234426",
+        "W3016124762",
+        "W3046582408",
+        "W3090500064",
+        "W3125624153",
+        "W3163044492",
+        "W3177044836",
+        "W3206329751",
+        "W3208569859",
+        "W3208977412",
+        "W3212977345",
+        "W4288057762",
+        "W4307837975",
+        "W4308643314",
+        "W4383220706",
+        "W4388858914",
+        "W4389199409"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2203.01315",
@@ -1354,7 +1457,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 13,
-      "referenced_works": []
+      "referenced_works": [
+        "W3206329751",
+        "W3084120904"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2506.07988",
@@ -1513,7 +1619,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 2,
-      "referenced_works": []
+      "referenced_works": [
+        "W4387880972",
+        "W3168113290"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2305.09032",
@@ -1566,7 +1675,13 @@
       "source": "seed+openalex",
       "seed": true,
       "ss_cited_by_count": 37,
-      "referenced_works": []
+      "referenced_works": [
+        "W4307837975",
+        "W4407827803",
+        "W3206329751",
+        "W3198478013",
+        "W3084120904"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2209.08673",
@@ -1618,7 +1733,10 @@
       "source": "seed+openalex",
       "seed": true,
       "ss_cited_by_count": 18,
-      "referenced_works": []
+      "referenced_works": [
+        "W3046491118",
+        "W2934218104"
+      ]
     },
     {
       "id": "doi:10.1109/eurosp63326.2025.00036",
@@ -1667,7 +1785,14 @@
         "doi:10.48550/arxiv.2407.19479"
       ],
       "ss_cited_by_count": 2,
-      "referenced_works": []
+      "referenced_works": [
+        "W4389037628",
+        "W4387880972",
+        "W4376988601",
+        "W4307837975",
+        "W3206329751",
+        "W3084120904"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2308.16902",
@@ -1708,7 +1833,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 1,
-      "referenced_works": []
+      "referenced_works": [
+        "W4402263733",
+        "W3084120904"
+      ]
     },
     {
       "id": "doi:10.47738/jcrb.v2i4.46",
@@ -1827,7 +1955,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 11,
-      "referenced_works": []
+      "referenced_works": [
+        "W4387031454",
+        "W3151460710"
+      ]
     },
     {
       "id": "doi:10.1145/3319535.3363221",
@@ -1950,7 +2081,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2012.00854",
-      "openalex_id": "https://openalex.org/W4287584291",
+      "openalex_id": "https://openalex.org/W3109883785",
       "cited_by_count": 139,
       "type": "preprint",
       "relevance_score": 15.1,
@@ -1980,7 +2111,27 @@
       "source": "seed+openalex",
       "seed": true,
       "ss_cited_by_count": 139,
-      "referenced_works": []
+      "referenced_works": [
+        "W2057248704",
+        "W2124713638",
+        "W2508339054",
+        "W2535029869",
+        "W2691152923",
+        "W2751010069",
+        "W2754395460",
+        "W2900163231",
+        "W2912512065",
+        "W2938920845",
+        "W2939344673",
+        "W2963649118",
+        "W3006762792",
+        "W3007951509",
+        "W3008678228",
+        "W3016124762",
+        "W3041833724",
+        "W3122067257",
+        "W3125642409"
+      ]
     },
     {
       "id": "doi:10.1145/3670865.3673550",
@@ -2252,7 +2403,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2408.01508",
-      "openalex_id": "https://openalex.org/W4403746844",
+      "openalex_id": "https://openalex.org/W4411411730",
       "cited_by_count": 1,
       "type": "preprint",
       "relevance_score": 14.9,
@@ -2285,7 +2436,12 @@
         "doi:10.48550/arxiv.2408.01508"
       ],
       "ss_cited_by_count": 0,
-      "referenced_works": []
+      "referenced_works": [
+        "W410570310",
+        "W2111371783",
+        "W3016124762",
+        "W3120405143"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2411.03892",
@@ -2705,7 +2861,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2305.14046",
-      "openalex_id": "https://openalex.org/W4378446725",
+      "openalex_id": "https://openalex.org/W4411523000",
       "cited_by_count": 7,
       "type": "preprint",
       "relevance_score": 14.1,
@@ -2734,7 +2890,41 @@
         "doi:10.48550/arxiv.2305.14046"
       ],
       "ss_cited_by_count": 7,
-      "referenced_works": []
+      "referenced_works": [
+        "W1893177189",
+        "W1992114977",
+        "W2123804192",
+        "W2127637733",
+        "W2144344516",
+        "W2169044454",
+        "W2350778671",
+        "W2539190473",
+        "W2804093830",
+        "W2805052744",
+        "W2846896781",
+        "W2912366721",
+        "W2963900946",
+        "W2970809537",
+        "W2999378142",
+        "W3091620507",
+        "W3100284210",
+        "W3105187050",
+        "W3137707325",
+        "W3177186237",
+        "W3194103972",
+        "W3211314335",
+        "W4244800048",
+        "W4285586691",
+        "W4288057718",
+        "W4288072839",
+        "W4322765894",
+        "W4384155542",
+        "W4384347367",
+        "W4385080392",
+        "W4390204305",
+        "W4391558518",
+        "W4402443087"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2010.10447",
@@ -3062,7 +3252,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2201.09035",
-      "openalex_id": "https://openalex.org/W4221156927",
+      "openalex_id": "https://openalex.org/W4367047212",
       "cited_by_count": 63,
       "type": "preprint",
       "relevance_score": 13.3,
@@ -3092,7 +3282,29 @@
         "doi:10.48550/arxiv.2201.09035"
       ],
       "ss_cited_by_count": 63,
-      "referenced_works": []
+      "referenced_works": [
+        "W1444567531",
+        "W1974997379",
+        "W2013686672",
+        "W2043007983",
+        "W2103647628",
+        "W2613280320",
+        "W2624307925",
+        "W2794213779",
+        "W2962718753",
+        "W2971986987",
+        "W2984448412",
+        "W3096419271",
+        "W3120405143",
+        "W3156083467",
+        "W3156644234",
+        "W3196161392",
+        "W3210902158",
+        "W3215947504",
+        "W4288072839",
+        "W4312943502",
+        "W6600336842"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2106.06389",
@@ -3252,7 +3464,20 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 37,
-      "referenced_works": []
+      "referenced_works": [
+        "W3152829963",
+        "W3120405143",
+        "W3155854917",
+        "W2979467439",
+        "W2908007588",
+        "W2898569715",
+        "W2805052744",
+        "W2620904645",
+        "W2805827286",
+        "W2804390587",
+        "W2787648539",
+        "W2604844934"
+      ]
     },
     {
       "id": "doi:10.1109/sp54263.2024.00135",
@@ -3269,7 +3494,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2308.05096",
-      "openalex_id": "https://openalex.org/W4385774491",
+      "openalex_id": "https://openalex.org/W4402263733",
       "cited_by_count": 11,
       "type": "preprint",
       "relevance_score": 13.3,
@@ -3302,7 +3527,72 @@
         "doi:10.48550/arxiv.2308.05096"
       ],
       "ss_cited_by_count": 11,
-      "referenced_works": []
+      "referenced_works": [
+        "W1501956902",
+        "W1573994738",
+        "W1963279632",
+        "W2003214215",
+        "W2038345682",
+        "W2080288192",
+        "W2128352062",
+        "W2534313446",
+        "W2766209351",
+        "W2794717484",
+        "W2883173799",
+        "W2914206182",
+        "W2926580575",
+        "W2964159515",
+        "W2969395421",
+        "W2981755312",
+        "W2987599572",
+        "W2990690033",
+        "W3009765502",
+        "W3013530784",
+        "W3015234426",
+        "W3090500064",
+        "W3096691500",
+        "W3113834054",
+        "W3163044492",
+        "W3168829699",
+        "W3185672164",
+        "W3186077535",
+        "W3203242817",
+        "W3204209583",
+        "W3204918413",
+        "W3206329751",
+        "W3212664445",
+        "W3212977345",
+        "W4220853208",
+        "W4245560098",
+        "W4251262790",
+        "W4287393548",
+        "W4287636531",
+        "W4287711171",
+        "W4307837975",
+        "W4308380996",
+        "W4308391463",
+        "W4308391550",
+        "W4311165839",
+        "W4386215120",
+        "W6608249891",
+        "W6678700732",
+        "W6678832241",
+        "W6745143538",
+        "W6752964981",
+        "W6774817649",
+        "W6775114192",
+        "W6782286235",
+        "W6784411056",
+        "W6788061147",
+        "W6795022194",
+        "W6802489580",
+        "W6802596373",
+        "W6843370259",
+        "W6855643304",
+        "W6865221857",
+        "W6929049598",
+        "W7047322590"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2406.02172",
@@ -3588,7 +3878,17 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 41,
-      "referenced_works": []
+      "referenced_works": [
+        "W4387880972",
+        "W4378713366",
+        "W4221162551",
+        "W4221147467",
+        "W3170841198",
+        "W3088345572",
+        "W3039746697",
+        "W3011992028",
+        "W2620904645"
+      ]
     },
     {
       "id": "doi:10.1145/3428258",
@@ -4114,7 +4414,12 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 14,
-      "referenced_works": []
+      "referenced_works": [
+        "W3206260386",
+        "W3168113290",
+        "W3151460710",
+        "W3132662786"
+      ]
     },
     {
       "id": "doi:10.1109/mass56207.2022.00057",
@@ -4699,7 +5004,9 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 0,
-      "referenced_works": []
+      "referenced_works": [
+        "W3168113290"
+      ]
     },
     {
       "id": "doi:10.7910/dvn/k7uypi",
@@ -5032,7 +5339,11 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 1,
-      "referenced_works": []
+      "referenced_works": [
+        "W4387880972",
+        "W4376988601",
+        "W3016124762"
+      ]
     },
     {
       "id": "doi:10.3233/faia251209",
@@ -5232,7 +5543,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2201.06929",
-      "openalex_id": "https://openalex.org/W4226210073",
+      "openalex_id": "https://openalex.org/W4313706718",
       "cited_by_count": 21,
       "type": "preprint",
       "relevance_score": 12.1,
@@ -5261,7 +5572,38 @@
         "doi:10.48550/arxiv.2201.06929"
       ],
       "ss_cited_by_count": 21,
-      "referenced_works": []
+      "referenced_works": [
+        "W1601379374",
+        "W1671353246",
+        "W2129999750",
+        "W2253610007",
+        "W2595976459",
+        "W2771122023",
+        "W2793275640",
+        "W2803836845",
+        "W2897142515",
+        "W2898441276",
+        "W2905867785",
+        "W2914554654",
+        "W2922313990",
+        "W2945978829",
+        "W2954103930",
+        "W2969972354",
+        "W2970321889",
+        "W2990718811",
+        "W3042468609",
+        "W3047423828",
+        "W3113656055",
+        "W3134469006",
+        "W3134628621",
+        "W3161976699",
+        "W4213053948",
+        "W4214545884",
+        "W4220945086",
+        "W4248175462",
+        "W4282974641",
+        "W4402910921"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2507.05558",
@@ -5300,7 +5642,18 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 6,
-      "referenced_works": []
+      "referenced_works": [
+        "W4367060825",
+        "W3152829963",
+        "W3120405143",
+        "W3155854917",
+        "W3016155638",
+        "W3016124762",
+        "W2908007588",
+        "W2898569715",
+        "W2805052744",
+        "W2787648539"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2405.00549",
@@ -5468,7 +5821,17 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 0,
-      "referenced_works": []
+      "referenced_works": [
+        "W4385687992",
+        "W4387880972",
+        "W4378945569",
+        "W4378713366",
+        "W4281638018",
+        "W4221162551",
+        "W3149239394",
+        "W3120405143",
+        "W3016124762"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2406.09420",
@@ -5596,7 +5959,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2403.16083",
-      "openalex_id": "https://openalex.org/W4393212957",
+      "openalex_id": "https://openalex.org/W4404977219",
       "cited_by_count": 9,
       "type": "preprint",
       "relevance_score": 11.7,
@@ -5627,7 +5990,22 @@
         "doi:10.48550/arxiv.2403.16083"
       ],
       "ss_cited_by_count": 9,
-      "referenced_works": []
+      "referenced_works": [
+        "W3042743284",
+        "W3094839250",
+        "W3134196592",
+        "W3137707325",
+        "W4308192654",
+        "W4367155885",
+        "W4376527784",
+        "W4379157380",
+        "W4385008969",
+        "W4385455367",
+        "W4391352301",
+        "W4396843707",
+        "W4402288716",
+        "W4405646016"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2404.11189",
@@ -5673,7 +6051,9 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 3,
-      "referenced_works": []
+      "referenced_works": [
+        "W3016124762"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2411.00558",
@@ -6231,7 +6611,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2501.17335",
-      "openalex_id": "https://openalex.org/W4406975354",
+      "openalex_id": "https://openalex.org/W4416927422",
       "cited_by_count": 7,
       "type": "preprint",
       "relevance_score": 11.3,
@@ -6262,7 +6642,21 @@
         "doi:10.48550/arxiv.2501.17335"
       ],
       "ss_cited_by_count": 7,
-      "referenced_works": []
+      "referenced_works": [
+        "W1970694313",
+        "W1973158119",
+        "W3016124762",
+        "W3120405143",
+        "W4287203512",
+        "W4308219223",
+        "W4389037628",
+        "W4398169031",
+        "W4402288716",
+        "W4404515186",
+        "W4405184821",
+        "W4405364709",
+        "W4411337263"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2407.08537",
@@ -6307,7 +6701,17 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 1,
-      "referenced_works": []
+      "referenced_works": [
+        "W4378713366",
+        "W4226245846",
+        "W3206329751",
+        "W3169690650",
+        "W3152829963",
+        "W3120405143",
+        "W3155854917",
+        "W3084120904",
+        "W3016124762"
+      ]
     },
     {
       "id": "doi:10.1109/icbc56567.2023.10174971",
@@ -6756,7 +7160,16 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 33,
-      "referenced_works": []
+      "referenced_works": [
+        "W4281638018",
+        "W4221162551",
+        "W4221147467",
+        "W3169690650",
+        "W3152829963",
+        "W3120405143",
+        "W3155854917",
+        "W3016124762"
+      ]
     },
     {
       "id": "doi:10.1145/3576915.3623219",
@@ -7058,7 +7471,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2302.12745",
-      "openalex_id": "https://openalex.org/W4322718297",
+      "openalex_id": "https://openalex.org/W4392309491",
       "cited_by_count": 19,
       "type": "preprint",
       "relevance_score": 10.9,
@@ -7087,7 +7500,17 @@
         "doi:10.48550/arxiv.2302.12745"
       ],
       "ss_cited_by_count": 19,
-      "referenced_works": []
+      "referenced_works": [
+        "W2003214215",
+        "W2054584570",
+        "W2295940006",
+        "W2770149261",
+        "W3090500064",
+        "W4297677807",
+        "W4308643314",
+        "W6635089820",
+        "W6774817649"
+      ]
     },
     {
       "id": "doi:10.1145/3419483",
@@ -8177,7 +8600,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2305.19037",
-      "openalex_id": "https://openalex.org/W4378945369",
+      "openalex_id": "https://openalex.org/W4387880972",
       "cited_by_count": 81,
       "type": "preprint",
       "relevance_score": 10.5,
@@ -8206,7 +8629,19 @@
         "doi:10.48550/arxiv.2305.19037"
       ],
       "ss_cited_by_count": 81,
-      "referenced_works": []
+      "referenced_works": [
+        "W1556662545",
+        "W2011039300",
+        "W2606170298",
+        "W3013391778",
+        "W3016124762",
+        "W3120405143",
+        "W3151748982",
+        "W3206951042",
+        "W4281638018",
+        "W4287203512",
+        "W4396759381"
+      ]
     },
     {
       "id": "doi:10.4230/lipics.opodis.2023.23",
@@ -8270,7 +8705,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "http://arxiv.org/abs/2306.10777",
-      "openalex_id": "https://openalex.org/W4381568356",
+      "openalex_id": "https://openalex.org/W4404863698",
       "cited_by_count": 47,
       "type": "preprint",
       "relevance_score": 10.5,
@@ -8297,7 +8732,21 @@
         "doi:10.48550/arxiv.2306.10777"
       ],
       "ss_cited_by_count": 47,
-      "referenced_works": []
+      "referenced_works": [
+        "W2317739826",
+        "W3013391778",
+        "W3016124762",
+        "W3043060424",
+        "W3120405143",
+        "W3170841198",
+        "W3211034881",
+        "W4283733641",
+        "W4387880972",
+        "W4389304874",
+        "W4389746636",
+        "W6600903635",
+        "W6816412036"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2102.02247",
@@ -8965,7 +9414,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 1,
-      "referenced_works": []
+      "referenced_works": [
+        "W4400023685",
+        "W2944383645"
+      ]
     },
     {
       "id": "openalex:W7112374606",
@@ -9054,7 +9506,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 3,
-      "referenced_works": []
+      "referenced_works": [
+        "W4385871909",
+        "W2885034081"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2409.14647",
@@ -9139,7 +9594,9 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 2,
-      "referenced_works": []
+      "referenced_works": [
+        "W4376988601"
+      ]
     },
     {
       "id": "doi:10.4230/oasics.tokenomics.2019.7",
@@ -10661,7 +11118,9 @@
         "seed"
       ],
       "ss_cited_by_count": 19,
-      "referenced_works": []
+      "referenced_works": [
+        "W3084120904"
+      ]
     },
     {
       "id": "doi:10.1145/3558535.3559778",
@@ -10742,7 +11201,10 @@
         "seed"
       ],
       "ss_cited_by_count": 14,
-      "referenced_works": []
+      "referenced_works": [
+        "W3215394575",
+        "W1909324101"
+      ]
     },
     {
       "id": "doi:10.1145/3532857",
@@ -12805,7 +13267,16 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 10,
-      "referenced_works": []
+      "referenced_works": [
+        "W4387880972",
+        "W4378713366",
+        "W4281638018",
+        "W3169690650",
+        "W3152829963",
+        "W3120405143",
+        "W3155854917",
+        "W3016124762"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2309.00629",
@@ -13187,7 +13658,14 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 0,
-      "referenced_works": []
+      "referenced_works": [
+        "W4404180534",
+        "W4403450255",
+        "W4387880972",
+        "W3215394575",
+        "W3039746697",
+        "W1909324101"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2501.03391",
@@ -16373,7 +16851,7 @@
       "arxiv_id": null,
       "eprint_id": null,
       "url": "https://www.usenix.net/system/files/sec21summer_perez.pdf",
-      "openalex_id": "https://openalex.org/W3154651159",
+      "openalex_id": "https://openalex.org/W3049135223",
       "cited_by_count": 60,
       "type": "article",
       "relevance_score": 9.3,
@@ -16398,7 +16876,43 @@
         "openalex:W3154651159"
       ],
       "ss_cited_by_count": 60,
-      "referenced_works": []
+      "referenced_works": [
+        "W1480909796",
+        "W1560253649",
+        "W1564176330",
+        "W2003556922",
+        "W2153185479",
+        "W2154005761",
+        "W2294764622",
+        "W2539190473",
+        "W2598139937",
+        "W2604844934",
+        "W2757509496",
+        "W2769609281",
+        "W2790202156",
+        "W2795611379",
+        "W2805052744",
+        "W2805827286",
+        "W2846896781",
+        "W2885034081",
+        "W2888928288",
+        "W2889740224",
+        "W2892520266",
+        "W2898569715",
+        "W2908007588",
+        "W2963465913",
+        "W2963610883",
+        "W2964631013",
+        "W2969328927",
+        "W3007951509",
+        "W3016155638",
+        "W3019893162",
+        "W3038512777",
+        "W3048595931",
+        "W3094133439",
+        "W3104720502",
+        "W3121385022"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2210.00264",
@@ -19079,7 +19593,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 30,
-      "referenced_works": []
+      "referenced_works": [
+        "W3170841198",
+        "W3012561668"
+      ]
     },
     {
       "id": "doi:10.1109/ectidamtncon53731.2022.9720373",
@@ -20266,7 +20783,11 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 36,
-      "referenced_works": []
+      "referenced_works": [
+        "W4387880972",
+        "W4378713366",
+        "W4376988601"
+      ]
     },
     {
       "id": "doi:10.1145/3538227",
@@ -20875,7 +21396,9 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 8,
-      "referenced_works": []
+      "referenced_works": [
+        "W1909324101"
+      ]
     },
     {
       "id": "doi:10.31219/osf.io/ube2z",
@@ -21502,7 +22025,11 @@
       "source": "seed+openalex",
       "seed": true,
       "ss_cited_by_count": 10,
-      "referenced_works": []
+      "referenced_works": [
+        "W2982474429",
+        "W2984674716",
+        "W1909324101"
+      ]
     },
     {
       "id": "doi:10.1109/icdacai57211.2022.00047",
@@ -21691,7 +22218,13 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 3,
-      "referenced_works": []
+      "referenced_works": [
+        "W4293253258",
+        "W3168113290",
+        "W3170841198",
+        "W3088345572",
+        "W2947356748"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2401.16353",
@@ -22808,7 +23341,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 5,
-      "referenced_works": []
+      "referenced_works": [
+        "W4367047212",
+        "W2794213779"
+      ]
     },
     {
       "id": "openalex:W7111787735",
@@ -22966,7 +23502,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 0,
-      "referenced_works": []
+      "referenced_works": [
+        "W4312092354",
+        "W2897525439"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2312.14159",
@@ -23003,7 +23542,12 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 1,
-      "referenced_works": []
+      "referenced_works": [
+        "W3003182903",
+        "W2982474429",
+        "W2984674716",
+        "W4365808257"
+      ]
     },
     {
       "id": "doi:10.48550/arxiv.2312.12654",
@@ -23039,7 +23583,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 1,
-      "referenced_works": []
+      "referenced_works": [
+        "W3120405143",
+        "W3016124762"
+      ]
     },
     {
       "id": "doi:10.1117/12.2681597",
@@ -44507,7 +45054,10 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 0,
-      "referenced_works": []
+      "referenced_works": [
+        "W3206079648",
+        "W3003182903"
+      ]
     },
     {
       "id": "doi:10.1109/icc51166.2024.10622571",
@@ -44601,7 +45151,9 @@
       ],
       "source": "openalex",
       "ss_cited_by_count": 0,
-      "referenced_works": []
+      "referenced_works": [
+        "W4365808257"
+      ]
     },
     {
       "id": "doi:10.1109/tssa59948.2023.10367037",
