@@ -3650,7 +3650,7 @@ function paperMetadataToInfluence(paper) {
   else if (age === 2) recencyMultiplier = 0.84 + Math.min(0.16, citeNorm * 0.30);
 
   var influence = 0.03 + (0.62 * base * recencyMultiplier);
-  return Math.max(0.03, Math.min(0.62, influence));
+  return Math.max(0.03, Math.min(1.0, influence));
 }
 
 function buildNetworkPaperAugment(baseNodeMap) {

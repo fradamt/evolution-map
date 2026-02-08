@@ -738,17 +738,30 @@ def normalize(values):
 
 
 def percentile_rank(values):
-    """Convert raw values to percentile ranks in [0, 1]."""
+    """Convert raw values to percentile ranks in [0, 1] using midrank for ties.
+
+    Tied values receive the average of their rank positions, so
+    [5, 5, 5] → [0.5, 0.5, 0.5] instead of arbitrary tie-breaking.
+    """
     if not values:
         return []
     n = len(values)
     if n == 1:
         return [0.5]
     indexed = sorted(range(n), key=lambda i: values[i])
-    ranks = [0.0] * n
-    for rank_pos, idx in enumerate(indexed):
-        ranks[idx] = rank_pos / (n - 1)
-    return ranks
+    raw_ranks = [0.0] * n
+    # Assign midrank within each tie group
+    i = 0
+    while i < n:
+        j = i
+        while j < n and values[indexed[j]] == values[indexed[i]]:
+            j += 1
+        midrank = (i + j - 1) / 2.0
+        for k in range(i, j):
+            raw_ranks[indexed[k]] = midrank
+        i = j
+    denom = n - 1
+    return [r / denom for r in raw_ranks]
 
 
 def shaped_rank(values, power=2.0):
@@ -2487,35 +2500,33 @@ def main():
             eip_refs = set(int(m.group(1)) for m in re.finditer(r'\bEIP[\s-]?(\d{1,5})\b', title, re.IGNORECASE))
             paper_eip_ref_counts.append(len(eip_refs))
 
-        # Citation percentile among non-zero papers
-        nonzero_cites = [c for c in paper_citation_raw if c > 0]
-        if nonzero_cites:
-            nz_sorted = sorted(nonzero_cites)
-            nz_denom = max(1, len(nz_sorted) - 1)
-            paper_citation_pct = []
-            nz_idx = 0
-            for c in paper_citation_raw:
-                if c > 0:
-                    rank = 0
-                    for j, sv in enumerate(nz_sorted):
-                        if sv <= c:
-                            rank = j
-                    paper_citation_pct.append(rank / nz_denom)
-                else:
-                    paper_citation_pct.append(0.0)
-        else:
-            paper_citation_pct = [0.0] * len(paper_ids_list)
+        # Citation percentile via shared percentile_rank (zero-cite papers stay 0)
+        paper_citation_pct_raw = percentile_rank(paper_citation_raw)
+        paper_citation_pct = [
+            p if c > 0 else 0.0
+            for p, c in zip(paper_citation_pct_raw, paper_citation_raw)
+        ]
 
         paper_relevance_pct = percentile_rank(paper_relevance_raw)
+
+        # Relevance gate: papers with relevance < 10 (bottom ~71%) get their
+        # citation contribution dampened — high-cite "blockchain for X" papers
+        # that aren't protocol research shouldn't dominate.
+        PAPER_RELEVANCE_GATE = 10.0
 
         current_year = datetime.now().year
         paper_intrinsic_scores = {}
         for i, pid in enumerate(paper_ids_list):
             p = papers_output[pid]
             eip_anchoring = min(1.0, paper_eip_ref_counts[i] / 2.0)
+            rel = paper_relevance_raw[i]
+            cite_pct = paper_citation_pct[i]
+            # Dampen citation contribution for low-relevance papers
+            if rel < PAPER_RELEVANCE_GATE:
+                cite_pct *= 0.25
             raw = (
-                0.45 * paper_citation_pct[i]
-                + 0.35 * paper_relevance_pct[i]
+                0.40 * cite_pct
+                + 0.40 * paper_relevance_pct[i]
                 + 0.20 * eip_anchoring
             )
             # Recency damping
