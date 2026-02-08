@@ -1,0 +1,658 @@
+{
+  "duplicate_groups": [
+    {
+      "title": "A Simple Single Slot Finality Protocol For Ethereum",
+      "entries": [
+        {
+          "id": "doi:10.48550/arxiv.2302.12745",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4322718297",
+          "is_arxiv": true
+        },
+        {
+          "id": "doi:10.1007/978-3-031-54204-6_23",
+          "cited_by_count": 5,
+          "openalex_id": "https://openalex.org/W4392309491",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 5
+    },
+    {
+      "title": "An Event Study of the Ethereum Transition to Proof-of-Stake",
+      "entries": [
+        {
+          "id": "doi:10.3390/commodities2020006",
+          "cited_by_count": 91,
+          "openalex_id": "https://openalex.org/W4361273198",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2210.13655",
+          "cited_by_count": 4,
+          "openalex_id": "https://openalex.org/W4307415551",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 91
+    },
+    {
+      "title": "BaseSAP: Modular Stealth Address Protocol for Programmable Blockchains",
+      "entries": [
+        {
+          "id": "doi:10.1109/tifs.2024.3364081",
+          "cited_by_count": 11,
+          "openalex_id": "https://openalex.org/W4391641496",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2306.14272",
+          "cited_by_count": 1,
+          "openalex_id": "https://openalex.org/W4382322610",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 11
+    },
+    {
+      "title": "Blockchain Amplification Attack",
+      "entries": [
+        {
+          "id": "doi:10.1145/3711697",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4408284998",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2408.01508",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4403746844",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 0
+    },
+    {
+      "title": "Clockwork Finance: Automated Analysis of Economic Security in Smart Contracts",
+      "entries": [
+        {
+          "id": "doi:10.1109/sp46215.2023.10179346",
+          "cited_by_count": 34,
+          "openalex_id": "https://openalex.org/W3198478013",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2109.04347",
+          "cited_by_count": 1,
+          "openalex_id": "https://openalex.org/W3204584317",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 34
+    },
+    {
+      "title": "Confronting the Carbon-footprint Challenge of Blockchain",
+      "entries": [
+        {
+          "id": "doi:10.48550/arxiv.2201.06929",
+          "cited_by_count": 3,
+          "openalex_id": "https://openalex.org/W4226210073",
+          "is_arxiv": true
+        },
+        {
+          "id": "doi:10.1021/acs.est.2c05165",
+          "cited_by_count": 20,
+          "openalex_id": "https://openalex.org/W4313706718",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 20
+    },
+    {
+      "title": "Dynamic Posted-Price Mechanisms for the Blockchain Transaction Fee Market (Invited Talk)",
+      "entries": [
+        {
+          "id": "doi:10.4230/oasics.tokenomics.2021.6",
+          "cited_by_count": 50,
+          "openalex_id": "https://openalex.org/W3216317686",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.1145/3479722.3480991",
+          "cited_by_count": 8,
+          "openalex_id": "https://openalex.org/W3151460710",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 50
+    },
+    {
+      "title": "Ebb-and-Flow Protocols: A Resolution of the Availability-Finality Dilemma",
+      "entries": [
+        {
+          "id": "doi:10.1109/sp40001.2021.00045",
+          "cited_by_count": 9,
+          "openalex_id": "https://openalex.org/W3084120904",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2009.04987",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4287669785",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 9
+    },
+    {
+      "title": "Enhancing Smart Contract Security Analysis with Execution Property Graphs",
+      "entries": [
+        {
+          "id": "doi:10.48550/arxiv.2305.14046",
+          "cited_by_count": 2,
+          "openalex_id": "https://openalex.org/W4378446725",
+          "is_arxiv": true
+        },
+        {
+          "id": "doi:10.1145/3728924",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4411523000",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 2
+    },
+    {
+      "title": "Ethereum Proof-of-Stake Consensus Layer: Participation and Decentralization",
+      "entries": [
+        {
+          "id": "doi:10.48550/arxiv.2306.10777",
+          "cited_by_count": 5,
+          "openalex_id": "https://openalex.org/W4381568356",
+          "is_arxiv": true
+        },
+        {
+          "id": "doi:10.1007/978-3-031-69231-4_17",
+          "cited_by_count": 19,
+          "openalex_id": "https://openalex.org/W4404863698",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 19
+    },
+    {
+      "title": "Ethereum Proof-of-Stake under Scrutiny",
+      "entries": [
+        {
+          "id": "doi:10.1145/3555776.3577655",
+          "cited_by_count": 21,
+          "openalex_id": "https://openalex.org/W4379620243",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.4230/oasics",
+          "cited_by_count": 3,
+          "openalex_id": "https://openalex.org/W4308693699",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 21
+    },
+    {
+      "title": "Exploring Unfairness on Proof of Authority",
+      "entries": [
+        {
+          "id": "doi:10.1145/3488932.3517394",
+          "cited_by_count": 21,
+          "openalex_id": "https://openalex.org/W4281381789",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2203.03008",
+          "cited_by_count": 6,
+          "openalex_id": "https://openalex.org/W4221148528",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 21
+    },
+    {
+      "title": "Formal Verification of the Ethereum 2.0 Beacon Chain",
+      "entries": [
+        {
+          "id": "doi:10.1007/978-3-030-99524-9_9",
+          "cited_by_count": 32,
+          "openalex_id": "https://openalex.org/W3209715990",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2110.12909",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4286898132",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 32
+    },
+    {
+      "title": "From Competition to Centralization: The Oligopoly in Ethereum Block Building Auctions",
+      "entries": [
+        {
+          "id": "doi:10.3233/faia251209",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4415428119",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2412.18074",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4405783684",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 0
+    },
+    {
+      "title": "Goldfish: No More Attacks on Ethereum?!",
+      "entries": [
+        {
+          "id": "doi:10.48550/arxiv.2209.03255",
+          "cited_by_count": 3,
+          "openalex_id": "https://openalex.org/W4297677807",
+          "is_arxiv": true
+        },
+        {
+          "id": "doi:10.1007/978-3-031-78676-1_1",
+          "cited_by_count": 4,
+          "openalex_id": "https://openalex.org/W4407827803",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 4
+    },
+    {
+      "title": "High-Frequency Trading on Decentralized On-Chain Exchanges",
+      "entries": [
+        {
+          "id": "doi:10.1109/sp40001.2021.00027",
+          "cited_by_count": 155,
+          "openalex_id": "https://openalex.org/W3155854917",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2009.14021",
+          "cited_by_count": 29,
+          "openalex_id": "https://openalex.org/W3089830732",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 155
+    },
+    {
+      "title": "Impact of EIP-4844 on Ethereum: Consensus Security, Ethereum Usage, Rollup Transaction Dynamics, and Blob Gas Fee Markets",
+      "entries": [
+        {
+          "id": "doi:10.48550/arxiv.2405.03183",
+          "cited_by_count": 1,
+          "openalex_id": "https://openalex.org/W4396787024",
+          "is_arxiv": true
+        },
+        {
+          "id": "doi:10.1109/tnse.2025.3594281",
+          "cited_by_count": 3,
+          "openalex_id": "https://openalex.org/W4412939614",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 3
+    },
+    {
+      "title": "Longest Chain Consensus Under Bandwidth Constraint",
+      "entries": [
+        {
+          "id": "doi:10.1145/3558535.3559777",
+          "cited_by_count": 10,
+          "openalex_id": "https://openalex.org/W4383220706",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2111.12332",
+          "cited_by_count": 1,
+          "openalex_id": "https://openalex.org/W4307769373",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 10
+    },
+    {
+      "title": "M\u00f6bius: Trustless Tumbling for Transaction Privacy",
+      "entries": [
+        {
+          "id": "doi:10.1515/popets-2018-0015",
+          "cited_by_count": 73,
+          "openalex_id": "https://openalex.org/W2794213779",
+          "is_arxiv": false
+        },
+        {
+          "id": "openalex:W2951301891",
+          "cited_by_count": 2,
+          "openalex_id": "https://openalex.org/W2951301891",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 73
+    },
+    {
+      "title": "Non-fungible token (NFT) markets on the Ethereum blockchain: temporal development, cointegration and interrelations",
+      "entries": [
+        {
+          "id": "doi:10.1080/10438599.2022.2119564",
+          "cited_by_count": 148,
+          "openalex_id": "https://openalex.org/W4294796273",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.2139/ssrn.3904683",
+          "cited_by_count": 110,
+          "openalex_id": "https://openalex.org/W3196016036",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 148
+    },
+    {
+      "title": "On How Zero-Knowledge Proof Blockchain Mixers Improve, and Worsen User Privacy",
+      "entries": [
+        {
+          "id": "doi:10.1145/3543507.3583217",
+          "cited_by_count": 47,
+          "openalex_id": "https://openalex.org/W4367047212",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2201.09035",
+          "cited_by_count": 5,
+          "openalex_id": "https://openalex.org/W4221156927",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 47
+    },
+    {
+      "title": "Optimal Flexible Consensus and its Application to Ethereum",
+      "entries": [
+        {
+          "id": "doi:10.1109/sp54263.2024.00135",
+          "cited_by_count": 5,
+          "openalex_id": "https://openalex.org/W4402263733",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2308.05096",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4385774491",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 5
+    },
+    {
+      "title": "Optimality Despite Chaos in Fee Markets",
+      "entries": [
+        {
+          "id": "doi:10.1007/978-3-031-47751-5_20",
+          "cited_by_count": 12,
+          "openalex_id": "https://openalex.org/W4389168141",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2212.07175",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4311722307",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 12
+    },
+    {
+      "title": "Private Order Flows and Builder Bidding Dynamics: The Road to Monopoly in Ethereum's Block Building Market",
+      "entries": [
+        {
+          "id": "doi:10.1145/3696410.3714754",
+          "cited_by_count": 1,
+          "openalex_id": "https://openalex.org/W4409671245",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2410.12352",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W4403578002",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 1
+    },
+    {
+      "title": "Quantifying Blockchain Extractable Value: How dark is the forest?",
+      "entries": [
+        {
+          "id": "doi:10.1109/sp46214.2022.9833734",
+          "cited_by_count": 196,
+          "openalex_id": "https://openalex.org/W3120405143",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2101.05511",
+          "cited_by_count": 33,
+          "openalex_id": "https://openalex.org/W4308902071",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 196
+    },
+    {
+      "title": "Settling Payments Fast and Private: Efficient Decentralized Routing for Path-Based Transactions",
+      "entries": [
+        {
+          "id": "doi:10.14722/ndss.2018.23252",
+          "cited_by_count": 12,
+          "openalex_id": "https://openalex.org/W2755456050",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.1709.05748",
+          "cited_by_count": 5,
+          "openalex_id": "https://openalex.org/W4298190935",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 12
+    },
+    {
+      "title": "Smart Contract Vulnerabilities: Vulnerable Does Not Imply Exploited",
+      "entries": [
+        {
+          "id": "openalex:W3154651159",
+          "cited_by_count": 23,
+          "openalex_id": "https://openalex.org/W3154651159",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.1902.06710",
+          "cited_by_count": 41,
+          "openalex_id": "https://openalex.org/W3049135223",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 41
+    },
+    {
+      "title": "Sprites and State Channels: Payment Networks that Go Faster than Lightning",
+      "entries": [
+        {
+          "id": "doi:10.1007/978-3-030-32101-7_30",
+          "cited_by_count": 200,
+          "openalex_id": "https://openalex.org/W2979341164",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.1702.05812",
+          "cited_by_count": 17,
+          "openalex_id": "https://openalex.org/W4300853017",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 200
+    },
+    {
+      "title": "SquirRL: Automating Attack Analysis on Blockchain Incentive Mechanisms with Deep Reinforcement Learning",
+      "entries": [
+        {
+          "id": "doi:10.14722/ndss.2021.24188",
+          "cited_by_count": 29,
+          "openalex_id": "https://openalex.org/W3139010521",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.1912.01798",
+          "cited_by_count": 21,
+          "openalex_id": "https://openalex.org/W2992906453",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 29
+    },
+    {
+      "title": "The Eye of Horus: Spotting and Analyzing Attacks on Ethereum Smart Contracts",
+      "entries": [
+        {
+          "id": "openalex:W3157553154",
+          "cited_by_count": 34,
+          "openalex_id": "https://openalex.org/W3157553154",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2101.06204",
+          "cited_by_count": 1,
+          "openalex_id": "https://openalex.org/W4297908947",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 34
+    },
+    {
+      "title": "The Non-Fungible Token (NFT) Market and Its Relationship with Bitcoin and Ethereum",
+      "entries": [
+        {
+          "id": "doi:10.3390/fintech1030017",
+          "cited_by_count": 273,
+          "openalex_id": "https://openalex.org/W4283719430",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.2139/ssrn.3861106",
+          "cited_by_count": 104,
+          "openalex_id": "https://openalex.org/W3190823590",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 273
+    },
+    {
+      "title": "Three Attacks on Proof-of-Stake Ethereum",
+      "entries": [
+        {
+          "id": "doi:10.1007/978-3-031-18283-9_28",
+          "cited_by_count": 52,
+          "openalex_id": "https://openalex.org/W3206329751",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.2110.10086",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W3210180911",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 52
+    },
+    {
+      "title": "Understanding Ethereum via Graph Analysis",
+      "entries": [
+        {
+          "id": "doi:10.1109/infocom.2018.8486401",
+          "cited_by_count": 206,
+          "openalex_id": "https://openalex.org/W2792261072",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.1145/3381036",
+          "cited_by_count": 196,
+          "openalex_id": "https://openalex.org/W3017072639",
+          "is_arxiv": false
+        }
+      ],
+      "recommended_cited_by_count": 206
+    },
+    {
+      "title": "Zero-Collateral Lotteries in Bitcoin and Ethereum",
+      "entries": [
+        {
+          "id": "doi:10.1109/eurospw.2017.44",
+          "cited_by_count": 52,
+          "openalex_id": "https://openalex.org/W2562143764",
+          "is_arxiv": false
+        },
+        {
+          "id": "doi:10.48550/arxiv.1612.05390",
+          "cited_by_count": 0,
+          "openalex_id": "https://openalex.org/W2951593333",
+          "is_arxiv": true
+        }
+      ],
+      "recommended_cited_by_count": 52
+    }
+  ],
+  "fixes": {
+    "doi:10.48550/arxiv.2302.12745": 5,
+    "doi:10.48550/arxiv.2210.13655": 91,
+    "doi:10.48550/arxiv.2306.14272": 11,
+    "doi:10.48550/arxiv.2109.04347": 34,
+    "doi:10.48550/arxiv.2201.06929": 20,
+    "doi:10.1145/3479722.3480991": 50,
+    "doi:10.48550/arxiv.2009.04987": 9,
+    "doi:10.1145/3728924": 2,
+    "doi:10.48550/arxiv.2306.10777": 19,
+    "doi:10.4230/oasics": 21,
+    "doi:10.48550/arxiv.2203.03008": 21,
+    "doi:10.48550/arxiv.2110.12909": 32,
+    "doi:10.48550/arxiv.2209.03255": 4,
+    "doi:10.48550/arxiv.2009.14021": 155,
+    "doi:10.48550/arxiv.2405.03183": 3,
+    "doi:10.48550/arxiv.2111.12332": 10,
+    "openalex:W2951301891": 73,
+    "doi:10.2139/ssrn.3904683": 148,
+    "doi:10.48550/arxiv.2201.09035": 47,
+    "doi:10.48550/arxiv.2308.05096": 5,
+    "doi:10.48550/arxiv.2212.07175": 12,
+    "doi:10.48550/arxiv.2410.12352": 1,
+    "doi:10.48550/arxiv.2101.05511": 196,
+    "doi:10.48550/arxiv.1709.05748": 12,
+    "openalex:W3154651159": 41,
+    "doi:10.48550/arxiv.1702.05812": 200,
+    "doi:10.48550/arxiv.1912.01798": 29,
+    "doi:10.48550/arxiv.2101.06204": 34,
+    "doi:10.2139/ssrn.3861106": 273,
+    "doi:10.48550/arxiv.2110.10086": 52,
+    "doi:10.1145/3381036": 206,
+    "doi:10.48550/arxiv.1612.05390": 52
+  },
+  "summary": {
+    "total_papers": 685,
+    "duplicate_groups": 34,
+    "papers_with_citation_fixes": 32,
+    "exact_title_matches": 27,
+    "near_title_matches": 7,
+    "false_positives_excluded": 1
+  }
+}

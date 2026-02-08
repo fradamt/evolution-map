@@ -9,7 +9,7 @@
       "year": 2024,
       "authors": [
         "Kose John",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Peter Mueller",
         "Fahad Saleh",
         "Caspar Schwarz-Schilling"
@@ -72,11 +72,11 @@
     },
     {
       "id": "doi:10.1007/978-3-031-30617-4_17",
-      "title": "HyperPlonk: Plonk with\u00a0Linear-Time Prover and\u00a0High-Degree Custom Gates",
+      "title": "HyperPlonk: Plonk with Linear-Time Prover and High-Degree Custom Gates",
       "year": 2023,
       "authors": [
         "Binyi Chen",
-        "Benedikt B\u00fcnz",
+        "Benedikt Bünz",
         "Dan Boneh",
         "Zhenfei Zhang"
       ],
@@ -108,7 +108,7 @@
       "arxiv_id": null,
       "url": "https://doi.org/10.48550/arXiv.2308.05096",
       "openalex_id": "https://openalex.org/W4385774491",
-      "cited_by_count": 0,
+      "cited_by_count": 5,
       "source": "openalex",
       "tags": [
         "ethereum",
@@ -146,7 +146,7 @@
         "Thomas Thiery",
         "Jennifer Pan",
         "Nihar B. Shah",
-        "Barnab\u00e9 Monnot"
+        "Barnabé Monnot"
       ],
       "venue": "arXiv (Cornell University)",
       "doi": "10.48550/arXiv.2305.09032",
@@ -236,7 +236,7 @@
       "title": "Goldfish: No More Attacks on Ethereum?!",
       "year": 2022,
       "authors": [
-        "Francesco D\u2019Amato",
+        "Francesco D’Amato",
         "Joachim Neu",
         "Ertem Nusret Tas",
         "David Tse"
@@ -246,7 +246,7 @@
       "arxiv_id": null,
       "url": "https://doi.org/10.48550/arXiv.2209.03255",
       "openalex_id": "https://openalex.org/W4297677807",
-      "cited_by_count": 3,
+      "cited_by_count": 4,
       "source": "openalex",
       "tags": [
         "ethereum",
@@ -323,12 +323,12 @@
     },
     {
       "id": "doi:10.1007/978-3-031-18283-9_28",
-      "title": "Three Attacks on\u00a0Proof-of-Stake Ethereum",
+      "title": "Three Attacks on Proof-of-Stake Ethereum",
       "year": 2022,
       "authors": [
         "Caspar Schwarz-Schilling",
         "Joachim Neu",
-        "Barnab\u00e9 Monnot",
+        "Barnabé Monnot",
         "Aditya Asgaonkar",
         "Ertem Nusret Tas",
         "David Tse"
@@ -538,7 +538,7 @@
       "year": 2019,
       "authors": [
         "Dan Boneh",
-        "Benedikt B\u00fcnz",
+        "Benedikt Bünz",
         "Ben Fisch"
       ],
       "venue": "Lecture notes in computer science",
