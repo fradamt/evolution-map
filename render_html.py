@@ -131,6 +131,16 @@ def _load_papers_for_viz(data):
             rows = analysis_papers
         source = "analysis"
 
+    # Merge pre-computed influence scores from analysis.json into rows
+    analysis_papers = data.get("papers", {})
+    if isinstance(analysis_papers, dict):
+        inf_by_id = {str(k): v.get("influence_score") for k, v in analysis_papers.items()
+                     if isinstance(v, dict) and v.get("influence_score") is not None}
+        for row in rows:
+            pid = str(row.get("id", "")).strip()
+            if pid and pid in inf_by_id and row.get("influence_score") is None:
+                row["influence_score"] = inf_by_id[pid]
+
     compact = {}
     for row in rows:
         if not isinstance(row, dict):
@@ -178,7 +188,14 @@ def _load_papers_for_viz(data):
         if not url and doi:
             url = "https://doi.org/" + doi
 
-        compact[pid] = {
+        # Pre-computed influence score from analyze.py (if available)
+        inf_score = row.get("influence_score")
+        try:
+            inf_score = round(float(inf_score), 4) if inf_score is not None else None
+        except (TypeError, ValueError):
+            inf_score = None
+
+        entry = {
             "id": pid,
             "t": title,
             "y": year,
@@ -192,6 +209,9 @@ def _load_papers_for_viz(data):
             "tg": tags[:12],
             "eq": eip_refs,
         }
+        if inf_score is not None:
+            entry["inf"] = inf_score
+        compact[pid] = entry
 
     return compact, source
 
@@ -3606,21 +3626,22 @@ function paperScoreToInfluence(score) {
 
 function paperMetadataToInfluence(paper) {
   if (!paper) return 0.03;
+  // Use pre-computed influence score from analyze.py when available.
+  if (paper.inf !== undefined && paper.inf !== null) {
+    return Math.max(0.03, Math.min(1.0, Number(paper.inf)));
+  }
+  // Fallback: compute from metadata (for papers not scored in analyze.py).
   var rs = Math.max(0, Number(paper.rs || 0));
   var cites = Math.max(0, Number(paper.cb || 0));
   var eipRefs = uniqueSortedNumbers(paper.eq || []).length;
   var year = paperYearValue(paper);
 
-  // Relevance scores have a high floor in the ingestion pipeline.
-  // Normalize around that floor so "just mentions Ethereum" does not score high.
   var relNorm = Math.max(0, Math.min(1, (rs - 10.0) / 8.0));
   var citeNorm = Math.max(0, Math.min(1, Math.log1p(cites) / Math.log(1 + 800)));
   var eipNorm = Math.max(0, Math.min(1, eipRefs / 2.0));
 
-  // Citations are the strongest signal; relevance and explicit EIP anchors refine it.
   var base = (0.62 * citeNorm) + (0.23 * relNorm) + (0.15 * eipNorm);
 
-  // Recency damping: very recent uncited papers should not outrank foundational work.
   var nowYear = new Date().getFullYear();
   var age = (year !== null) ? (nowYear - year) : 3;
   var recencyMultiplier = 1.0;

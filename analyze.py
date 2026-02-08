@@ -34,6 +34,7 @@ COAUTHOR_REPORT_PATH = SCRIPT_DIR / "coauthor-report.json"
 COAUTHOR_REPORT_MD_PATH = SCRIPT_DIR / "coauthor-report.md"
 EIP_METADATA_PATH = SCRIPT_DIR / "eip-metadata.json"
 PAPERS_SEED_PATH = SCRIPT_DIR / "papers-seed.json"
+PAPERS_DB_PATH = SCRIPT_DIR / "papers-db.json"
 MAGICIANS_INDEX_PATH = SCRAPE_DIR / "magicians_index.json"
 MAGICIANS_TOPICS_DIR = SCRAPE_DIR / "magicians_topics"
 
@@ -736,6 +737,30 @@ def normalize(values):
     return [(v - mn) / rng for v in values]
 
 
+def percentile_rank(values):
+    """Convert raw values to percentile ranks in [0, 1]."""
+    if not values:
+        return []
+    n = len(values)
+    if n == 1:
+        return [0.5]
+    indexed = sorted(range(n), key=lambda i: values[i])
+    ranks = [0.0] * n
+    for rank_pos, idx in enumerate(indexed):
+        ranks[idx] = rank_pos / (n - 1)
+    return ranks
+
+
+def shaped_rank(values, power=2.0):
+    """Percentile rank with power transformation for right-skewed distribution.
+
+    With power=2.0, percentile 0.50 maps to 0.25 and 0.71 maps to 0.50.
+    Most items score low, with a long tail of high-influence items.
+    """
+    pct = percentile_rank(values)
+    return [p ** power for p in pct]
+
+
 def protocol_relevance_signals(topic):
     """Compute coarse protocol relevance signals for a topic."""
     title = topic.get("title", "")
@@ -957,17 +982,29 @@ def main():
         print("  Continuing without EIP catalog")
 
     # -----------------------------------------------------------------------
-    # Load curated research papers seed
+    # Load research papers (prefer papers-db.json, fall back to seed)
     # -----------------------------------------------------------------------
     papers_output = {}
-    if PAPERS_SEED_PATH.exists():
+    papers_rows = []  # raw rows for influence scoring
+    if PAPERS_DB_PATH.exists():
+        print("Loading papers database...")
+        with open(PAPERS_DB_PATH) as f:
+            papers_db_payload = json.load(f)
+        if isinstance(papers_db_payload, dict):
+            papers_rows = papers_db_payload.get("papers", [])
+        elif isinstance(papers_db_payload, list):
+            papers_rows = papers_db_payload
+        papers_output = normalize_papers_seed({"papers": papers_rows})
+        print(f"  {len(papers_output)} papers loaded from papers-db.json")
+    elif PAPERS_SEED_PATH.exists():
         print("Loading papers seed...")
         with open(PAPERS_SEED_PATH) as f:
             papers_seed = json.load(f)
         papers_output = normalize_papers_seed(papers_seed)
-        print(f"  {len(papers_output)} papers loaded")
+        papers_rows = papers_seed.get("papers", []) if isinstance(papers_seed, dict) else []
+        print(f"  {len(papers_output)} papers loaded from papers-seed.json")
     else:
-        print(f"  Warning: {PAPERS_SEED_PATH} not found — continuing without papers")
+        print(f"  Warning: no papers files found — continuing without papers")
 
     # Build reverse lookups from EIP catalog
     # magicians_topic_id → list of EIP numbers that point to it
@@ -1329,54 +1366,61 @@ def main():
     print(f"  {total_edges} cross-reference edges")
 
     # -----------------------------------------------------------------------
-    # Compute influence scores
+    # Compute influence scores (percentile-based with cross-entity boost)
     # -----------------------------------------------------------------------
     print("Computing influence scores...")
     tids = sorted(topics.keys())
 
-    # Prolific authors (5+ topics)
-    author_topic_counts = Counter(topics[t]["author"] for t in tids)
-    prolific_authors = {a for a, c in author_topic_counts.items() if c >= 5}
+    # Phase 1: Intrinsic scores using percentile ranking
+    raw_engagement = []
+    raw_citation = []
+    for tid in tids:
+        t = topics[tid]
+        engagement = t["like_count"] + math.sqrt(t["posts_count"]) + math.log1p(t["views"])
+        raw_engagement.append(engagement)
+        raw_citation.append(in_degree.get(tid, 0))
 
-    raw_in = [in_degree.get(t, 0) for t in tids]
-    raw_likes = [topics[t]["like_count"] for t in tids]
-    raw_views = [math.log1p(topics[t]["views"]) for t in tids]
-    raw_posts = [topics[t]["posts_count"] for t in tids]
-    raw_prolific = [1.0 if topics[t]["author"] in prolific_authors else 0.0 for t in tids]
+    pct_engagement = percentile_rank(raw_engagement)
+    pct_citation = percentile_rank(raw_citation)
 
-    norm_in = normalize(raw_in)
-    norm_likes = normalize(raw_likes)
-    norm_views = normalize(raw_views)
-    norm_posts = normalize(raw_posts)
-
+    topic_intrinsic = {}
     for i, tid in enumerate(tids):
-        score = (
-            0.30 * norm_in[i]
-            + 0.25 * norm_likes[i]
-            + 0.20 * norm_views[i]
-            + 0.15 * norm_posts[i]
-            + 0.10 * raw_prolific[i]
-        )
-        topics[tid]["influence_score"] = round(score, 4)
+        topic_intrinsic[tid] = 0.50 * pct_citation[i] + 0.50 * pct_engagement[i]
+
+    # Store in_degree / out_degree first (needed by later phases)
+    for tid in tids:
         topics[tid]["in_degree"] = in_degree.get(tid, 0)
         topics[tid]["out_degree"] = out_degree.get(tid, 0)
+
+    # Set preliminary influence_score from intrinsic (for tier filtering).
+    # Cross-entity boost will update this after EIP scoring.
+    topic_intrinsic_shaped = shaped_rank(
+        [topic_intrinsic[tid] for tid in tids], power=2.0
+    )
+    for i, tid in enumerate(tids):
+        topics[tid]["influence_score"] = round(topic_intrinsic_shaped[i], 4)
+
+    # Phase 2: Cross-entity boost from EIPs (applied after EIP scoring below)
+    topic_boost = {tid: 0.0 for tid in tids}
 
     # -----------------------------------------------------------------------
     # Topic filtering: Tier 1 + Tier 2
     # -----------------------------------------------------------------------
+    # Note: thresholds calibrated for shaped_rank(power=2) distribution
+    # where mean≈0.33, median≈0.25. Tier 1 at 0.70 gives ~530 topics.
     print("Filtering topics...")
     tier1 = set()
     for tid in tids:
         t = topics[tid]
-        if t["influence_score"] >= 0.25 or t["in_degree"] >= 3:
+        if t["influence_score"] >= 0.70 or t["in_degree"] >= 3:
             tier1.add(tid)
 
-    # Tier 2: referenced by Tier 1 with influence >= 0.10
+    # Tier 2: referenced by Tier 1 with influence >= 0.30
     tier2 = set()
     for tid in tier1:
         for tgt in all_internal_links.get(tid, set()):
             if tgt in topics and tgt not in tier1:
-                if topics[tgt]["influence_score"] >= 0.10:
+                if topics[tgt]["influence_score"] >= 0.30:
                     tier2.add(tgt)
 
     included = tier1 | tier2
@@ -1386,15 +1430,15 @@ def main():
     if len(included) < 400:
         print("  Adjusting thresholds to include more topics...")
         for tid in tids:
-            if tid not in included and (topics[tid]["influence_score"] >= 0.15 or topics[tid]["in_degree"] >= 2):
+            if tid not in included and (topics[tid]["influence_score"] >= 0.50 or topics[tid]["in_degree"] >= 2):
                 included.add(tid)
         print(f"  After adjustment: {len(included)}")
 
     # If too many, raise threshold
-    if len(included) > 600:
+    if len(included) > 650:
         # Remove lowest-influence tier2 topics
         tier2_sorted = sorted(tier2, key=lambda t: topics[t]["influence_score"])
-        while len(included) > 550 and tier2_sorted:
+        while len(included) > 600 and tier2_sorted:
             removed = tier2_sorted.pop(0)
             included.discard(removed)
             tier2.discard(removed)
@@ -2021,14 +2065,13 @@ def main():
     print(f"  {len(minor_topics_output)} minor topics")
 
     # -----------------------------------------------------------------------
-    # EIP influence scoring
+    # EIP influence scoring (percentile-based)
     # -----------------------------------------------------------------------
     print("Computing EIP influence scores...")
 
-    # Status weights
     EIP_STATUS_WEIGHT = {
-        "Final": 1.0, "Living": 0.9, "Last Call": 0.7, "Review": 0.6,
-        "Draft": 0.4, "Stagnant": 0.2, "Withdrawn": 0.05, "Moved": 0.05,
+        "Final": 1.0, "Living": 0.85, "Last Call": 0.65, "Review": 0.5,
+        "Draft": 0.3, "Stagnant": 0.1, "Withdrawn": 0.05, "Moved": 0.02,
     }
 
     # Pre-compute ethresearch citation count: how many topics mention each EIP
@@ -2040,48 +2083,84 @@ def main():
     # Shipped forks set
     shipped_forks = {f["name"] for f in FORKS_MANUAL if f["date"]}
 
-    # Collect raw component values for normalization
     eip_nums = sorted(eip_catalog.keys(), key=lambda x: int(x))
-    raw_magicians = []
-    raw_citations = []
+    eip_engagement_raw = []
+    eip_ethresearch_raw = []
     for eip_str in eip_nums:
         em = eip_catalog[eip_str]
         likes = em.get("magicians_likes", 0)
         views = em.get("magicians_views", 0)
         posts = em.get("magicians_posts", 0)
-        raw_magicians.append(likes + math.log1p(views) + math.sqrt(posts))
-        raw_citations.append(eip_ethresearch_citations.get(int(eip_str), 0))
+        eip_engagement_raw.append(likes + math.log1p(views) + math.sqrt(posts))
+        eip_ethresearch_raw.append(eip_ethresearch_citations.get(int(eip_str), 0))
 
-    norm_mag = normalize(raw_magicians)
-    norm_cit = normalize(raw_citations)
+    eip_engagement_pct = percentile_rank(eip_engagement_raw)
+    eip_ethresearch_pct = percentile_rank(eip_ethresearch_raw)
 
-    above_010 = 0
-    above_015 = 0
+    # Compute EIP intrinsic scores
+    eip_intrinsic = {}
     for i, eip_str in enumerate(eip_nums):
         em = eip_catalog[eip_str]
-        status = em.get("status", "")
-        status_w = EIP_STATUS_WEIGHT.get(status, 0.1)
+        status_w = EIP_STATUS_WEIGHT.get(em.get("status", ""), 0.1)
         fork = em.get("fork")
-        fork_bonus = 0.3 if fork and fork in shipped_forks else 0.0
+        fork_bonus = 1.0 if fork and fork in shipped_forks else 0.0
         requires = em.get("requires", [])
-        requires_depth = min(len(requires) * 0.05, 0.3)
+        requires_d = min(1.0, len(requires) * 0.15)
 
         score = (
-            0.25 * status_w
-            + 0.30 * norm_mag[i]
-            + 0.20 * norm_cit[i]
-            + 0.15 * fork_bonus
-            + 0.10 * requires_depth
+            0.20 * status_w
+            + 0.25 * eip_engagement_pct[i]
+            + 0.25 * eip_ethresearch_pct[i]
+            + 0.20 * fork_bonus
+            + 0.10 * requires_d
         )
-        em["influence_score"] = round(score, 4)
+        eip_intrinsic[eip_str] = score
         em["ethresearch_citation_count"] = eip_ethresearch_citations.get(int(eip_str), 0)
 
-        if score >= 0.10:
-            above_010 += 1
-        if score >= 0.15:
-            above_015 += 1
+    # Cross-entity boost: EIPs cited by high-influence topics get boosted
+    eip_boost = {eip_str: 0.0 for eip_str in eip_nums}
+    for tid in tids:
+        if topic_intrinsic.get(tid, 0) < 0.3:
+            continue
+        for eip_num in topics[tid].get("eip_mentions", []):
+            eip_str = str(eip_num)
+            if eip_str in eip_boost:
+                eip_boost[eip_str] = min(eip_boost[eip_str] + 0.02, 0.10)
 
-    print(f"  {above_010} EIPs above 0.10, {above_015} above 0.15")
+    # Apply boosts and shaped_rank normalization
+    eip_boosted = [eip_intrinsic[e] + eip_boost[e] for e in eip_nums]
+    eip_final_shaped = shaped_rank(eip_boosted, power=2.0)
+    for i, eip_str in enumerate(eip_nums):
+        eip_catalog[eip_str]["influence_score"] = round(eip_final_shaped[i], 4)
+
+    above_010 = sum(1 for e in eip_nums if eip_catalog[e]["influence_score"] >= 0.10)
+    above_030 = sum(1 for e in eip_nums if eip_catalog[e]["influence_score"] >= 0.30)
+    print(f"  {above_010} EIPs above 0.10, {above_030} above 0.30")
+
+    # -----------------------------------------------------------------------
+    # Cross-entity boost for topics (now that EIP scores are available)
+    # -----------------------------------------------------------------------
+    print("Applying cross-entity influence boosts...")
+    for tid in tids:
+        for eip_num in topics[tid].get("eip_mentions", []):
+            eip_str = str(eip_num)
+            if eip_str not in eip_catalog:
+                continue
+            em = eip_catalog[eip_str]
+            status = em.get("status", "")
+            fork = em.get("fork")
+            if status == "Final":
+                topic_boost[tid] = min(topic_boost[tid] + 0.03, 0.12)
+            if fork and fork in shipped_forks:
+                topic_boost[tid] = min(topic_boost[tid] + 0.04, 0.12)
+
+    # Finalize topic scores with shaped_rank
+    topic_boosted = [topic_intrinsic.get(tid, 0) + topic_boost.get(tid, 0) for tid in tids]
+    topic_final_shaped = shaped_rank(topic_boosted, power=2.0)
+    for i, tid in enumerate(tids):
+        topics[tid]["influence_score"] = round(topic_final_shaped[i], 4)
+    boosted_count = sum(1 for tid in tids if topic_boost.get(tid, 0) > 0)
+    print(f"  {boosted_count} topics received cross-entity boosts")
 
     # -----------------------------------------------------------------------
     # Assign EIP research threads
@@ -2126,10 +2205,10 @@ def main():
     eip_graph_nodes = []
     eip_graph_edges = []
 
-    # Nodes: EIPs with influence >= 0.05
+    # Nodes: EIPs with influence >= 0.03 (shaped_rank scale, ~490 nodes)
     eip_node_set = set()
     for eip_str, em in eip_catalog.items():
-        if em.get("influence_score", 0) >= 0.05:
+        if em.get("influence_score", 0) >= 0.03:
             eip_node_set.add(eip_str)
             eip_graph_nodes.append({
                 "id": "eip_" + eip_str,
@@ -2385,6 +2464,83 @@ def main():
             "magicians_participants": eip_meta.get("magicians_participants", 0),
             "ethresearch_citation_count": eip_meta.get("ethresearch_citation_count", 0),
         }
+
+    # -----------------------------------------------------------------------
+    # Paper influence scoring (percentile-based, with EIP anchoring)
+    # -----------------------------------------------------------------------
+    print("Computing paper influence scores...")
+    if papers_output:
+        paper_ids_list = list(papers_output.keys())
+        paper_citation_raw = []
+        paper_relevance_raw = []
+        paper_eip_ref_counts = []
+        for pid in paper_ids_list:
+            p = papers_output[pid]
+            cites = p.get("cited_by_count") or 0
+            paper_citation_raw.append(cites if cites > 0 else 0)
+            # Use relevance_score from papers-db if available, else 0
+            db_row = next((r for r in papers_rows if str(r.get("id", "")).strip() == pid), None)
+            rel_score = (db_row or {}).get("relevance_score", 0) or 0
+            paper_relevance_raw.append(rel_score)
+            # Count EIP references from title
+            title = p.get("title", "")
+            eip_refs = set(int(m.group(1)) for m in re.finditer(r'\bEIP[\s-]?(\d{1,5})\b', title, re.IGNORECASE))
+            paper_eip_ref_counts.append(len(eip_refs))
+
+        # Citation percentile among non-zero papers
+        nonzero_cites = [c for c in paper_citation_raw if c > 0]
+        if nonzero_cites:
+            nz_sorted = sorted(nonzero_cites)
+            nz_denom = max(1, len(nz_sorted) - 1)
+            paper_citation_pct = []
+            nz_idx = 0
+            for c in paper_citation_raw:
+                if c > 0:
+                    rank = 0
+                    for j, sv in enumerate(nz_sorted):
+                        if sv <= c:
+                            rank = j
+                    paper_citation_pct.append(rank / nz_denom)
+                else:
+                    paper_citation_pct.append(0.0)
+        else:
+            paper_citation_pct = [0.0] * len(paper_ids_list)
+
+        paper_relevance_pct = percentile_rank(paper_relevance_raw)
+
+        current_year = datetime.now().year
+        paper_intrinsic_scores = {}
+        for i, pid in enumerate(paper_ids_list):
+            p = papers_output[pid]
+            eip_anchoring = min(1.0, paper_eip_ref_counts[i] / 2.0)
+            raw = (
+                0.45 * paper_citation_pct[i]
+                + 0.35 * paper_relevance_pct[i]
+                + 0.20 * eip_anchoring
+            )
+            # Recency damping
+            year = p.get("year")
+            age = (current_year - year) if year else 3
+            if age <= 0:
+                damp = 0.55
+            elif age == 1:
+                damp = 0.70
+            elif age == 2:
+                damp = 0.85
+            else:
+                damp = 1.0
+            paper_intrinsic_scores[pid] = raw * damp
+
+        # Apply shaped_rank
+        paper_raw_vals = [paper_intrinsic_scores[pid] for pid in paper_ids_list]
+        paper_shaped = shaped_rank(paper_raw_vals, power=2.0)
+        for i, pid in enumerate(paper_ids_list):
+            papers_output[pid]["influence_score"] = round(paper_shaped[i], 4)
+
+        above_030 = sum(1 for pid in paper_ids_list if papers_output[pid]["influence_score"] >= 0.30)
+        print(f"  {len(paper_ids_list)} papers scored, {above_030} above 0.30")
+    else:
+        print("  No papers to score")
 
     print("Writing analysis.json...")
     output = {

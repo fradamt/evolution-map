@@ -70,9 +70,18 @@ python3 render_markdown.py
 
 ## Key Design Decisions
 
-**Topic influence scoring** (in `analyze.py`): Topics are ranked by a weighted composite — 30% citation in-degree, 25% likes, 20% log(views), 15% post count, 10% prolific author bonus. Tier 1 topics have influence ≥ 0.25 or in-degree ≥ 3; Tier 2 are referenced by Tier 1 with influence ≥ 0.10. **Note**: EIPs and magicians threads do NOT currently feed back into topic influence — the formula is purely ethresearch-internal.
+**Unified influence scoring** (in `analyze.py`): All entity types (topics, EIPs, papers) use percentile-based scoring with shaped_rank(power=2.0) transformation, producing a right-skewed [0, 1] distribution (mean≈0.33, median≈0.25). Two-phase approach:
 
-**EIP influence scoring** (in `analyze.py`): Separate formula — 25% status weight (Final=1.0, Living=0.9, Draft=0.4, Moved=0.05, etc.), 30% magicians engagement (normalized likes+log(views)+sqrt(posts)), 20% ethresearch citation count, 15% fork bonus (0.3 if shipped), 10% requires depth. ~264 EIPs above 0.10, EIP-1559 tops at ~0.80. The 365 "Moved" EIPs (former ERCs) mostly fall below threshold.
+*Phase 1 — Intrinsic scores:*
+- **Topics**: 50% citation in-degree percentile + 50% engagement percentile (likes + sqrt(posts) + log1p(views)).
+- **EIPs**: 20% status weight (Final=1.0, Living=0.85, Draft=0.3, Moved=0.02) + 25% magicians engagement percentile + 25% ethresearch citation percentile + 20% fork bonus (1.0 if shipped) + 10% requires depth.
+- **Papers**: 45% citation percentile (among non-zero) + 35% relevance percentile + 20% EIP anchoring. Recency damping: current year ×0.55, -1yr ×0.70, -2yr ×0.85.
+
+*Phase 2 — Cross-entity reinforcement (single pass):*
+- Topics mentioning Final EIPs get +0.03 each (capped +0.12); topics mentioning fork-shipped EIPs get +0.04 each (capped +0.12).
+- EIPs cited by high-influence topics (intrinsic ≥ 0.3) get +0.02 each (capped +0.10).
+
+Tier 1 topics have influence ≥ 0.70 or in-degree ≥ 3; Tier 2 are referenced by Tier 1 with influence ≥ 0.30. EIP-1559, EIP-4844, EIP-7702 are top-3 EIPs. Paper influence is pre-computed in Python (not JavaScript).
 
 **Research thread assignment**: Pattern-matching on title, tags, post excerpt, and author identity against seed definitions in `THREAD_SEEDS`. A topic must pass both:
 - Thread seed score (`>= 1.0`)
