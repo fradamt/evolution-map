@@ -31,6 +31,7 @@ SEED_PATH = SCRIPT_DIR / "papers-seed.json"
 OUTPUT_PATH = SCRIPT_DIR / "papers-db.json"
 
 OPENALEX_BASE = "https://api.openalex.org"
+SEMANTIC_SCHOLAR_BASE = "https://api.semanticscholar.org/graph/v1"
 USER_AGENT = "evolution-map-papers-builder/1.0"
 
 # Ethereum/domain-centric search queries.
@@ -230,7 +231,10 @@ def invert_abstract(idx):
 
 
 def normalize_title_key(title):
-    return re.sub(r"[^a-z0-9]+", " ", (title or "").lower()).strip()
+    text = (title or "").lower()
+    # Strip literal escape sequences from OpenAlex titles (e.g. literal \n, \t).
+    text = re.sub(r"\\[nrt]", " ", text)
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
 def term_in_text(term, text):
@@ -278,6 +282,192 @@ def http_get_json(path, params=None, retries=5, pause=0.15):
             backoff = pause * (2 ** attempt)
             time.sleep(backoff)
     raise RuntimeError(f"OpenAlex request failed after retries: {url}") from last_err
+
+
+def http_post_json(url, body, retries=5, pause=1.0):
+    """POST JSON to a URL via curl, with retries and exponential backoff."""
+    payload_str = json.dumps(body)
+    last_err = None
+
+    for attempt in range(retries + 1):
+        try:
+            proc = subprocess.run(
+                [
+                    "curl",
+                    "-fsSL",
+                    "--connect-timeout",
+                    "10",
+                    "--max-time",
+                    "60",
+                    "-A",
+                    USER_AGENT,
+                    "-H",
+                    "Content-Type: application/json",
+                    "--data",
+                    "@-",
+                    url,
+                ],
+                input=payload_str,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return json.loads(proc.stdout)
+        except Exception as err:  # noqa: BLE001
+            last_err = err
+            if attempt == retries:
+                break
+            backoff = pause * (2 ** attempt)
+            time.sleep(backoff)
+    raise RuntimeError(f"POST request failed after retries: {url}") from last_err
+
+
+def paper_id_to_ss_id(paper):
+    """Convert a paper's canonical ID to Semantic Scholar format.
+
+    Returns an SS-compatible ID string, or None if no usable identifier.
+    SS accepts: DOI:xxx, ARXIV:xxx, CorpusId:xxx
+    """
+    doi = paper.get("doi")
+    arxiv_id = paper.get("arxiv_id")
+
+    # For arxiv DOIs (10.48550/arxiv.XXXX), extract the arXiv ID directly.
+    if doi and re.match(r"10\.48550/arxiv\.", doi, re.IGNORECASE):
+        extracted = re.sub(r"^10\.48550/arxiv\.", "", doi, flags=re.IGNORECASE)
+        return f"ARXIV:{extracted}"
+
+    if arxiv_id:
+        return f"ARXIV:{arxiv_id}"
+
+    if doi:
+        return f"DOI:{doi}"
+
+    return None
+
+
+def _all_ss_ids_for_paper(paper):
+    """Return all possible SS IDs for a paper (primary ID + aliases).
+
+    This handles merged papers where the canonical ID might use a published DOI
+    but the arXiv version (in aliases) is what SS knows.
+    """
+    ids = set()
+
+    # From primary fields.
+    primary = paper_id_to_ss_id(paper)
+    if primary:
+        ids.add(primary)
+
+    # From aliases — extract DOI/arXiv from doi:xxx or arxiv:xxx format.
+    for alias in paper.get("aliases") or []:
+        if alias.startswith("doi:"):
+            doi = alias[4:]
+            if re.match(r"10\.48550/arxiv\.", doi, re.IGNORECASE):
+                extracted = re.sub(r"^10\.48550/arxiv\.", "", doi, flags=re.IGNORECASE)
+                ids.add(f"ARXIV:{extracted}")
+            else:
+                ids.add(f"DOI:{doi}")
+        elif alias.startswith("arxiv:"):
+            ids.add(f"ARXIV:{alias[6:]}")
+
+    return ids
+
+
+def ss_batch_citations(papers):
+    """Query Semantic Scholar batch endpoint for citation counts.
+
+    Returns dict mapping our canonical paper ID to SS result dict.
+    Queries all known IDs (primary + aliases) and keeps the best result.
+    """
+    # Build mapping: SS ID → our paper ID
+    ss_to_ours = {}
+    for paper in papers:
+        for ss_id in _all_ss_ids_for_paper(paper):
+            ss_to_ours[ss_id] = paper["id"]
+
+    if not ss_to_ours:
+        return {}
+
+    ss_ids = list(ss_to_ours.keys())
+    results = {}
+    batch_size = 500
+    url = f"{SEMANTIC_SCHOLAR_BASE}/paper/batch"
+
+    for i in range(0, len(ss_ids), batch_size):
+        chunk = ss_ids[i : i + batch_size]
+        batch_num = i // batch_size + 1
+        total_batches = (len(ss_ids) + batch_size - 1) // batch_size
+        print(
+            f"  SS batch {batch_num}/{total_batches}: {len(chunk)} papers...",
+            flush=True,
+        )
+
+        try:
+            response = http_post_json(
+                f"{url}?fields=citationCount,externalIds",
+                {"ids": chunk},
+            )
+        except RuntimeError as err:
+            print(f"  WARNING: SS batch {batch_num} failed: {err}", flush=True)
+            continue
+
+        if not isinstance(response, list):
+            print(f"  WARNING: SS batch {batch_num} unexpected response type", flush=True)
+            continue
+
+        for ss_id, result in zip(chunk, response):
+            our_id = ss_to_ours[ss_id]
+            if result is None:
+                continue
+            existing = results.get(our_id)
+            if existing is None or (result.get("citationCount") or 0) > (existing.get("citationCount") or 0):
+                results[our_id] = result
+
+        # Rate limit between batches.
+        if i + batch_size < len(ss_ids):
+            time.sleep(1.0)
+
+    return results
+
+
+def enrich_with_semantic_scholar(papers):
+    """Enrich papers with Semantic Scholar citation counts.
+
+    For each paper, stores `ss_cited_by_count` and updates `cited_by_count`
+    to max(openalex, semantic_scholar).
+
+    Returns (enriched_count, not_found_count).
+    """
+    print("Querying Semantic Scholar for citation counts...", flush=True)
+
+    ss_results = ss_batch_citations(papers)
+
+    enriched = 0
+    not_found = 0
+
+    for paper in papers:
+        pid = paper["id"]
+        ss_data = ss_results.get(pid)
+        if ss_data is None:
+            not_found += 1
+            paper["ss_cited_by_count"] = 0
+            continue
+
+        ss_count = ss_data.get("citationCount") or 0
+        paper["ss_cited_by_count"] = ss_count
+
+        oa_count = paper.get("cited_by_count") or 0
+        if ss_count > oa_count:
+            paper["cited_by_count"] = ss_count
+            enriched += 1
+
+    print(
+        f"  Semantic Scholar: {enriched} papers updated, "
+        f"{not_found} not found, "
+        f"{len(papers) - enriched - not_found} unchanged",
+        flush=True,
+    )
+    return enriched, not_found
 
 
 def author_name_tokens(name):
@@ -510,7 +700,20 @@ def merge_seed(seed_path):
     return out
 
 
+def _is_arxiv_doi(doi):
+    """True if the DOI is an arXiv preprint DOI (10.48550/arxiv.xxx)."""
+    return bool(doi and re.match(r"10\.48550/arxiv\.", doi, re.IGNORECASE))
+
+
 def merge_paper_rows(existing, incoming):
+    # Collect both DOIs/years before the base swap can clobber them.
+    both_dois = [d for d in (existing.get("doi"), incoming.get("doi")) if d]
+    both_years = [y for y in (existing.get("year"), incoming.get("year")) if y]
+    both_arxiv = [a for a in (existing.get("arxiv_id"), incoming.get("arxiv_id")) if a]
+    both_openalex = [o for o in (existing.get("openalex_id"), incoming.get("openalex_id")) if o]
+    both_urls = [u for u in (existing.get("url"), incoming.get("url")) if u]
+    both_venues = [v for v in (existing.get("venue"), incoming.get("venue")) if v]
+
     if (incoming.get("relevance_score") or 0) > (existing.get("relevance_score") or 0):
         # Keep stronger row as base but preserve existing id aliases.
         base = dict(incoming)
@@ -527,6 +730,7 @@ def merge_paper_rows(existing, incoming):
         existing["aliases"] = sorted(a for a in aliases if a and a != existing.get("id"))
 
     existing["cited_by_count"] = max(existing.get("cited_by_count") or 0, incoming.get("cited_by_count") or 0)
+    existing["ss_cited_by_count"] = max(existing.get("ss_cited_by_count") or 0, incoming.get("ss_cited_by_count") or 0)
     existing["relevance_score"] = max(existing.get("relevance_score") or 0, incoming.get("relevance_score") or 0)
 
     for k in ("authors", "tags", "relevance_reasons", "matched_queries", "source_types"):
@@ -534,25 +738,44 @@ def merge_paper_rows(existing, incoming):
         vals.update(incoming.get(k) or [])
         existing[k] = sorted(v for v in vals if v)
 
-    if not existing.get("doi") and incoming.get("doi"):
-        existing["doi"] = incoming["doi"]
-    if not existing.get("arxiv_id") and incoming.get("arxiv_id"):
-        existing["arxiv_id"] = incoming["arxiv_id"]
-    if not existing.get("openalex_id") and incoming.get("openalex_id"):
-        existing["openalex_id"] = incoming["openalex_id"]
-    if not existing.get("url") and incoming.get("url"):
-        existing["url"] = incoming["url"]
-    if not existing.get("venue") and incoming.get("venue"):
-        existing["venue"] = incoming["venue"]
+    # Prefer the published (non-arXiv) DOI when merging preprint + published.
+    published_dois = [d for d in both_dois if not _is_arxiv_doi(d)]
+    if published_dois:
+        existing["doi"] = published_dois[0]
+    elif both_dois:
+        existing["doi"] = both_dois[0]
+
+    if not existing.get("arxiv_id") and both_arxiv:
+        existing["arxiv_id"] = both_arxiv[0]
+    if not existing.get("openalex_id") and both_openalex:
+        existing["openalex_id"] = both_openalex[0]
+    if not existing.get("url") and both_urls:
+        existing["url"] = both_urls[0]
+    if not existing.get("venue") and both_venues:
+        existing["venue"] = both_venues[0]
+
+    # Prefer the later year (published version) and update the canonical ID
+    # to use the published DOI.
+    if both_years:
+        existing["year"] = max(both_years)
+    new_doi = existing.get("doi")
+    new_arxiv = existing.get("arxiv_id")
+    new_oa = existing.get("openalex_id")
+    new_id = canonical_paper_id(new_doi, new_arxiv, new_oa, existing.get("title"), existing.get("year"))
+    if new_id != existing.get("id"):
+        aliases = set(existing.get("aliases") or [])
+        aliases.add(existing["id"])
+        aliases.discard(new_id)
+        existing["aliases"] = sorted(a for a in aliases if a)
+        existing["id"] = new_id
+
     return existing
 
 
 def dedupe_accepted_papers(papers):
     deduped = {}
     for paper in papers:
-        title_key = normalize_title_key(paper.get("title") or "")
-        year = paper.get("year")
-        key = ("title_year", title_key, year)
+        key = normalize_title_key(paper.get("title") or "")
         if key not in deduped:
             deduped[key] = paper
         else:
@@ -671,6 +894,7 @@ def build_database(min_score, min_year, query_pages, author_pages, per_page):
 
     print("Resolving author seeds...", flush=True)
     resolved_authors = {}
+    seen_author_ids = {}  # OpenAlex author ID → first seed name
     for name in sorted(author_names):
         resolved = resolve_author(name)
         if not resolved:
@@ -678,6 +902,10 @@ def build_database(min_score, min_year, query_pages, author_pages, per_page):
         author_id = short_openalex_id(resolved.get("id"))
         if not author_id:
             continue
+        # Skip if we already resolved this OpenAlex author under a different name.
+        if author_id in seen_author_ids:
+            continue
+        seen_author_ids[author_id] = name
         resolved_authors[name] = {
             "id": author_id,
             "display_name": resolved.get("display_name"),
@@ -831,6 +1059,11 @@ def main():
     parser.add_argument("--query-pages", type=int, default=2, help="Pages per keyword query")
     parser.add_argument("--author-pages", type=int, default=1, help="Pages per author")
     parser.add_argument("--per-page", type=int, default=100, help="OpenAlex page size (<=200)")
+    parser.add_argument(
+        "--skip-ss",
+        action="store_true",
+        help="Skip Semantic Scholar citation enrichment",
+    )
     args = parser.parse_args()
 
     output_path = Path(args.output)
@@ -841,6 +1074,15 @@ def main():
         author_pages=args.author_pages,
         per_page=max(1, min(200, args.per_page)),
     )
+
+    # Semantic Scholar enrichment (after all OpenAlex collection and dedup).
+    if not args.skip_ss:
+        ss_enriched, ss_not_found = enrich_with_semantic_scholar(payload["papers"])
+        payload["config"]["semantic_scholar"] = True
+        payload["stats"]["ss_enriched"] = ss_enriched
+        payload["stats"]["ss_not_found"] = ss_not_found
+    else:
+        print("Skipping Semantic Scholar enrichment (--skip-ss)", flush=True)
 
     with open(output_path, "w") as f:
         json.dump(payload, f, indent=2, ensure_ascii=True)
@@ -855,6 +1097,11 @@ def main():
     )
     print(f"  sources={stats['source_breakdown']}")
     print(f"  domains={stats['domain_breakdown']}")
+    if "ss_enriched" in stats:
+        print(
+            f"  semantic_scholar: {stats['ss_enriched']} enriched, "
+            f"{stats['ss_not_found']} not found"
+        )
 
 
 if __name__ == "__main__":
