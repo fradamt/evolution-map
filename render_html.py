@@ -6523,70 +6523,98 @@ function applyEntityFocusTimeline(context) {
   var focusTopicId = (context.kind === 'topic' && context.entityTopicId !== null && context.entityTopicId !== undefined)
     ? Number(context.entityTopicId)
     : null;
+  function normalizedTopicId(topicId) {
+    var tid = Number(topicId);
+    return isFinite(tid) ? tid : null;
+  }
+  function normalizedMagId(magId) {
+    var mid = Number(magId);
+    return isFinite(mid) ? mid : null;
+  }
+  function normalizedPaperId(paperId) {
+    return String(paperId || '').replace(/^paper_/, '').trim();
+  }
+  function topicIsLinkedAndVisible(topicId) {
+    var tid = normalizedTopicId(topicId);
+    if (tid === null) return false;
+    if (focusTopicId !== null && tid === focusTopicId) {
+      return timelineTopicVisibleForFocus(tid, focusTopicId, null);
+    }
+    if (!context.linkedTopics.has(tid)) return false;
+    return timelineTopicVisibleForFocus(tid, focusTopicId, null);
+  }
+  function eipIsLinkedAndVisible(eipNodeId, eipNum) {
+    var eid = String(eipNodeId || '').trim();
+    if (!eid) {
+      var parsedNum = Number(eipNum);
+      if (isFinite(parsedNum)) eid = 'eip_' + String(parsedNum);
+    }
+    if (!eid) return false;
+    var num = Number(eipNum);
+    if (!isFinite(num)) num = Number(String(eid).replace(/^eip_/, ''));
+    if (!isFinite(num)) return false;
+    var isFocusedEip = (context.kind === 'eip' && context.entityNodeId && String(context.entityNodeId) === eid);
+    if (!isFocusedEip && !context.linkedEips.has(eid)) return false;
+    return timelineEipVisibleByNum(num);
+  }
+  function magiciansIsLinkedAndVisible(magId) {
+    var mid = normalizedMagId(magId);
+    if (mid === null) return false;
+    var isFocusedMag = (context.kind === 'magicians' && context.entityMagId !== null && Number(context.entityMagId) === mid);
+    if (!isFocusedMag && !context.linkedMagicians.has(mid)) return false;
+    return timelineMagiciansVisibleById(mid);
+  }
+  function paperIsLinkedAndVisible(paperId) {
+    var pid = normalizedPaperId(paperId);
+    if (!pid) return false;
+    var isFocusedPaper = (isPaperFocus && String(context.entityPaperId || '') === pid);
+    if (!isFocusedPaper && !context.linkedPapers.has(pid)) return false;
+    return timelinePaperVisibleById(pid);
+  }
   function focusEdgeEndpointVisible(topicId) {
-    return timelineTopicVisibleForFocus(topicId, focusTopicId, null);
+    var tid = normalizedTopicId(topicId);
+    return tid !== null && timelineTopicVisibleForFocus(tid, focusTopicId, null);
+  }
+  function topicEdgeShouldShow(edge) {
+    if (!edge) return false;
+    var sourceId = normalizedTopicId(edge.source);
+    var targetId = normalizedTopicId(edge.target);
+    if (sourceId === null || targetId === null) return false;
+    if (!focusEdgeEndpointVisible(sourceId) || !focusEdgeEndpointVisible(targetId)) return false;
+    if (focusTopicId !== null) return sourceId === focusTopicId || targetId === focusTopicId;
+    return context.linkedTopics.has(sourceId) && context.linkedTopics.has(targetId);
   }
 
   d3.selectAll('.edge-line')
     .style('display', function(e) {
       if (isPaperFocus || !e) return 'none';
-      var sourceVisible = focusEdgeEndpointVisible(e.source);
-      var targetVisible = focusEdgeEndpointVisible(e.target);
-      return (sourceVisible && targetVisible) ? null : 'none';
+      return topicEdgeShouldShow(e) ? null : 'none';
     })
     .attr('stroke-opacity', function(e) {
       if (isPaperFocus || !e) return 0;
-      var sourceVisible = focusEdgeEndpointVisible(e.source);
-      var targetVisible = focusEdgeEndpointVisible(e.target);
-      if (!sourceVisible || !targetVisible) return 0;
-      var sourceId = Number(e.source);
-      var targetId = Number(e.target);
-      if (focusTopicId !== null) {
-        var isFocusEdge = (sourceId === focusTopicId || targetId === focusTopicId);
-        if (isFocusEdge) return 0.86;
-      }
-      if (context.linkedTopics.has(sourceId) && context.linkedTopics.has(targetId)) return 0.62;
-      return 0.02;
+      if (!topicEdgeShouldShow(e)) return 0;
+      var sourceId = normalizedTopicId(e.source);
+      var targetId = normalizedTopicId(e.target);
+      if (focusTopicId !== null && (sourceId === focusTopicId || targetId === focusTopicId)) return 0.86;
+      return 0.62;
     })
     .attr('stroke-width', function(e) {
       if (isPaperFocus || !e) return 0.6;
-      var sourceVisible = focusEdgeEndpointVisible(e.source);
-      var targetVisible = focusEdgeEndpointVisible(e.target);
-      if (!sourceVisible || !targetVisible) return 0.6;
-      var sourceId = Number(e.source);
-      var targetId = Number(e.target);
-      if (focusTopicId !== null) {
-        var isFocusEdge = (sourceId === focusTopicId || targetId === focusTopicId);
-        if (isFocusEdge) return 2.0;
-      }
-      return (context.linkedTopics.has(sourceId) && context.linkedTopics.has(targetId)) ? 1.9 : 0.9;
+      if (!topicEdgeShouldShow(e)) return 0.6;
+      var sourceId = normalizedTopicId(e.source);
+      var targetId = normalizedTopicId(e.target);
+      if (focusTopicId !== null && (sourceId === focusTopicId || targetId === focusTopicId)) return 2.0;
+      return 1.9;
     })
     .attr('stroke', function(e) {
       if (isPaperFocus || !e) return '#556';
-      var sourceVisible = focusEdgeEndpointVisible(e.source);
-      var targetVisible = focusEdgeEndpointVisible(e.target);
-      if (!sourceVisible || !targetVisible) return '#556';
-      var sourceId = Number(e.source);
-      var targetId = Number(e.target);
-      if (focusTopicId !== null) {
-        var isFocusEdge = (sourceId === focusTopicId || targetId === focusTopicId);
-        if (isFocusEdge) return '#9fc0ff';
-      }
-      if (context.linkedTopics.has(sourceId) && context.linkedTopics.has(targetId)) return '#9fc0ff';
-      return '#556';
+      if (!topicEdgeShouldShow(e)) return '#556';
+      return '#9fc0ff';
     })
     .attr('marker-end', function(e) {
       if (isPaperFocus || !e) return null;
-      var sourceVisible = focusEdgeEndpointVisible(e.source);
-      var targetVisible = focusEdgeEndpointVisible(e.target);
-      if (!sourceVisible || !targetVisible) return null;
-      var sourceId = Number(e.source);
-      var targetId = Number(e.target);
-      if (focusTopicId !== null) {
-        var isFocusEdge = (sourceId === focusTopicId || targetId === focusTopicId);
-        if (isFocusEdge) return 'url(#arrow-highlight)';
-      }
-      return (context.linkedTopics.has(sourceId) && context.linkedTopics.has(targetId)) ? 'url(#arrow-highlight)' : 'url(#arrow-default)';
+      if (!topicEdgeShouldShow(e)) return null;
+      return 'url(#arrow-highlight)';
     });
 
   d3.selectAll('.eip-square').attr('opacity', function(e) {
@@ -6621,148 +6649,144 @@ function applyEntityFocusTimeline(context) {
     return context.linkedPapers.has(String(pid)) ? 0.78 : 0;
   });
 
+  function crossRefEdgeShouldShow(ed) {
+    if (isPaperFocus || !ed) return false;
+    var eipNode = String(ed.eipNodeId || '').trim();
+    if (!topicIsLinkedAndVisible(ed.topicId)) return false;
+    if (!eipIsLinkedAndVisible(eipNode, ed.eipNum)) return false;
+    if (context.kind === 'eip') return context.entityNodeId && String(context.entityNodeId) === eipNode;
+    return true;
+  }
   d3.selectAll('.cross-ref-edge')
     .style('display', function(ed) {
-      if (isPaperFocus) return 'none';
-      if (!ed) return 'none';
-      if (!timelineTopicVisible(ed.topicId)) return 'none';
-      if (!timelineEipVisibleByNum(ed.eipNum)) return 'none';
-      return null;
+      return crossRefEdgeShouldShow(ed) ? null : 'none';
     })
     .attr('stroke', '#8fb4ff')
     .attr('stroke-opacity', function(ed) {
-      if (!showPosts || !showEips) return 0.01;
-      if (!ed) return 0.02;
-      if (!timelineTopicVisible(ed.topicId) || !timelineEipVisibleByNum(ed.eipNum)) return 0.02;
-      if (context.kind === 'eip') {
-        return String(ed.eipNodeId) === String(context.entityNodeId) ? 0.92 : 0.02;
-      }
-      return (context.linkedTopics.has(ed.topicId) && context.linkedEips.has(String(ed.eipNodeId))) ? 0.70 : 0.02;
+      if (!showPosts || !showEips || !crossRefEdgeShouldShow(ed)) return 0;
+      return context.kind === 'eip' ? 0.92 : 0.70;
     })
     .attr('stroke-width', function(ed) {
-      if (!showPosts || !showEips) return 0.4;
-      if (!ed) return 0.6;
-      if (!timelineTopicVisible(ed.topicId) || !timelineEipVisibleByNum(ed.eipNum)) return 0.6;
-      if (context.kind === 'eip') {
-        return String(ed.eipNodeId) === String(context.entityNodeId) ? 1.9 : 0.6;
-      }
-      return (context.linkedTopics.has(ed.topicId) && context.linkedEips.has(String(ed.eipNodeId))) ? 1.5 : 0.6;
+      if (!showPosts || !showEips || !crossRefEdgeShouldShow(ed)) return 0.6;
+      return context.kind === 'eip' ? 1.9 : 1.5;
     });
 
+  function magiciansRefEdgeShouldShow(ed) {
+    if (isPaperFocus || !ed || !ed.magTopic) return false;
+    var mid = magiciansTopicId(ed.magTopic);
+    if (!magiciansIsLinkedAndVisible(mid)) return false;
+    if (!topicIsLinkedAndVisible(ed.topicId)) return false;
+    if (context.kind === 'magicians') {
+      return context.entityMagId !== null && Number(context.entityMagId) === Number(mid);
+    }
+    return true;
+  }
   d3.selectAll('.magicians-ref-edge')
     .style('display', function(ed) {
-      if (isPaperFocus) return 'none';
-      if (!ed || !ed.magTopic) return 'none';
-      if (!timelineMagiciansVisibleById(magiciansTopicId(ed.magTopic))) return 'none';
-      if (!timelineTopicVisible(ed.topicId)) return 'none';
-      return null;
+      return magiciansRefEdgeShouldShow(ed) ? null : 'none';
     })
     .attr('stroke', '#bf93df')
     .attr('stroke-opacity', function(ed) {
-      if (!showPosts || !showMagicians) return 0.01;
-      if (!ed || !ed.magTopic) return 0.02;
-      if (!timelineMagiciansVisibleById(magiciansTopicId(ed.magTopic)) || !timelineTopicVisible(ed.topicId)) return 0.02;
-      if (context.kind === 'magicians') {
-        return Number(magiciansTopicId(ed.magTopic)) === Number(context.entityMagId) ? 0.90 : 0.02;
-      }
-      return context.linkedMagicians.has(magiciansTopicId(ed.magTopic)) ? 0.68 : 0.02;
+      if (!showPosts || !showMagicians || !magiciansRefEdgeShouldShow(ed)) return 0;
+      return context.kind === 'magicians' ? 0.90 : 0.68;
     })
     .attr('stroke-width', function(ed) {
-      if (!showPosts || !showMagicians) return 0.4;
-      if (!ed || !ed.magTopic) return 0.6;
-      if (!timelineMagiciansVisibleById(magiciansTopicId(ed.magTopic)) || !timelineTopicVisible(ed.topicId)) return 0.6;
-      if (context.kind === 'magicians') {
-        return Number(magiciansTopicId(ed.magTopic)) === Number(context.entityMagId) ? 1.7 : 0.6;
-      }
-      return context.linkedMagicians.has(magiciansTopicId(ed.magTopic)) ? 1.4 : 0.6;
+      if (!showPosts || !showMagicians || !magiciansRefEdgeShouldShow(ed)) return 0.6;
+      return context.kind === 'magicians' ? 1.7 : 1.4;
     });
 
+  function paperTopicRefEdgeShouldShow(ed) {
+    if (!ed) return false;
+    var pid = normalizedPaperId(ed.paperId);
+    if (!paperIsLinkedAndVisible(pid)) return false;
+    if (!topicIsLinkedAndVisible(ed.topicId)) return false;
+    if (isPaperFocus) return String(pid) === String(context.entityPaperId || '');
+    if (context.kind === 'eip') {
+      var edgeEips = Array.isArray(ed.eipNodeIds) ? ed.eipNodeIds : [];
+      return edgeEips.some(function(eid) { return context.entityNodeId && String(eid) === String(context.entityNodeId); });
+    }
+    if (context.kind === 'magicians') {
+      return magiciansIsLinkedAndVisible(ed.magId);
+    }
+    return true;
+  }
   d3.selectAll('.paper-topic-ref-edge')
     .style('display', function(ed) {
-      if (!ed) return 'none';
-      if (!timelinePaperVisibleById(ed.paperId)) return 'none';
-      if (!timelineTopicVisible(ed.topicId)) return 'none';
-      if (isPaperFocus && String(ed.paperId) !== String(context.entityPaperId || '')) return 'none';
-      return null;
+      return paperTopicRefEdgeShouldShow(ed) ? null : 'none';
     })
     .attr('stroke', '#8eb8ff')
     .attr('stroke-opacity', function(ed) {
-      if (!showPosts || !showPapers || !ed) return 0.01;
-      if (!timelinePaperVisibleById(ed.paperId) || !timelineTopicVisible(ed.topicId)) return 0.02;
-      if (isPaperFocus) return String(ed.paperId) === String(context.entityPaperId) ? 0.90 : 0;
-      if (context.kind === 'eip') {
-        var edgeEips = Array.isArray(ed.eipNodeIds) ? ed.eipNodeIds : [];
-        var linkedToFocusedEip = edgeEips.some(function(eid) {
-          return String(eid) === String(context.entityNodeId || '');
-        });
-        return linkedToFocusedEip ? 0.74 : 0.02;
-      }
-      if (context.kind === 'magicians') return context.linkedMagicians.has(Number(ed.magId || -1)) ? 0.68 : 0.02;
-      return context.linkedPapers.has(String(ed.paperId)) ? 0.66 : 0.02;
+      if (!showPosts || !showPapers || !paperTopicRefEdgeShouldShow(ed)) return 0;
+      if (isPaperFocus) return 0.90;
+      if (context.kind === 'eip') return 0.74;
+      if (context.kind === 'magicians') return 0.68;
+      return 0.66;
     })
     .attr('stroke-width', function(ed) {
-      if (!showPosts || !showPapers || !ed) return 0.5;
-      if (isPaperFocus) return String(ed.paperId) === String(context.entityPaperId) ? 1.8 : 0.6;
-      if (context.kind === 'eip') {
-        var edgeEips = Array.isArray(ed.eipNodeIds) ? ed.eipNodeIds : [];
-        var linkedToFocusedEip = edgeEips.some(function(eid) {
-          return String(eid) === String(context.entityNodeId || '');
-        });
-        return linkedToFocusedEip ? 1.5 : 0.6;
-      }
-      return context.linkedPapers.has(String(ed.paperId)) ? 1.4 : 0.6;
+      if (!showPosts || !showPapers || !paperTopicRefEdgeShouldShow(ed)) return 0.6;
+      if (isPaperFocus) return 1.8;
+      if (context.kind === 'eip') return 1.5;
+      return 1.4;
     });
 
+  function paperEipRefEdgeShouldShow(ed) {
+    if (!ed) return false;
+    var pid = normalizedPaperId(ed.paperId);
+    if (!paperIsLinkedAndVisible(pid)) return false;
+    if (!eipIsLinkedAndVisible(ed.eipNodeId, ed.eipNum)) return false;
+    if (isPaperFocus) return String(pid) === String(context.entityPaperId || '');
+    if (context.kind === 'eip') return context.entityNodeId && String(ed.eipNodeId || '') === String(context.entityNodeId);
+    if (context.kind === 'magicians') return magiciansIsLinkedAndVisible(ed.magId);
+    return true;
+  }
   d3.selectAll('.paper-eip-ref-edge')
     .style('display', function(ed) {
-      if (!ed) return 'none';
-      if (!timelinePaperVisibleById(ed.paperId)) return 'none';
-      if (!timelineEipVisibleByNum(ed.eipNum)) return 'none';
-      if (isPaperFocus && String(ed.paperId) !== String(context.entityPaperId || '')) return 'none';
-      return null;
+      return paperEipRefEdgeShouldShow(ed) ? null : 'none';
     })
     .attr('stroke', '#94c3ff')
     .attr('stroke-opacity', function(ed) {
-      if (!showEips || !showPapers || !ed) return 0.01;
-      if (!timelinePaperVisibleById(ed.paperId) || !timelineEipVisibleByNum(ed.eipNum)) return 0.02;
-      if (isPaperFocus) return String(ed.paperId) === String(context.entityPaperId) ? 0.88 : 0;
-      if (context.kind === 'eip') return String(ed.eipNodeId || '') === String(context.entityNodeId || '') ? 0.86 : 0.02;
-      if (context.kind === 'magicians') return context.linkedMagicians.has(Number(ed.magId || -1)) ? 0.66 : 0.02;
-      return context.linkedPapers.has(String(ed.paperId)) ? 0.66 : 0.02;
+      if (!showEips || !showPapers || !paperEipRefEdgeShouldShow(ed)) return 0;
+      if (isPaperFocus) return 0.88;
+      if (context.kind === 'eip') return 0.86;
+      if (context.kind === 'magicians') return 0.66;
+      return 0.66;
     })
     .attr('stroke-width', function(ed) {
-      if (!showEips || !showPapers || !ed) return 0.5;
-      if (isPaperFocus) return String(ed.paperId) === String(context.entityPaperId) ? 1.8 : 0.6;
-      if (context.kind === 'eip') return String(ed.eipNodeId || '') === String(context.entityNodeId || '') ? 1.8 : 0.6;
-      return context.linkedPapers.has(String(ed.paperId)) ? 1.3 : 0.6;
+      if (!showEips || !showPapers || !paperEipRefEdgeShouldShow(ed)) return 0.6;
+      if (isPaperFocus) return 1.8;
+      if (context.kind === 'eip') return 1.8;
+      return 1.3;
     });
 
+  function paperPaperEdgeShouldShow(ed) {
+    if (!showPapers || !ed) return false;
+    var paperA = normalizedPaperId(ed.paperA);
+    var paperB = normalizedPaperId(ed.paperB);
+    if (!paperIsLinkedAndVisible(paperA) || !paperIsLinkedAndVisible(paperB)) return false;
+    if (!isPaperFocus) return true;
+    var focusPid = String(context.entityPaperId || '');
+    return String(paperA) === focusPid || String(paperB) === focusPid;
+  }
   d3.selectAll('.paper-paper-edge')
     .style('display', function(ed) {
-      if (!showPapers || !ed) return 'none';
-      if (!timelinePaperVisibleById(ed.paperA)) return 'none';
-      if (!timelinePaperVisibleById(ed.paperB)) return 'none';
-      if (!isPaperFocus) return null;
-      var focusPid = String(context.entityPaperId || '');
-      return (String(ed.paperA) === focusPid || String(ed.paperB) === focusPid) ? null : 'none';
+      return paperPaperEdgeShouldShow(ed) ? null : 'none';
     })
     .attr('stroke', '#8fb7ef')
     .attr('stroke-opacity', function(ed) {
-      if (!showPapers || !ed) return 0.01;
-      if (!timelinePaperVisibleById(ed.paperA) || !timelinePaperVisibleById(ed.paperB)) return 0.02;
+      if (!paperPaperEdgeShouldShow(ed)) return 0;
       if (isPaperFocus) {
         var pid = String(context.entityPaperId || '');
         return (String(ed.paperA) === pid || String(ed.paperB) === pid) ? 0.72 : 0;
       }
-      return (context.linkedPapers.has(String(ed.paperA)) && context.linkedPapers.has(String(ed.paperB))) ? 0.40 : 0.03;
+      return 0.40;
     })
     .attr('stroke-width', function(ed) {
-      if (!showPapers || !ed) return 0.5;
+      if (!paperPaperEdgeShouldShow(ed)) return 0.6;
       if (isPaperFocus) {
         var pid = String(context.entityPaperId || '');
         return (String(ed.paperA) === pid || String(ed.paperB) === pid) ? 1.45 : 0.6;
       }
-      return (context.linkedPapers.has(String(ed.paperA)) && context.linkedPapers.has(String(ed.paperB))) ? 1.1 : 0.6;
+      return 1.1;
     });
 
   updateFocusedTimelineExtraEdges(context, hasFilter);
