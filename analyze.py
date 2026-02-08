@@ -149,6 +149,8 @@ THREAD_SEEDS = {
             r"longest.?chain", r"tendermint", r"randomness.?beacon",
             r"\bvdf\b", r"randao", r"leader.?election",
             r"incentiv.*full.?node", r"anti.?correlation",
+            r"block.?propos", r"eth2", r"eth1.*eth2", r"the.?merge",
+            r"withdrawal.?credential", r"deposit.?contract",
         ],
         "tag_patterns": [
             r"casper", r"pos", r"beacon", r"ssf",
@@ -195,6 +197,7 @@ THREAD_SEEDS = {
             # Based preconf (merged from based_preconf)
             r"based.?sequenc", r"pre.?confirm", r"preconf",
             r"proposer.?commit",
+            r"withdrawal", r"exit.?game", r"dispute.?game",
         ],
         "tag_patterns": [r"plasma", r"rollup", r"layer-2", r"preconf", r"based"],
         "paper_tags": ["rollups"],
@@ -251,10 +254,14 @@ THREAD_SEEDS = {
             r"state.?size", r"trie", r"witness", r"binary.?trie",
             r"portal.?network", r"history.?expir", r"purge",
             r"evm.*improv", r"eof\b",
-            r"state.?rent", r"access.?list",
+            r"state.?rent", r"\brent\b.*(?:sleep|wak|stor|expir)", r"access.?list",
             r"account.?abstract", r"erc.?4337", r"eip.?7702",
             r"\bopcode\b", r"precompile",
             r"gossipsub", r"devp2p", r"light.?client",
+            r"regenesis", r"fuel.?source.*evm", r"oil.*evm",
+            r"evm.?performance", r"block.?level.?warm", r"warming",
+            r"merkle.?tree", r"binary.?tree", r"hex.*bin.*tree",
+            r"delayed.?execution", r"skipped.?transac",
         ],
         "tag_patterns": [r"verkle", r"stateless", r"state", r"evm", r"account-abstraction"],
         "paper_tags": ["stateless"],
@@ -277,8 +284,10 @@ THREAD_SEEDS = {
             r"polynomial.?commit", r"inner.?product",
             r"\bbls\b", r"aggregate.?sig", r"threshold.?sig",
             r"hash.?function", r"collision.?resist",
-            r"merkle", r"accumulator", r"commitment.?scheme",
+            r"accumulator", r"commitment.?scheme",
             r"post.?quantum", r"falcon",
+            r"vector.?commitment", r"elliptic.?curve", r"bandersnatch",
+            r"obfuscat", r"secret.?shar", r"crypto(?:graph|econom)",
         ],
         "tag_patterns": [r"zk", r"snark", r"stark", r"cryptography", r"kzg"],
         "paper_tags": [
@@ -305,6 +314,8 @@ THREAD_SEEDS = {
             r"market.?maker", r"lending", r"stablecoin",
             r"\bdefi\b", r"liquidity", r"loss.?versus", r"\blvr\b",
             r"flash.?loan", r"token.?economics",
+            r"\bico\b", r"token.?sale", r"crowdsale", r"coin.?voting",
+            r"\boracle\b", r"price.?feed",
         ],
         "tag_patterns": [r"defi", r"amm", r"dex", r"liquidity"],
         "paper_tags": [
@@ -362,6 +373,8 @@ THREAD_SEEDS = {
             r"governance", r"voting", r"\bdao\b", r"quadratic",
             r"mechanism.?design", r"daico", r"signaling",
             r"futarchy", r"prediction.?market",
+            r"collusion", r"public.?good", r"funding.?design",
+            r"retroactive.?fund", r"grants?\b.*fund",
         ],
         "tag_patterns": [r"governance", r"dao", r"voting"],
         "paper_tags": ["economics", "incentives"],
@@ -397,7 +410,9 @@ PROTOCOL_ANCHOR_PATTERNS = [
     # Core protocol terms
     r"\bprotocol\b", r"\bconsensus\b", r"\bfork.?choice\b", r"\bfinality\b",
     r"\bvalidator", r"\battestat", r"\bslashing\b", r"\bbeacon\b",
-    r"\beip[- ]?\d{1,5}\b", r"\bhard.?fork\b",
+    r"\beip[- ]?\d{1,5}\b", r"\bhard.?fork\b", r"\bcasper\b",
+    r"\bdeposit.?contract\b", r"\bwithdrawal\b", r"\beth2\b",
+    r"\bblock.?propos", r"\bcommittee\b",
     # Data availability / scaling
     r"\bshard", r"\bdata.?availab", r"\bdas\b", r"\bblob", r"\bdanksharding\b",
     r"\bproto.?dank\b", r"\bpeer.?das\b", r"\berasure.?cod",
@@ -406,18 +421,19 @@ PROTOCOL_ANCHOR_PATTERNS = [
     r"\bsequenc", r"\bpre.?confirm", r"\bbased.?rollup",
     # MEV / PBS
     r"\bpbs\b", r"\bmev\b", r"\bepbs\b", r"\bproposer\b", r"\bbuilder\b",
-    r"\bblock.?auction\b", r"\bpayload.?timeliness\b",
+    r"\bblock.?auction\b", r"\bpayload.?timeliness\b", r"\bburn.?auction\b",
     # Economics / fees
     r"\bissuance\b", r"\bstaking\b", r"\breward.?curve\b", r"\bbase.?fee\b",
     r"\bfee.?market\b", r"\bgas.?limit\b", r"\bgas.?price\b", r"\b1559\b",
     # State / execution
     r"\bstate\b", r"\bstateless\b", r"\bverkle\b", r"\btrie\b", r"\bwitness\b",
-    r"\bevm\b", r"\bexecution.?layer\b",
+    r"\bevm\b", r"\bexecution.?layer\b", r"\bopcode\b", r"\bgas\b",
+    r"\bstorage\b", r"\brent\b",
     # Privacy / cryptography
     r"\bzk\b", r"\bsnark", r"\bstark", r"\bzero.?knowledge\b", r"\bmaci\b",
     r"\bsemaphore\b", r"\bstealth.?address\b",
     # Censorship resistance
-    r"\binclusion.?list\b", r"\bfocil\b", r"\bcensorship.?resist",
+    r"\binclusion.?list\b", r"\bfocil\b", r"\bcensorship",
 ]
 
 NON_PROTOCOL_PATTERNS = [
@@ -1600,6 +1616,9 @@ def main():
 
     blocked_by_relevance = 0
 
+    # Categories that are designed for non-protocol-core content; skip guardrail.
+    GUARDRAIL_EXEMPT_THREADS = {"defi", "governance", "security"}
+
     # Assign each topic to best-matching thread (all topics, not just included)
     for tid in tids:
         t = topics[tid]
@@ -1611,12 +1630,17 @@ def main():
                 best_score = s
                 best_thread = thread_id
 
-        protocol_ok, _sig = is_protocol_relevant_topic(t, best_score)
-        if best_score >= 1.0 and protocol_ok:
-            t["research_thread"] = best_thread
+        if best_score >= 1.0:
+            if best_thread in GUARDRAIL_EXEMPT_THREADS:
+                t["research_thread"] = best_thread
+            else:
+                protocol_ok, _sig = is_protocol_relevant_topic(t, best_score)
+                if protocol_ok:
+                    t["research_thread"] = best_thread
+                else:
+                    blocked_by_relevance += 1
+                    t["research_thread"] = None
         else:
-            if best_score >= 1.0 and not protocol_ok:
-                blocked_by_relevance += 1
             t["research_thread"] = None
 
     # Thread stats
