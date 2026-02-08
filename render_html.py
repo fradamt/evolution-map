@@ -2896,7 +2896,7 @@ const PAPER_TAG_TO_THREADS = (function() {
 function paperTimelineInfluence(nodeOrPaper) {
   var p = nodeOrPaper || {};
   if (p._paperInf !== undefined && p._paperInf !== null) return Number(p._paperInf) || 0;
-  return paperScoreToInfluence(Number(p.rs || p.paperScore || 0));
+  return paperMetadataToInfluence(p);
 }
 
 function paperTimelineThread(nodeOrPaper) {
@@ -3582,9 +3582,37 @@ function paperFromNode(node) {
 
 function paperScoreToInfluence(score) {
   var s = Math.max(0, Number(score || 0));
-  // Keep paper influence on a lower band than topics so shared min-influence
-  // filtering does not let nearly all papers through.
+  // Relation-score -> influence mapping (used for network paper augmentation).
+  // Keep it conservative so paper overlay does not dominate core topic graph.
   return Math.max(0.03, Math.min(0.62, 0.04 + (s / 36)));
+}
+
+function paperMetadataToInfluence(paper) {
+  if (!paper) return 0.03;
+  var rs = Math.max(0, Number(paper.rs || 0));
+  var cites = Math.max(0, Number(paper.cb || 0));
+  var eipRefs = uniqueSortedNumbers(paper.eq || []).length;
+  var year = paperYearValue(paper);
+
+  // Relevance scores have a high floor in the ingestion pipeline.
+  // Normalize around that floor so "just mentions Ethereum" does not score high.
+  var relNorm = Math.max(0, Math.min(1, (rs - 10.0) / 8.0));
+  var citeNorm = Math.max(0, Math.min(1, Math.log1p(cites) / Math.log(1 + 800)));
+  var eipNorm = Math.max(0, Math.min(1, eipRefs / 2.0));
+
+  // Citations are the strongest signal; relevance and explicit EIP anchors refine it.
+  var base = (0.62 * citeNorm) + (0.23 * relNorm) + (0.15 * eipNorm);
+
+  // Recency damping: very recent uncited papers should not outrank foundational work.
+  var nowYear = new Date().getFullYear();
+  var age = (year !== null) ? (nowYear - year) : 3;
+  var recencyMultiplier = 1.0;
+  if (age <= 0) recencyMultiplier = 0.55 + Math.min(0.25, citeNorm * 0.20);
+  else if (age === 1) recencyMultiplier = 0.68 + Math.min(0.28, citeNorm * 0.45);
+  else if (age === 2) recencyMultiplier = 0.84 + Math.min(0.16, citeNorm * 0.30);
+
+  var influence = 0.03 + (0.62 * base * recencyMultiplier);
+  return Math.max(0.03, Math.min(0.62, influence));
 }
 
 function buildNetworkPaperAugment(baseNodeMap) {
@@ -7400,7 +7428,7 @@ function buildNetwork() {
       var p = paperFromNode(n);
       if ((!n.title || !String(n.title).trim()) && p) n.title = p.t || 'Untitled paper';
       if ((n.influence === undefined || n.influence === null)) {
-        n.influence = p ? paperScoreToInfluence(Number(p.rs || 0)) : 0.2;
+        n.influence = p ? paperMetadataToInfluence(p) : 0.2;
       }
     } else if (sourceType === 'fork') {
       n.isFork = true;
@@ -10352,9 +10380,11 @@ function drawPaperTimeline() {
   });
 
   var topPapers = paperData.slice().sort(function(a, b) {
-    var d = Number(b.rs || 0) - Number(a.rs || 0);
+    var d = paperTimelineInfluence(b) - paperTimelineInfluence(a);
     if (d !== 0) return d;
-    return Number(b.cb || 0) - Number(a.cb || 0);
+    d = Number(b.cb || 0) - Number(a.cb || 0);
+    if (d !== 0) return d;
+    return Number(b.rs || 0) - Number(a.rs || 0);
   }).slice(0, 14);
   var labelG = paperG.append('g');
   topPapers.forEach(function(paper) {
