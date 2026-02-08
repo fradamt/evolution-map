@@ -236,7 +236,7 @@
       "title": "Goldfish: No More Attacks on Ethereum?!",
       "year": 2022,
       "authors": [
-        "Francesco D’Amato",
+        "Francesco D'Amato",
         "Joachim Neu",
         "Ertem Nusret Tas",
         "David Tse"
@@ -663,6 +663,146 @@
         "kzg",
         "polynomial-commitments",
         "cryptography"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2302.11326",
+      "title": "Recent Latest Message Driven GHOST: Balancing Dynamic Availability With Asynchrony Resilience",
+      "year": 2023,
+      "authors": [
+        "Francesco D'Amato",
+        "Luca Zanolini"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2302.11326",
+      "arxiv_id": "2302.11326",
+      "url": "https://arxiv.org/abs/2302.11326",
+      "openalex_id": "https://openalex.org/W4321649656",
+      "cited_by_count": 1,
+      "source": "curated",
+      "tags": [
+        "ethereum",
+        "consensus",
+        "fork-choice",
+        "ghost"
+      ]
+    },
+    {
+      "id": "doi:10.1109/sp40001.2021.00045",
+      "title": "Ebb-and-Flow Protocols: A Resolution of the Availability-Finality Dilemma",
+      "year": 2021,
+      "authors": [
+        "Joachim Neu",
+        "Ertem Nusret Tas",
+        "David Tse"
+      ],
+      "venue": "IEEE Symposium on Security and Privacy",
+      "doi": "10.1109/SP40001.2021.00045",
+      "arxiv_id": "2009.04987",
+      "url": "https://doi.org/10.1109/SP40001.2021.00045",
+      "openalex_id": "https://openalex.org/W3084120904",
+      "cited_by_count": 9,
+      "source": "curated",
+      "tags": [
+        "consensus",
+        "finality",
+        "availability",
+        "ethereum"
+      ]
+    },
+    {
+      "id": "doi:10.4230/lipics.aft.2023.30",
+      "title": "Casper the Friendly Finality Gadget",
+      "year": 2017,
+      "authors": [
+        "Vitalik Buterin",
+        "Virgil Griffith"
+      ],
+      "venue": "Advances in Financial Technologies",
+      "doi": "10.4230/lipics.aft.2023.30",
+      "arxiv_id": "1710.09437",
+      "url": "https://doi.org/10.4230/lipics.aft.2023.30",
+      "openalex_id": "https://openalex.org/W2766209351",
+      "cited_by_count": 423,
+      "source": "curated",
+      "tags": [
+        "ethereum",
+        "consensus",
+        "finality",
+        "casper"
+      ]
+    },
+    {
+      "id": "doi:10.48550/arxiv.2003.03052",
+      "title": "Combining GHOST and Casper",
+      "year": 2020,
+      "authors": [
+        "Vitalik Buterin",
+        "Diego Hernandez",
+        "Thor Kamphefner",
+        "Khiem Pham",
+        "Zhi Qiao",
+        "Danny Ryan",
+        "Juhyeok Sin",
+        "Ying Wang",
+        "Yan X. Zhang"
+      ],
+      "venue": "arXiv (Cornell University)",
+      "doi": "10.48550/arXiv.2003.03052",
+      "arxiv_id": "2003.03052",
+      "url": "https://arxiv.org/abs/2003.03052",
+      "openalex_id": "https://openalex.org/W3009765502",
+      "cited_by_count": 67,
+      "source": "curated",
+      "tags": [
+        "ethereum",
+        "consensus",
+        "gasper",
+        "ghost",
+        "casper"
+      ]
+    },
+    {
+      "id": "doi:10.1007/978-3-319-63688-7_12",
+      "title": "Ouroboros: A Provably Secure Proof-of-Stake Blockchain Protocol",
+      "year": 2017,
+      "authors": [
+        "Aggelos Kiayias",
+        "Alexander Russell",
+        "Bernardo David",
+        "Roman Oliynykov"
+      ],
+      "venue": "CRYPTO 2017",
+      "doi": "10.1007/978-3-319-63688-7_12",
+      "arxiv_id": null,
+      "url": "https://doi.org/10.1007/978-3-319-63688-7_12",
+      "openalex_id": "https://openalex.org/W2739845435",
+      "cited_by_count": 1408,
+      "source": "curated",
+      "tags": [
+        "consensus",
+        "proof-of-stake",
+        "ouroboros"
+      ]
+    },
+    {
+      "id": "openalex:W3151748982",
+      "title": "Ethereum: A Secure Decentralised Generalised Transaction Ledger",
+      "year": 2013,
+      "authors": [
+        "Gavin Wood"
+      ],
+      "venue": null,
+      "doi": null,
+      "arxiv_id": null,
+      "url": "https://ethereum.github.io/yellowpaper/paper.pdf",
+      "openalex_id": "https://openalex.org/W3151748982",
+      "cited_by_count": 5313,
+      "source": "curated",
+      "tags": [
+        "ethereum",
+        "yellow-paper",
+        "specification"
       ]
     }
   ]

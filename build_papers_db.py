@@ -68,6 +68,15 @@ KEYWORD_QUERIES = [
     "plonk proof system",
     "kzg polynomial commitments",
     "casper ffg",
+    "gasper consensus protocol",
+    "single slot finality blockchain",
+    "LMD GHOST fork choice",
+    "proof of stake BFT consensus",
+    "blockchain sharding protocol",
+    "verifiable delay function blockchain",
+    "based rollups sequencing",
+    "RLMD-GHOST",
+    "orbit SSF consensus",
 ]
 
 # Researcher seeds (requested + expanded from curated list).
@@ -181,6 +190,14 @@ def now_iso():
 
 def normalize_space(text):
     return re.sub(r"\s+", " ", text or "").strip()
+
+
+def normalize_quotes(text):
+    """Replace curly/smart quotes with ASCII equivalents."""
+    if not text:
+        return text
+    return text.replace("\u2018", "'").replace("\u2019", "'").replace(
+        "\u201c", '"').replace("\u201d", '"').replace("`", "'")
 
 
 def normalize_doi(doi):
@@ -528,6 +545,11 @@ def paper_from_openalex(work):
     ids = work.get("ids") or {}
     doi = normalize_doi(work.get("doi") or ids.get("doi"))
     arxiv_id = normalize_arxiv(ids.get("arxiv"))
+    # Fallback: extract arXiv ID from arXiv DOI (10.48550/arXiv.XXXX.XXXXX)
+    if not arxiv_id and doi:
+        m = re.match(r"10\.48550/arxiv\.(\d{4}\.\d{4,5})", doi, re.IGNORECASE)
+        if m:
+            arxiv_id = m.group(1)
     openalex_id = work.get("id") or ids.get("openalex")
 
     primary_location = work.get("primary_location") or {}
@@ -543,7 +565,7 @@ def paper_from_openalex(work):
     authors = []
     for a in authorships:
         author = (a or {}).get("author") or {}
-        name = normalize_space(author.get("display_name") or "")
+        name = normalize_quotes(normalize_space(author.get("display_name") or ""))
         if name:
             authors.append(name)
 
@@ -902,11 +924,12 @@ def build_database(min_score, min_year, query_pages, author_pages, per_page):
     print(f"  Candidates after keyword phase: {len(work_candidates)}", flush=True)
 
     # Author discovery starts with explicit seeds plus seed-paper authors.
-    author_names = set(AUTHOR_SEEDS)
+    # Normalize quotes so e.g. D'Amato and D'Amato don't create duplicates.
+    author_names = set(normalize_quotes(n) for n in AUTHOR_SEEDS)
     for p in seed_rows.values():
         for a in p.get("authors", []):
             if a:
-                author_names.add(a)
+                author_names.add(normalize_quotes(a))
 
     print("Resolving author seeds...", flush=True)
     resolved_authors = {}
@@ -1010,6 +1033,11 @@ def build_database(min_score, min_year, query_pages, author_pages, per_page):
             reasons = set(existing.get("relevance_reasons") or [])
             reasons.add("curated_seed")
             existing["relevance_reasons"] = sorted(reasons)
+            # Preserve useful seed metadata that OA might lack
+            if not existing.get("arxiv_id") and seed_paper.get("arxiv_id"):
+                existing["arxiv_id"] = seed_paper["arxiv_id"]
+            if not existing.get("venue") and seed_paper.get("venue"):
+                existing["venue"] = seed_paper["venue"]
             continue
 
         seeded = dict(seed_paper)
@@ -1022,6 +1050,97 @@ def build_database(min_score, min_year, query_pages, author_pages, per_page):
         domain_counter.update(t for t in seeded.get("tags", []) if t in DOMAIN_TERMS)
 
     accepted = dedupe_accepted_papers(accepted)
+
+    # ------------------------------------------------------------------
+    # Citation expansion: discover papers our corpus cites frequently
+    # but that weren't found by keyword/author search.
+    # ------------------------------------------------------------------
+    print("Citation expansion: finding frequently-cited missing papers...", flush=True)
+    accepted_oa_ids = set()
+    for p in accepted:
+        oa = p.get("openalex_id", "")
+        if oa:
+            short = short_openalex_id(oa)
+            if short:
+                accepted_oa_ids.add(short)
+            accepted_oa_ids.add(oa)
+
+    # Count how many corpus papers cite each external paper
+    external_ref_counts = Counter()
+    for p in accepted:
+        for ref_oa_id in p.get("referenced_works") or []:
+            if ref_oa_id not in accepted_oa_ids:
+                external_ref_counts[ref_oa_id] += 1
+
+    # Papers cited by >= CITATION_EXPANSION_MIN corpus papers get auto-added
+    CITATION_EXPANSION_MIN = 3
+    expansion_ids = [
+        oa_id for oa_id, count in external_ref_counts.most_common()
+        if count >= CITATION_EXPANSION_MIN
+    ]
+    print(f"  {len(expansion_ids)} external papers cited by >={CITATION_EXPANSION_MIN} corpus papers", flush=True)
+
+    if expansion_ids:
+        expansion_added = 0
+        # Batch-fetch from OpenAlex in chunks of 50
+        for chunk_start in range(0, len(expansion_ids), 50):
+            chunk = expansion_ids[chunk_start:chunk_start + 50]
+            ids_filter = "|".join(f"https://openalex.org/{oid}" for oid in chunk)
+            try:
+                cursor = "*"
+                while cursor:
+                    data = http_get_json(
+                        "/works",
+                        {
+                            "filter": f"openalex:{ids_filter}",
+                            "select": work_select,
+                            "per_page": 200,
+                            "cursor": cursor,
+                        },
+                    )
+                    for work in data.get("results", []):
+                        paper = paper_from_openalex(work)
+                        if not paper:
+                            continue
+                        # Check if already in accepted by ID
+                        if any(a["id"] == paper["id"] for a in accepted):
+                            continue
+                        # Give it a relevance boost proportional to citation count
+                        cite_count = external_ref_counts.get(
+                            short_openalex_id(work.get("id")), 0
+                        )
+                        paper["relevance_score"] = max(
+                            float(min_score),
+                            min(30.0, cite_count * 2.0),
+                        )
+                        paper["relevance_reasons"] = [
+                            f"citation_expansion(cited_by={cite_count})"
+                        ]
+                        paper["tags"] = sorted(
+                            set(paper.get("tags") or []) | {"citation-expanded"}
+                        )
+                        paper["matched_queries"] = []
+                        paper["source_types"] = ["citation_expansion"]
+                        paper["source"] = "citation_expansion"
+                        # Strip large text fields (same as scored papers)
+                        paper.pop("abstract_text", None)
+                        paper.pop("concept_terms", None)
+                        paper.pop("keyword_terms", None)
+                        accepted.append(paper)
+                        expansion_added += 1
+                        # Track the new OA ID to avoid re-fetching
+                        new_short = short_openalex_id(work.get("id"))
+                        if new_short:
+                            accepted_oa_ids.add(new_short)
+                    cursor = (data.get("meta") or {}).get("next_cursor")
+                    if not data.get("results"):
+                        break
+            except Exception as err:
+                print(f"  Warning: expansion batch failed: {err}", flush=True)
+
+        accepted = dedupe_accepted_papers(accepted)
+        print(f"  Added {expansion_added} papers via citation expansion", flush=True)
+        source_counter.update({"citation_expansion": expansion_added})
 
     accepted.sort(
         key=lambda p: (

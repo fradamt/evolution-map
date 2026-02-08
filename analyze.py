@@ -2835,31 +2835,54 @@ def main():
     # Build paper citation graph from referenced_works
     # -----------------------------------------------------------------------
     print("Building paper citation graph...")
-    # Build reverse lookup: short OpenAlex ID → paper ID in our corpus
+    # Build reverse lookups: OA ID, DOI, arXiv → paper ID in our corpus
     openalex_to_pid = {}
+    doi_to_pid = {}
+    arxiv_to_pid = {}
     for pid, p in papers_output.items():
         oa_id = p.get("openalex_id", "")
         if oa_id:
-            # Store both full URL form and short form
             short = oa_id.replace("https://openalex.org/", "")
             openalex_to_pid[short] = pid
             openalex_to_pid[oa_id] = pid
+        doi = p.get("doi", "")
+        if doi:
+            doi_to_pid[doi.lower()] = pid
+        arxiv = p.get("arxiv_id", "")
+        if arxiv:
+            arxiv_to_pid[arxiv.lower()] = pid
+
+    def resolve_ref(ref_id):
+        """Resolve a reference ID (OA short, DOI, arXiv) to a corpus paper ID."""
+        pid = openalex_to_pid.get(ref_id)
+        if pid:
+            return pid
+        # Try as DOI (some refs use DOI strings)
+        if ref_id.startswith("10."):
+            pid = doi_to_pid.get(ref_id.lower())
+            if pid:
+                return pid
+        return None
 
     paper_graph_nodes = []
     paper_graph_edges = []
     paper_ids_with_edges = set()
+    seen_edges = set()
 
     for pid, p in papers_output.items():
         for ref_oa_id in p.get("referenced_works") or []:
-            target_pid = openalex_to_pid.get(ref_oa_id)
+            target_pid = resolve_ref(ref_oa_id)
             if target_pid and target_pid != pid:
-                paper_graph_edges.append({
-                    "source": pid,
-                    "target": target_pid,
-                    "type": "cites",
-                })
-                paper_ids_with_edges.add(pid)
-                paper_ids_with_edges.add(target_pid)
+                edge_key = (pid, target_pid)
+                if edge_key not in seen_edges:
+                    seen_edges.add(edge_key)
+                    paper_graph_edges.append({
+                        "source": pid,
+                        "target": target_pid,
+                        "type": "cites",
+                    })
+                    paper_ids_with_edges.add(pid)
+                    paper_ids_with_edges.add(target_pid)
 
     # Include all papers with edges as nodes (minimum influence threshold 0.0)
     for pid in paper_ids_with_edges:
