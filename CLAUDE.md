@@ -18,8 +18,11 @@ An analysis pipeline over a scraped archive of **ethresear.ch** (Ethereum's Disc
 ```
 extract_eips.py      # Parses EIP front-matter → eip-metadata.json (stdlib-only)
 eip-metadata.json    # EIP catalog: number → title, status, fork, authors, links
+build_papers_db.py   # OpenAlex + Semantic Scholar → papers-db.json (651 papers)
+enrich_paper_refs.py # Batch-fetch referenced_works for existing papers-db.json
+papers-db.json       # Paper corpus with citations, relevance, referenced_works
 analyze.py           # Processes scraped data + EIP catalog → analysis.json
-analysis.json        # Structured analysis output (~4 MB, the central artifact)
+analysis.json        # Structured analysis output (~6 MB, the central artifact)
 render_html.py       # analysis.json → self-contained D3.js HTML visualization
 render_markdown.py   # analysis.json → ~10,000 word narrative Markdown document
 evolution-map.html   # Generated: interactive timeline/network/co-author viz
@@ -50,6 +53,12 @@ python3 ../scrape.py --base-url https://ethereum-magicians.org \
 
 # Step 2: Extract EIP metadata from the EIPs repo
 python3 extract_eips.py
+
+# Step 2b: (Optional) Build/refresh papers database from OpenAlex + Semantic Scholar
+python3 build_papers_db.py
+
+# Step 2c: (Optional) Enrich existing papers-db.json with citation references
+python3 enrich_paper_refs.py
 
 # Step 3: Analyze scraped data + EIP catalog → analysis.json
 python3 analyze.py
@@ -111,7 +120,7 @@ All EIP authors are treated equally — no distinction between first-author and 
 
 ## Data Shapes
 
-**analysis.json**: `{ metadata, eras[], forks[], eip_catalog{}, magicians_topics{}, cross_forum_edges[], eip_authors{}, eip_graph{ nodes[], edges[] }, topics{}, minor_topics{}, authors{}, research_threads{}, graph{ nodes[], edges[] }, co_author_graph{ nodes[], edges[] } }`
+**analysis.json**: `{ metadata, eras[], forks[], eip_catalog{}, magicians_topics{}, cross_forum_edges[], eip_authors{}, eip_graph{ nodes[], edges[] }, paper_graph{ nodes[], edges[] }, topics{}, minor_topics{}, authors{}, research_threads{}, graph{ nodes[], edges[] }, co_author_graph{ nodes[], edges[] } }`
 
 **metadata**: Includes corpus/accounting fields and cross-forum counters:
 - `total_topics`, `scraped_topics`, `excluded_topics`, `excluded_by_category`, `excluded_by_title`, `included`
@@ -123,6 +132,8 @@ All EIP authors are treated equally — no distinction between first-author and 
 **eip_authors{}** (~40 entries, keyed by canonical name): `name, eips[], eip_count, influence_sum, statuses{}, forks_contributed[], active_years, score`. All authored EIPs in a single `eips` list (no first-author/co-author distinction).
 
 **eip_graph{}**: `nodes[]` (~490 EIPs with influence ≥ 0.05), `edges[]` (~734 edges of 3 types: `eip_topic`, `eip_requires`, `eip_fork`).
+
+**paper_graph{}**: `nodes[]` (~423 papers with citation edges), `edges[]` (~1,120 citation edges, type `cites`). Built from OpenAlex `referenced_works` — only includes edges where both source and target are in our corpus. Each node: `id, title, year, influence, thread, cited_by_count`. Used in timeline (citation lines), network (paper_cites edges), and paper detail panel (Cited by / References sections).
 
 **topics{}** (included, ~550): Full detail — `id, title, author, coauthors, authors, date, category_name, views, like_count, posts_count, influence_score, research_thread, era, first_post_excerpt, tags, eip_mentions, primary_eips, in_degree, out_degree, shipped_in, magicians_refs, participants, outgoing_refs, incoming_refs`.
 
@@ -144,6 +155,7 @@ EIP-related compact data:
 - `DATA.eipCatalog{}`: keyed by EIP number, adds `inf` (influence), `th` (thread), `mv`/`ml`/`mp`/`mpc` (magicians views/likes/posts/participants), `erc` (ethresearch citation count)
 - `DATA.eipAuthors[]`: `n` = name, `eips` = EIP numbers list, `inf` = influence_sum, `sc` = score, `fk` = forks_contributed
 - `DATA.eipGraph{}`: `nodes[]` and `edges[]` for EIP citation/dependency network
+- `DATA.paperGraph{}`: `nodes[]` and `edges[]` for paper citation network (from OpenAlex `referenced_works`)
 
 **Scraped data** (parent directory):
 - `index.json`: `{ "topic_id_str": { id, title, category_id, category_name, posts_count, created_at, last_posted_at, views, like_count } }`
