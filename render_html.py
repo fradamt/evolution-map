@@ -4424,6 +4424,52 @@ function magiciansInfluenceScore(mt) {
   return magiciansRawEngagementScore(mt);
 }
 
+function timelineTopicVisible(topicId) {
+  if (!showPosts) return false;
+  var tid = Number(topicId);
+  if (!isFinite(tid)) return false;
+  var t = DATA.topics[tid];
+  if (!t) return false;
+  return topicMatchesFilter(t);
+}
+
+function timelineEipVisibleByNum(eipNum) {
+  if (!showEips) return false;
+  var num = Number(eipNum);
+  if (!isFinite(num)) return false;
+  var eMeta = (DATA.eipCatalog || {})[String(num)];
+  if (!eMeta) return false;
+  // Mirror drawEipTimeline gating so we never render dangling paper/EIP links.
+  if (!eMeta.cr || Number(eMeta.inf || 0) < 0.05) return false;
+  if (!eMeta._eipDate || eMeta._eipYPos === undefined || eMeta._eipYPos === null) return false;
+  return eipMatchesFilter(eMeta);
+}
+
+function timelineMagiciansVisibleById(magId) {
+  if (!showMagicians) return false;
+  var mid = Number(magId);
+  if (!isFinite(mid)) return false;
+  var mt = (DATA.magiciansTopics || {})[String(mid)];
+  if (!mt) return false;
+  if (!mt._magDate || mt._magYPos === undefined || mt._magYPos === null) return false;
+  return magiciansMatchesFilter(mt);
+}
+
+function timelinePaperVisibleById(paperId) {
+  if (!showPapers) return false;
+  var pid = String(paperId || '').replace(/^paper_/, '').trim();
+  if (!pid) return false;
+  var p = (DATA.papers || {})[pid];
+  if (!p) return false;
+  if (!p._paperDate || p._paperYPos === undefined || p._paperYPos === null) return false;
+  return paperMatchesTimelineFilter(p);
+}
+
+function clearTimelineAuxEdgeMarkers() {
+  d3.selectAll('.cross-ref-edge,.magicians-ref-edge,.paper-topic-ref-edge,.paper-eip-ref-edge,.paper-paper-edge,.focus-eip-topic-edge')
+    .attr('marker-end', null);
+}
+
 function networkNodeSourceType(node) {
   if (!node) return null;
   if (node.sourceType) return node.sourceType;
@@ -5213,6 +5259,7 @@ function applyContentVisibility() {
   d3.selectAll('.topic-circle').style('display', showPosts ? null : 'none');
   d3.selectAll('.topic-label').style('display', showPosts ? null : 'none');
   d3.selectAll('.edge-line').style('display', showPosts ? null : 'none');
+  clearTimelineAuxEdgeMarkers();
   d3.selectAll('.milestone-marker').style('display', function(d) {
     return showPosts && milestonesVisible ? null : 'none';
   });
@@ -5238,36 +5285,35 @@ function applyContentVisibility() {
     return paperMatchesTimelineFilter(d) ? null : 'none';
   });
   d3.selectAll('.paper-topic-ref-edge').style('display', function(d) {
-    if (!(showPosts && showPapers)) return 'none';
-    if (!d || !paperMatchesTimelineFilter((DATA.papers || {})[String(d.paperId)] || {})) return 'none';
-    var t = DATA.topics[d.topicId];
-    if (!t) return 'none';
-    return topicMatchesFilter(t) ? null : 'none';
+    if (!d) return 'none';
+    if (!timelinePaperVisibleById(d.paperId)) return 'none';
+    if (!timelineTopicVisible(d.topicId)) return 'none';
+    return null;
   });
   d3.selectAll('.paper-eip-ref-edge').style('display', function(d) {
-    if (!(showEips && showPapers)) return 'none';
-    if (!d || !paperMatchesTimelineFilter((DATA.papers || {})[String(d.paperId)] || {})) return 'none';
-    var e = (DATA.eipCatalog || {})[String(d.eipNum)];
-    if (!e) return 'none';
-    return eipMatchesFilter(e) ? null : 'none';
+    if (!d) return 'none';
+    if (!timelinePaperVisibleById(d.paperId)) return 'none';
+    if (!timelineEipVisibleByNum(d.eipNum)) return 'none';
+    return null;
   });
   d3.selectAll('.paper-paper-edge').style('display', function(d) {
     if (!showPapers || !d) return 'none';
-    var pa = (DATA.papers || {})[String(d.paperA)] || null;
-    var pb = (DATA.papers || {})[String(d.paperB)] || null;
-    if (!pa || !pb) return 'none';
-    return (paperMatchesTimelineFilter(pa) && paperMatchesTimelineFilter(pb)) ? null : 'none';
+    if (!timelinePaperVisibleById(d.paperA)) return 'none';
+    if (!timelinePaperVisibleById(d.paperB)) return 'none';
+    return null;
   });
   d3.selectAll('.magicians-ref-edge').style('display', function(d) {
-    if (!(showPosts && showMagicians)) return 'none';
-    if (!d || !d.magTopic || !magiciansMatchesFilter(d.magTopic)) return 'none';
+    if (!d || !d.magTopic) return 'none';
+    if (!timelineMagiciansVisibleById(magiciansTopicId(d.magTopic))) return 'none';
+    if (!timelineTopicVisible(d.topicId)) return 'none';
     return null;
   });
   d3.selectAll('.eip-lane-label').style('display', showEips ? null : 'none');
   // Cross-ref edges: only when both posts and EIPs are visible
   d3.selectAll('.cross-ref-edge').style('display', function(d) {
-    if (!(showPosts && showEips)) return 'none';
-    if (d && !eipMatchesFilter(d)) return 'none';
+    if (!d) return 'none';
+    if (!timelineTopicVisible(d.topicId)) return 'none';
+    if (!timelineEipVisibleByNum(d.eipNum)) return 'none';
     return null;
   });
 }
@@ -6426,10 +6472,7 @@ function applyEntityFocusTimeline(context) {
   if (!context) return;
   var hasFilter = activeThread || hasAuthorFilter() || activeCategory || activeTag || minInfluence > 0;
   var isPaperFocus = context.kind === 'paper';
-  if (isPaperFocus) {
-    d3.selectAll('.cross-ref-edge,.magicians-ref-edge,.paper-topic-ref-edge,.paper-eip-ref-edge,.paper-paper-edge,.focus-eip-topic-edge')
-      .attr('marker-end', null);
-  }
+  clearTimelineAuxEdgeMarkers();
 
   var topicOp = {};
   d3.selectAll('.topic-circle').each(function(t) {
@@ -6521,20 +6564,16 @@ function applyEntityFocusTimeline(context) {
   d3.selectAll('.cross-ref-edge')
     .style('display', function(ed) {
       if (isPaperFocus) return 'none';
-      if (!showPosts || !showEips) return 'none';
       if (!ed) return 'none';
-      var t = DATA.topics[ed.topicId];
-      var eMeta = (DATA.eipCatalog || {})[String(ed.eipNum)] || null;
-      if (!t || !eMeta || !topicMatchesFilter(t) || !eipMatchesFilter(eMeta)) return 'none';
+      if (!timelineTopicVisible(ed.topicId)) return 'none';
+      if (!timelineEipVisibleByNum(ed.eipNum)) return 'none';
       return null;
     })
     .attr('stroke', '#8fb4ff')
     .attr('stroke-opacity', function(ed) {
       if (!showPosts || !showEips) return 0.01;
       if (!ed) return 0.02;
-      var t = DATA.topics[ed.topicId];
-      var eMeta = (DATA.eipCatalog || {})[String(ed.eipNum)] || null;
-      if (!t || !eMeta || !topicMatchesFilter(t) || !eipMatchesFilter(eMeta)) return 0.02;
+      if (!timelineTopicVisible(ed.topicId) || !timelineEipVisibleByNum(ed.eipNum)) return 0.02;
       if (context.kind === 'eip') {
         return String(ed.eipNodeId) === String(context.entityNodeId) ? 0.92 : 0.02;
       }
@@ -6543,9 +6582,7 @@ function applyEntityFocusTimeline(context) {
     .attr('stroke-width', function(ed) {
       if (!showPosts || !showEips) return 0.4;
       if (!ed) return 0.6;
-      var t = DATA.topics[ed.topicId];
-      var eMeta = (DATA.eipCatalog || {})[String(ed.eipNum)] || null;
-      if (!t || !eMeta || !topicMatchesFilter(t) || !eipMatchesFilter(eMeta)) return 0.6;
+      if (!timelineTopicVisible(ed.topicId) || !timelineEipVisibleByNum(ed.eipNum)) return 0.6;
       if (context.kind === 'eip') {
         return String(ed.eipNodeId) === String(context.entityNodeId) ? 1.9 : 0.6;
       }
@@ -6555,18 +6592,16 @@ function applyEntityFocusTimeline(context) {
   d3.selectAll('.magicians-ref-edge')
     .style('display', function(ed) {
       if (isPaperFocus) return 'none';
-      if (!showPosts || !showMagicians) return 'none';
       if (!ed || !ed.magTopic) return 'none';
-      var t = DATA.topics[ed.topicId];
-      if (!t || !topicMatchesFilter(t) || !magiciansMatchesFilter(ed.magTopic)) return 'none';
+      if (!timelineMagiciansVisibleById(magiciansTopicId(ed.magTopic))) return 'none';
+      if (!timelineTopicVisible(ed.topicId)) return 'none';
       return null;
     })
     .attr('stroke', '#bf93df')
     .attr('stroke-opacity', function(ed) {
       if (!showPosts || !showMagicians) return 0.01;
       if (!ed || !ed.magTopic) return 0.02;
-      var t = DATA.topics[ed.topicId];
-      if (!t || !topicMatchesFilter(t) || !magiciansMatchesFilter(ed.magTopic)) return 0.02;
+      if (!timelineMagiciansVisibleById(magiciansTopicId(ed.magTopic)) || !timelineTopicVisible(ed.topicId)) return 0.02;
       if (context.kind === 'magicians') {
         return Number(magiciansTopicId(ed.magTopic)) === Number(context.entityMagId) ? 0.90 : 0.02;
       }
@@ -6575,8 +6610,7 @@ function applyEntityFocusTimeline(context) {
     .attr('stroke-width', function(ed) {
       if (!showPosts || !showMagicians) return 0.4;
       if (!ed || !ed.magTopic) return 0.6;
-      var t = DATA.topics[ed.topicId];
-      if (!t || !topicMatchesFilter(t) || !magiciansMatchesFilter(ed.magTopic)) return 0.6;
+      if (!timelineMagiciansVisibleById(magiciansTopicId(ed.magTopic)) || !timelineTopicVisible(ed.topicId)) return 0.6;
       if (context.kind === 'magicians') {
         return Number(magiciansTopicId(ed.magTopic)) === Number(context.entityMagId) ? 1.7 : 0.6;
       }
@@ -6585,21 +6619,16 @@ function applyEntityFocusTimeline(context) {
 
   d3.selectAll('.paper-topic-ref-edge')
     .style('display', function(ed) {
-      if (!showPosts || !showPapers || !ed) return 'none';
-      var p = (DATA.papers || {})[String(ed.paperId)] || null;
-      if (!p || !paperMatchesTimelineFilter(p)) return 'none';
-      var t = DATA.topics[ed.topicId];
-      if (!t || !topicMatchesFilter(t)) return 'none';
+      if (!ed) return 'none';
+      if (!timelinePaperVisibleById(ed.paperId)) return 'none';
+      if (!timelineTopicVisible(ed.topicId)) return 'none';
       if (isPaperFocus && String(ed.paperId) !== String(context.entityPaperId || '')) return 'none';
       return null;
     })
     .attr('stroke', '#8eb8ff')
     .attr('stroke-opacity', function(ed) {
       if (!showPosts || !showPapers || !ed) return 0.01;
-      var p = (DATA.papers || {})[String(ed.paperId)] || null;
-      if (!p || !paperMatchesTimelineFilter(p)) return 0.02;
-      var t = DATA.topics[ed.topicId];
-      if (!t || !topicMatchesFilter(t)) return 0.02;
+      if (!timelinePaperVisibleById(ed.paperId) || !timelineTopicVisible(ed.topicId)) return 0.02;
       if (isPaperFocus) return String(ed.paperId) === String(context.entityPaperId) ? 0.90 : 0;
       if (context.kind === 'eip') {
         var edgeEips = Array.isArray(ed.eipNodeIds) ? ed.eipNodeIds : [];
@@ -6626,21 +6655,16 @@ function applyEntityFocusTimeline(context) {
 
   d3.selectAll('.paper-eip-ref-edge')
     .style('display', function(ed) {
-      if (!showEips || !showPapers || !ed) return 'none';
-      var p = (DATA.papers || {})[String(ed.paperId)] || null;
-      if (!p || !paperMatchesTimelineFilter(p)) return 'none';
-      var eMeta = (DATA.eipCatalog || {})[String(ed.eipNum)] || null;
-      if (!eMeta || !eipMatchesFilter(eMeta)) return 'none';
+      if (!ed) return 'none';
+      if (!timelinePaperVisibleById(ed.paperId)) return 'none';
+      if (!timelineEipVisibleByNum(ed.eipNum)) return 'none';
       if (isPaperFocus && String(ed.paperId) !== String(context.entityPaperId || '')) return 'none';
       return null;
     })
     .attr('stroke', '#94c3ff')
     .attr('stroke-opacity', function(ed) {
       if (!showEips || !showPapers || !ed) return 0.01;
-      var p = (DATA.papers || {})[String(ed.paperId)] || null;
-      if (!p || !paperMatchesTimelineFilter(p)) return 0.02;
-      var eMeta = (DATA.eipCatalog || {})[String(ed.eipNum)] || null;
-      if (!eMeta || !eipMatchesFilter(eMeta)) return 0.02;
+      if (!timelinePaperVisibleById(ed.paperId) || !timelineEipVisibleByNum(ed.eipNum)) return 0.02;
       if (isPaperFocus) return String(ed.paperId) === String(context.entityPaperId) ? 0.88 : 0;
       if (context.kind === 'eip') return String(ed.eipNodeId || '') === String(context.entityNodeId || '') ? 0.86 : 0.02;
       if (context.kind === 'magicians') return context.linkedMagicians.has(Number(ed.magId || -1)) ? 0.66 : 0.02;
@@ -6656,10 +6680,8 @@ function applyEntityFocusTimeline(context) {
   d3.selectAll('.paper-paper-edge')
     .style('display', function(ed) {
       if (!showPapers || !ed) return 'none';
-      var pa = (DATA.papers || {})[String(ed.paperA)] || null;
-      var pb = (DATA.papers || {})[String(ed.paperB)] || null;
-      if (!pa || !pb) return 'none';
-      if (!paperMatchesTimelineFilter(pa) || !paperMatchesTimelineFilter(pb)) return 'none';
+      if (!timelinePaperVisibleById(ed.paperA)) return 'none';
+      if (!timelinePaperVisibleById(ed.paperB)) return 'none';
       if (!isPaperFocus) return null;
       var focusPid = String(context.entityPaperId || '');
       return (String(ed.paperA) === focusPid || String(ed.paperB) === focusPid) ? null : 'none';
@@ -6667,10 +6689,7 @@ function applyEntityFocusTimeline(context) {
     .attr('stroke', '#8fb7ef')
     .attr('stroke-opacity', function(ed) {
       if (!showPapers || !ed) return 0.01;
-      var pa = (DATA.papers || {})[String(ed.paperA)] || null;
-      var pb = (DATA.papers || {})[String(ed.paperB)] || null;
-      if (!pa || !pb) return 0.02;
-      if (!paperMatchesTimelineFilter(pa) || !paperMatchesTimelineFilter(pb)) return 0.02;
+      if (!timelinePaperVisibleById(ed.paperA) || !timelinePaperVisibleById(ed.paperB)) return 0.02;
       if (isPaperFocus) {
         var pid = String(context.entityPaperId || '');
         return (String(ed.paperA) === pid || String(ed.paperB) === pid) ? 0.72 : 0;
@@ -6736,6 +6755,7 @@ function updateFocusedTimelineExtraEdges(context, hasFilter) {
   sel.exit().remove();
   sel.enter().append('line')
     .attr('class', 'focus-eip-topic-edge')
+    .attr('marker-end', null)
     .attr('stroke', '#a8c4ff')
     .attr('stroke-opacity', 0.56)
     .attr('stroke-width', 1.2)
@@ -7102,11 +7122,11 @@ function restorePinnedHighlight() {
   // Revert stroke-width and restore pinned or filter state
   d3.selectAll('.topic-circle').attr('stroke-width', 0.5);
   d3.selectAll('.net-node .net-shape').attr('stroke-width', 0.5);
-  if (pinnedTopicId) {
-    applyPinnedHighlight();
-  } else {
-    applyFilters();
+  if (hasFocusedEntity()) {
+    applyFocusedEntityHighlight();
+    return;
   }
+  applyFilters();
 }
 
 function filterTimeline(skipFocusedHighlight) {
@@ -7135,6 +7155,7 @@ function filterTimeline(skipFocusedHighlight) {
       return 0.01;
     })
     .attr('marker-end', 'url(#arrow-default)');
+  clearTimelineAuxEdgeMarkers();
   syncLabelsFromMap(targetOp);
 
   // Filter EIP squares
@@ -7149,25 +7170,17 @@ function filterTimeline(skipFocusedHighlight) {
       .style('display', function(d) { return eipMatchesFilter(d) ? null : 'none'; });
     d3.selectAll('.cross-ref-edge')
       .style('display', function(d) {
-        if (!showPosts || !showEips) return 'none';
         if (!d) return 'none';
-        if (!eipMatchesFilter(d)) return 'none';
-        var t = DATA.topics[d.topicId];
-        if (!t) return 'none';
-        if (hasFilter && !topicMatchesFilter(t)) return 'none';
+        if (!timelineTopicVisible(d.topicId)) return 'none';
+        if (!timelineEipVisibleByNum(d.eipNum)) return 'none';
         return null;
       })
       .attr('stroke-opacity', function(d) {
         if (!d) return 0.02;
-        var t = DATA.topics[d.topicId];
-        if (!t) return 0.02;
-        return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.14;
+        return (timelineTopicVisible(d.topicId) && timelineEipVisibleByNum(d.eipNum)) ? 0.14 : 0.02;
       })
       .attr('stroke-width', function(d) {
-        if (!d) return 0.6;
-        var t = DATA.topics[d.topicId];
-        if (!t) return 0.6;
-        return hasFilter && !topicMatchesFilter(t) ? 0.6 : 0.8;
+        return (!d || !timelineTopicVisible(d.topicId) || !timelineEipVisibleByNum(d.eipNum)) ? 0.6 : 0.8;
       });
   }
 
@@ -7181,24 +7194,16 @@ function filterTimeline(skipFocusedHighlight) {
       .style('display', function(d) { return magiciansMatchesFilter(d) ? null : 'none'; });
     d3.selectAll('.magicians-ref-edge')
       .style('display', function(d) {
-        if (!showPosts || !showMagicians) return 'none';
-        if (!d || !d.magTopic || !magiciansMatchesFilter(d.magTopic)) return 'none';
-        var t = DATA.topics[d.topicId];
-        if (!t) return 'none';
-        if (hasFilter && !topicMatchesFilter(t)) return 'none';
+        if (!d || !d.magTopic) return 'none';
+        if (!timelineMagiciansVisibleById(magiciansTopicId(d.magTopic))) return 'none';
+        if (!timelineTopicVisible(d.topicId)) return 'none';
         return null;
       })
       .attr('stroke-opacity', function(d) {
-        if (!d) return 0.02;
-        var t = DATA.topics[d.topicId];
-        if (!t) return 0.02;
-        return hasFilter && !topicMatchesFilter(t) ? 0.02 : 0.14;
+        return (!d || !timelineMagiciansVisibleById(magiciansTopicId(d.magTopic)) || !timelineTopicVisible(d.topicId)) ? 0.02 : 0.14;
       })
       .attr('stroke-width', function(d) {
-        if (!d) return 0.7;
-        var t = DATA.topics[d.topicId];
-        if (!t) return 0.7;
-        return hasFilter && !topicMatchesFilter(t) ? 0.7 : 0.9;
+        return (!d || !timelineMagiciansVisibleById(magiciansTopicId(d.magTopic)) || !timelineTopicVisible(d.topicId)) ? 0.7 : 0.9;
       });
   }
 
@@ -7215,73 +7220,42 @@ function filterTimeline(skipFocusedHighlight) {
       .attr('opacity', 0.74);
     d3.selectAll('.paper-topic-ref-edge')
       .style('display', function(d) {
-        if (!showPosts || !showPapers || !d) return 'none';
-        var p = (DATA.papers || {})[String(d.paperId)];
-        if (!p || !paperMatchesTimelineFilter(p)) return 'none';
-        var t = DATA.topics[d.topicId];
-        if (!t) return 'none';
-        if (hasFilter && !topicMatchesFilter(t)) return 'none';
+        if (!d) return 'none';
+        if (!timelinePaperVisibleById(d.paperId)) return 'none';
+        if (!timelineTopicVisible(d.topicId)) return 'none';
         return null;
       })
       .attr('stroke-opacity', function(d) {
-        if (!d) return 0.02;
-        var p = (DATA.papers || {})[String(d.paperId)];
-        var t = DATA.topics[d.topicId];
-        if (!p || !t) return 0.02;
-        return (paperMatchesTimelineFilter(p) && topicMatchesFilter(t)) ? 0.12 : 0.02;
+        return (!d || !timelinePaperVisibleById(d.paperId) || !timelineTopicVisible(d.topicId)) ? 0.02 : 0.12;
       })
       .attr('stroke-width', function(d) {
-        if (!d) return 0.6;
-        var p = (DATA.papers || {})[String(d.paperId)];
-        var t = DATA.topics[d.topicId];
-        if (!p || !t) return 0.6;
-        return (paperMatchesTimelineFilter(p) && topicMatchesFilter(t)) ? 0.9 : 0.6;
+        return (!d || !timelinePaperVisibleById(d.paperId) || !timelineTopicVisible(d.topicId)) ? 0.6 : 0.9;
       });
     d3.selectAll('.paper-eip-ref-edge')
       .style('display', function(d) {
-        if (!showEips || !showPapers || !d) return 'none';
-        var p = (DATA.papers || {})[String(d.paperId)];
-        if (!p || !paperMatchesTimelineFilter(p)) return 'none';
-        var eMeta = (DATA.eipCatalog || {})[String(d.eipNum)];
-        if (!eMeta || !eipMatchesFilter(eMeta)) return 'none';
+        if (!d) return 'none';
+        if (!timelinePaperVisibleById(d.paperId)) return 'none';
+        if (!timelineEipVisibleByNum(d.eipNum)) return 'none';
         return null;
       })
       .attr('stroke-opacity', function(d) {
-        if (!d) return 0.02;
-        var p = (DATA.papers || {})[String(d.paperId)];
-        var eMeta = (DATA.eipCatalog || {})[String(d.eipNum)];
-        if (!p || !eMeta) return 0.02;
-        return (paperMatchesTimelineFilter(p) && eipMatchesFilter(eMeta)) ? 0.12 : 0.02;
+        return (!d || !timelinePaperVisibleById(d.paperId) || !timelineEipVisibleByNum(d.eipNum)) ? 0.02 : 0.12;
       })
       .attr('stroke-width', function(d) {
-        if (!d) return 0.6;
-        var p = (DATA.papers || {})[String(d.paperId)];
-        var eMeta = (DATA.eipCatalog || {})[String(d.eipNum)];
-        if (!p || !eMeta) return 0.6;
-        return (paperMatchesTimelineFilter(p) && eipMatchesFilter(eMeta)) ? 0.9 : 0.6;
+        return (!d || !timelinePaperVisibleById(d.paperId) || !timelineEipVisibleByNum(d.eipNum)) ? 0.6 : 0.9;
       });
     d3.selectAll('.paper-paper-edge')
       .style('display', function(d) {
         if (!showPapers || !d) return 'none';
-        var pa = (DATA.papers || {})[String(d.paperA)];
-        var pb = (DATA.papers || {})[String(d.paperB)];
-        if (!pa || !pb) return 'none';
-        if (!paperMatchesTimelineFilter(pa) || !paperMatchesTimelineFilter(pb)) return 'none';
+        if (!timelinePaperVisibleById(d.paperA)) return 'none';
+        if (!timelinePaperVisibleById(d.paperB)) return 'none';
         return null;
       })
       .attr('stroke-opacity', function(d) {
-        if (!d) return 0.02;
-        var pa = (DATA.papers || {})[String(d.paperA)];
-        var pb = (DATA.papers || {})[String(d.paperB)];
-        if (!pa || !pb) return 0.02;
-        return (paperMatchesTimelineFilter(pa) && paperMatchesTimelineFilter(pb)) ? 0.10 : 0.02;
+        return (!d || !timelinePaperVisibleById(d.paperA) || !timelinePaperVisibleById(d.paperB)) ? 0.02 : 0.10;
       })
       .attr('stroke-width', function(d) {
-        if (!d) return 0.5;
-        var pa = (DATA.papers || {})[String(d.paperA)];
-        var pb = (DATA.papers || {})[String(d.paperB)];
-        if (!pa || !pb) return 0.5;
-        return (paperMatchesTimelineFilter(pa) && paperMatchesTimelineFilter(pb)) ? 0.85 : 0.5;
+        return (!d || !timelinePaperVisibleById(d.paperA) || !timelinePaperVisibleById(d.paperB)) ? 0.5 : 0.85;
       });
   }
 
@@ -10017,6 +9991,7 @@ function drawEipTimeline() {
       .attr('class', 'cross-ref-edge')
       .attr('x1', tlXScale(eip._eipDate)).attr('y1', eip._eipYPos)
       .attr('x2', tlXScale(topic._date)).attr('y2', topic._yPos)
+      .attr('marker-end', null)
       .attr('stroke', '#6f94f2').attr('stroke-opacity', 0.14).attr('stroke-width', 0.8)
       .datum({
         eipDate: eip._eipDate,
@@ -10121,6 +10096,7 @@ function drawMagiciansTimeline() {
         .attr('class', 'magicians-ref-edge')
         .attr('x1', tlXScale(mt._magDate)).attr('y1', mt._magYPos)
         .attr('x2', tlXScale(topic._date)).attr('y2', topic._yPos)
+        .attr('marker-end', null)
         .attr('stroke', '#9b72c2').attr('stroke-opacity', 0.14).attr('stroke-width', 0.9)
         .attr('stroke-dasharray', '3 3')
         .datum({
@@ -10251,6 +10227,7 @@ function drawPaperTimeline() {
       .attr('class', 'paper-paper-edge')
       .attr('x1', tlXScale(ed.paperDateA)).attr('y1', ed.paperYA)
       .attr('x2', tlXScale(ed.paperDateB)).attr('y2', ed.paperYB)
+      .attr('marker-end', null)
       .attr('stroke', '#8fb7ef').attr('stroke-opacity', 0.10).attr('stroke-width', 0.85)
       .datum(ed)
       .style('display', (showPapers &&
@@ -10283,6 +10260,7 @@ function drawPaperTimeline() {
         .attr('class', 'paper-topic-ref-edge')
         .attr('x1', tlXScale(pDate)).attr('y1', pY)
         .attr('x2', tlXScale(t._date)).attr('y2', t._yPos)
+        .attr('marker-end', null)
         .attr('stroke', '#7ea9e4').attr('stroke-opacity', 0.12).attr('stroke-width', 0.9)
         .datum({
           paperId: pid,
@@ -10315,6 +10293,7 @@ function drawPaperTimeline() {
         .attr('class', 'paper-eip-ref-edge')
         .attr('x1', tlXScale(pDate)).attr('y1', pY)
         .attr('x2', tlXScale(eDate)).attr('y2', eY)
+        .attr('marker-end', null)
         .attr('stroke', '#8fb7ef').attr('stroke-opacity', 0.12).attr('stroke-width', 0.9)
         .datum({
           paperId: pid,
