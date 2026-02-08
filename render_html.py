@@ -1199,7 +1199,7 @@ def generate_html(viz_json, data):
     <button id="sidebar-width-toggle" class="sidebar-width-toggle" onclick="toggleSidebarWidth()" title="Expand sidebar">&#9664;</button>
     <button id="sidebar-hide-toggle" class="sidebar-hide-toggle" onclick="toggleSidebarHidden()" title="Hide sidebar">&#9654;</button>
     <div class="sidebar-section">
-      <h3>Research Threads</h3>
+      <h3>Categories</h3>
       <div id="thread-legend" class="thread-legend"></div>
     </div>
     <div class="sidebar-section">
@@ -8747,7 +8747,7 @@ function showThreadDetail(tid) {
 
   content.innerHTML =
     '<h2 style="color:' + color + '">' + escHtml(th.n) + '</h2>' +
-    '<div class="meta">Research Thread \u00b7 ' + (th.dr ? th.dr[0] + ' to ' + th.dr[1] : '') + '</div>' +
+    '<div class="meta">Category \u00b7 ' + (th.dr ? th.dr[0] + ' to ' + th.dr[1] : '') + '</div>' +
     statsHtml + authorsHtml + eipsHtml + msHtml + topsHtml;
 
   panel.classList.add('open');

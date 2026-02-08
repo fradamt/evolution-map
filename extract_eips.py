@@ -176,9 +176,22 @@ def parse_eip_file(filepath):
         except Exception:
             pass
 
+    # Extract Abstract section from markdown body (first paragraph after ## Abstract)
+    abstract = None
+    abstract_match = re.search(
+        r"^##\s*Abstract\s*\n+(.*?)(?:\n##|\Z)",
+        text, re.MULTILINE | re.DOTALL,
+    )
+    if abstract_match:
+        abstract = abstract_match.group(1).strip()
+        # Collapse to single line, limit length
+        abstract = re.sub(r"\s+", " ", abstract)[:500]
+
     return {
         "eip": eip_num,
         "title": fm.get("title", "").strip() or None,
+        "description": fm.get("description", "").strip() or None,
+        "abstract": abstract,
         "authors": parse_authors(fm.get("author", "")),
         "status": fm.get("status", "").strip() or None,
         "type": fm.get("type", "").strip() or None,

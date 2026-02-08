@@ -2310,37 +2310,108 @@ def main():
     # Assign EIP research threads
     # -----------------------------------------------------------------------
     print("Assigning EIP research threads...")
+
+    # EIP category → default thread mapping (for EIPs with no title pattern match)
+    EIP_CATEGORY_HINTS = {
+        "Core": "execution",       # Most Core EIPs are execution-layer
+        "Networking": "execution",  # Networking → execution bucket
+    }
+
+    # Hardfork meta EIPs → governance
+    HARDFORK_META_RE = re.compile(r"hardfork.?meta|meta.*hardfork", re.IGNORECASE)
+
+    # Build EIP → ethresearch topics reverse index (once, not per-thread)
+    eip_to_topics = defaultdict(set)
+    for tid in tids:
+        for eip_num in topics[tid].get("eip_mentions", []):
+            eip_to_topics[eip_num].add(tid)
+
+    # Pass 1: assign by title + description + abstract patterns
     eip_thread_assigned = 0
     for eip_str, em in eip_catalog.items():
         title = em.get("title", "")
         if not title:
             em["research_thread"] = None
             continue
+
+        # Combine title + description + abstract for matching
+        desc = em.get("description") or ""
+        abstract = em.get("abstract") or ""
+        text_lower = f"{title} {desc} {abstract}".lower()
+        title_lower = title.lower()
+
         best_thread = None
         best_score = 0
-        title_lower = title.lower()
+        eip_num = int(eip_str)
+
         for thread_id, thread_def in THREAD_SEEDS.items():
             s = 0
+            # Title pattern match (strong signal)
             for pat in thread_def["title_patterns"]:
                 if re.search(pat, title_lower):
                     s += 2
                     break
+            # Description/abstract pattern match (weaker signal)
+            if s == 0:
+                for pat in thread_def["title_patterns"]:
+                    if re.search(pat, text_lower):
+                        s += 1
+                        break
             # Boost from related ethresearch topics' thread assignments
-            eip_num = int(eip_str)
-            related_tids = eipToTopics_set = set()
-            for tid in tids:
-                if eip_num in topics[tid].get("eip_mentions", []):
-                    related_tids.add(tid)
-            thread_count = sum(1 for t in related_tids if topics[t].get("research_thread") == thread_id)
+            related_tids = eip_to_topics.get(eip_num, set())
+            thread_count = sum(
+                1 for t in related_tids
+                if topics[t].get("research_thread") == thread_id
+            )
             if thread_count >= 2:
                 s += 1
+            elif thread_count == 1 and s > 0:
+                s += 0.5
             if s > best_score:
                 best_score = s
                 best_thread = thread_id
+
+        # Hardfork meta EIPs → governance
+        if best_score < 1.0 and HARDFORK_META_RE.search(title):
+            best_thread = "governance"
+            best_score = 2
+
+        # Fallback: use EIP category field as hint
+        if best_score < 1.0:
+            eip_cat = em.get("category")
+            if eip_cat in EIP_CATEGORY_HINTS:
+                best_thread = EIP_CATEGORY_HINTS[eip_cat]
+                best_score = 1
+
         em["research_thread"] = best_thread if best_score >= 1.0 else None
         if em["research_thread"]:
             eip_thread_assigned += 1
-    print(f"  {eip_thread_assigned} EIPs assigned to research threads")
+
+    # Pass 2: propagate from requires chain — if an EIP has no thread but
+    # requires EIPs that have a consistent thread, inherit it.
+    propagated = 0
+    for eip_str, em in eip_catalog.items():
+        if em.get("research_thread"):
+            continue
+        if not em.get("title"):
+            continue
+        requires = em.get("requires", [])
+        if not requires:
+            continue
+        req_threads = Counter()
+        for req_num in requires:
+            req_em = eip_catalog.get(str(req_num), {})
+            rt = req_em.get("research_thread")
+            if rt:
+                req_threads[rt] += 1
+        if req_threads:
+            dominant_thread, count = req_threads.most_common(1)[0]
+            if count >= 1:
+                em["research_thread"] = dominant_thread
+                propagated += 1
+                eip_thread_assigned += 1
+
+    print(f"  {eip_thread_assigned} EIPs assigned ({propagated} via requires chain)")
 
     # -----------------------------------------------------------------------
     # Build EIP graph nodes and edges
