@@ -70,18 +70,18 @@ python3 render_markdown.py
 
 ## Key Design Decisions
 
-**Unified influence scoring** (in `analyze.py`): All entity types (topics, EIPs, papers) use percentile-based scoring with shaped_rank(power=2.0) transformation, producing a right-skewed [0, 1] distribution (mean≈0.33, median≈0.25). Two-phase approach:
+**Unified influence scoring** (in `analyze.py`): All entity types (topics, EIPs, papers) use percentile-based scoring with shaped_rank(power=2.0) transformation, producing a right-skewed [0, 1] distribution (mean≈0.33, median≈0.25). `percentile_rank()` uses midrank tie handling. Two-phase approach — see `INFLUENCE_REDESIGN.md` for full details.
 
 *Phase 1 — Intrinsic scores:*
 - **Topics**: 50% citation in-degree percentile + 50% engagement percentile (likes + sqrt(posts) + log1p(views)).
 - **EIPs**: 20% status weight (Final=1.0, Living=0.85, Draft=0.3, Moved=0.02) + 25% magicians engagement percentile + 25% ethresearch citation percentile + 20% fork bonus (1.0 if shipped) + 10% requires depth.
-- **Papers**: 45% citation percentile (among non-zero) + 35% relevance percentile + 20% EIP anchoring. Recency damping: current year ×0.55, -1yr ×0.70, -2yr ×0.85.
+- **Papers**: 40% citation percentile + 40% relevance percentile + 20% EIP anchoring. Relevance gate: papers with `relevance_score < 10` (bottom ~71%) get citation contribution dampened to 25%, preventing "blockchain for healthcare/supply chain" papers from dominating. Recency damping: current year ×0.55, -1yr ×0.70, -2yr ×0.85.
 
 *Phase 2 — Cross-entity reinforcement (single pass):*
 - Topics mentioning Final EIPs get +0.03 each (capped +0.12); topics mentioning fork-shipped EIPs get +0.04 each (capped +0.12).
 - EIPs cited by high-influence topics (intrinsic ≥ 0.3) get +0.02 each (capped +0.10).
 
-Tier 1 topics have influence ≥ 0.70 or in-degree ≥ 3; Tier 2 are referenced by Tier 1 with influence ≥ 0.30. EIP-1559, EIP-4844, EIP-7702 are top-3 EIPs. Paper influence is pre-computed in Python (not JavaScript).
+Tier 1 topics have influence ≥ 0.70 or in-degree ≥ 3; Tier 2 are referenced by Tier 1 with influence ≥ 0.30. Combined top 50: 30 Topics, 9 EIPs, 7 Papers. Paper influence is pre-computed in Python (not JavaScript); `render_html.py` has a fallback JS formula for any unscored papers but it should never trigger.
 
 **Research thread assignment**: Pattern-matching on title, tags, post excerpt, and author identity against seed definitions in `THREAD_SEEDS`. A topic must pass both:
 - Thread seed score (`>= 1.0`)
