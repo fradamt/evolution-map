@@ -6418,7 +6418,7 @@ function applyEntityFocusTimeline(context) {
 
   d3.selectAll('.edge-line')
     .attr('stroke-opacity', function(e) {
-      if (context.kind === 'paper') return 0.02;
+      if (context.kind === 'paper') return 0;
       if (context.kind === 'topic' && context.entityTopicId !== null) {
         var isFocusEdge = (Number(e.source) === Number(context.entityTopicId) || Number(e.target) === Number(context.entityTopicId));
         if (isFocusEdge) return 0.86;
@@ -6427,7 +6427,7 @@ function applyEntityFocusTimeline(context) {
       return 0.02;
     })
     .attr('stroke-width', function(e) {
-      if (context.kind === 'paper') return 0.9;
+      if (context.kind === 'paper') return 0.6;
       if (context.kind === 'topic' && context.entityTopicId !== null) {
         var isFocusEdge = (Number(e.source) === Number(context.entityTopicId) || Number(e.target) === Number(context.entityTopicId));
         if (isFocusEdge) return 2.0;
@@ -6444,7 +6444,7 @@ function applyEntityFocusTimeline(context) {
       return '#556';
     })
     .attr('marker-end', function(e) {
-      if (context.kind === 'paper') return 'url(#arrow-default)';
+      if (context.kind === 'paper') return null;
       if (context.kind === 'topic' && context.entityTopicId !== null) {
         var isFocusEdge = (Number(e.source) === Number(context.entityTopicId) || Number(e.target) === Number(context.entityTopicId));
         if (isFocusEdge) return 'url(#arrow-highlight)';
