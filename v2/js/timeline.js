@@ -329,7 +329,11 @@ export function init() {
   on('lineage:changed', onLineageChanged);
   on('milestones:changed', onMilestonesChanged);
   on('content:changed', onContentChanged);
-  on('content:changed', filterTimeline);
+  on('content:changed', ({ key }) => {
+    // Skip sync filterTimeline for async layer toggles — their builders call filterTimeline when ready
+    if (key === 'showPapers' || key === 'showEips') return;
+    filterTimeline();
+  });
   on('reset', onReset);
   on('pin:changed', ({ current }) => { if (!current) filterTimeline(); });
 
@@ -1194,10 +1198,10 @@ function buildPinnedConnections(pinned) {
     // Adjacent topics via citation edges
     const adj = indexes?.topicEdgeIndex?.[String(pinned.id)];
     if (adj) adj.forEach(id => connectedTopics.add(id));
-    // EIPs mentioned by this topic
+    // EIPs mentioned by this topic (union of eips + primary eips)
     const topic = core?.topics?.[pinned.id];
     if (topic) {
-      for (const eNum of (topic.eips || [])) connectedEips.add(Number(eNum));
+      for (const eNum of (topic.eips || []).concat(topic.peips || [])) connectedEips.add(Number(eNum));
     }
     // Magicians linked to this topic or its EIPs
     if (graphIdx?.topicToMagiciansRefs?.[String(pinned.id)]) {
@@ -1210,7 +1214,6 @@ function buildPinnedConnections(pinned) {
     }
     // Papers: EIP overlap + title keyword + thread matching (v1-aligned scoring)
     if (paperData?.papers) {
-      const topic = core?.topics?.[pinned.id];
       const topicKW = extractKeywords(topic?.t);
       const topicThread = topic?.th;
       const scored = [];
@@ -1228,10 +1231,10 @@ function buildPinnedConnections(pinned) {
         }
         // Thread match (+1.0)
         if (topicThread && p.th === topicThread) score += 1.0;
-        if (score >= 1.4) scored.push({ id: pid, score, inf: p.inf || 0 });
+        if (score >= 1.0) scored.push({ id: pid, score, inf: p.inf || 0 });
       }
       scored.sort((a, b) => b.score - a.score || b.inf - a.inf);
-      for (const s of scored.slice(0, 18)) connectedPapers.add(s.id);
+      for (const s of scored.slice(0, 12)) connectedPapers.add(s.id);
     }
 
   } else if (pinned.type === 'eip') {
@@ -1280,10 +1283,10 @@ function buildPinnedConnections(pinned) {
           if (overlap > 0) score += overlap * 0.65;
         }
         if (eipThread && p.th === eipThread) score += 1.0;
-        if (score >= 1.4) scored.push({ id: pid, score, inf: p.inf || 0 });
+        if (score >= 1.0) scored.push({ id: pid, score, inf: p.inf || 0 });
       }
       scored.sort((a, b) => b.score - a.score || b.inf - a.inf);
-      for (const s of scored.slice(0, 18)) connectedPapers.add(s.id);
+      for (const s of scored.slice(0, 12)) connectedPapers.add(s.id);
     }
 
   } else if (pinned.type === 'paper') {
@@ -1318,7 +1321,7 @@ function buildPinnedConnections(pinned) {
           let score = 0;
           if (overlap > 0) score += overlap * 0.65;
           if (paper2.th && t.th === paper2.th) score += 1.0;
-          if (score >= 1.4) scored.push({ id: Number(tid), score, inf: t.inf || 0 });
+          if (score >= 1.0) scored.push({ id: Number(tid), score, inf: t.inf || 0 });
         }
         scored.sort((a, b) => b.score - a.score || b.inf - a.inf);
         for (const s of scored.slice(0, 12)) connectedTopics.add(s.id);
