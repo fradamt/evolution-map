@@ -695,10 +695,12 @@ function buildTimeline(container, core) {
     if (ev.defaultPrevented) return;
     const target = ev.target;
     if (target && target.closest &&
-      target.closest('.topic-circle,.milestone-marker,.fork-hover-line,.histogram-bar,.era-bg')) return;
+      target.closest('.topic-circle,.eip-square,.paper-diamond,.magicians-triangle,.milestone-marker,.fork-hover-line,.histogram-bar,.era-bg')) return;
     const st = getState();
-    if (st.selectedEntity) {
+    if (st.pinnedEntity || st.selectedEntity) {
+      pinEntity(null);
       selectEntity(null);
+      filterTimeline();
     }
   });
 
@@ -837,6 +839,9 @@ function onTopicHover(ev, d, entering) {
     showTooltip(ev, d);
     hoverEntity({ type: 'topic', id: d.id });
 
+    // If pinned, don't override the pinned highlight — only show tooltip
+    if (getState().pinnedEntity) return;
+
     // Highlight this topic and its direct connections
     const indexes = getCoreIndexes();
     const connected = indexes?.topicEdgeIndex?.[String(d.id)] || new Set();
@@ -897,13 +902,10 @@ function onTopicHover(ev, d, entering) {
     hideTooltip();
     hoverEntity(null);
 
-    // Restore: if pinned, apply pinned highlight; otherwise normal filter state
-    const st = getState();
-    if (st.pinnedEntity) {
-      applyPinnedHighlight();
-    } else {
-      filterTimeline();
-    }
+    // If pinned, don't touch the display — it stays locked
+    if (getState().pinnedEntity) return;
+
+    filterTimeline();
   }
 }
 
@@ -1069,38 +1071,148 @@ function filterTimeline() {
 // --- Pinned highlight ---
 // When a node is single-clicked, dim everything except the pinned entity and its connections.
 
+function buildPinnedConnections(pinned) {
+  const connectedTopics = new Set();
+  const connectedEips = new Set();
+  const connectedPapers = new Set();
+  const connectedMagicians = new Set();
+
+  const indexes = getCoreIndexes();
+  const core = getCore();
+  const paperData = getPapers();
+  const graphData = getGraph();
+  const graphIdx = getGraphIndexes();
+
+  if (pinned.type === 'topic') {
+    connectedTopics.add(pinned.id);
+    // Adjacent topics via citation edges
+    const adj = indexes?.topicEdgeIndex?.[String(pinned.id)];
+    if (adj) adj.forEach(id => connectedTopics.add(id));
+    // EIPs mentioned by this topic
+    const topic = core?.topics?.[pinned.id];
+    if (topic) {
+      for (const eNum of (topic.eips || [])) connectedEips.add(Number(eNum));
+    }
+    // Magicians linked to this topic or its EIPs
+    if (graphIdx?.topicToMagiciansRefs?.[String(pinned.id)]) {
+      graphIdx.topicToMagiciansRefs[String(pinned.id)].forEach(mid => connectedMagicians.add(mid));
+    }
+    for (const eNum of connectedEips) {
+      if (graphIdx?.eipToMagiciansRefs?.[String(eNum)]) {
+        graphIdx.eipToMagiciansRefs[String(eNum)].forEach(mid => connectedMagicians.add(mid));
+      }
+    }
+    // Papers sharing EIPs or in same thread
+    if (paperData?.papers) {
+      for (const [pid, p] of Object.entries(paperData.papers)) {
+        for (const peip of (p.eq || [])) {
+          if (connectedEips.has(Number(peip))) { connectedPapers.add(pid); break; }
+        }
+      }
+    }
+
+  } else if (pinned.type === 'eip') {
+    connectedEips.add(Number(pinned.id));
+    // Topics mentioning this EIP
+    const eipTopics = indexes?.eipToTopics?.[String(pinned.id)];
+    if (eipTopics) eipTopics.forEach(tid => connectedTopics.add(tid));
+    // Magicians linked to this EIP
+    if (graphIdx?.eipToMagiciansRefs?.[String(pinned.id)]) {
+      graphIdx.eipToMagiciansRefs[String(pinned.id)].forEach(mid => connectedMagicians.add(mid));
+    }
+    if (graphData?.magiciansTopics) {
+      for (const [mtid, mt] of Object.entries(graphData.magiciansTopics)) {
+        if ((mt.eips || []).includes(Number(pinned.id)) || (mt.eips || []).includes(String(pinned.id))) {
+          connectedMagicians.add(Number(mtid));
+        }
+      }
+    }
+    // EIPs connected via requires edges
+    const eipData = getEips();
+    if (eipData?.eipCatalog) {
+      const cat = eipData.eipCatalog[String(pinned.id)];
+      if (cat?.req) for (const r of cat.req) connectedEips.add(Number(r));
+      // EIPs that require this one
+      for (const [eNum, e] of Object.entries(eipData.eipCatalog)) {
+        if ((e.req || []).includes(Number(pinned.id)) || (e.req || []).includes(String(pinned.id))) {
+          connectedEips.add(Number(eNum));
+        }
+      }
+    }
+    // Papers mentioning this EIP
+    if (paperData?.papers) {
+      for (const [pid, p] of Object.entries(paperData.papers)) {
+        for (const peip of (p.eq || [])) {
+          if (Number(peip) === Number(pinned.id)) { connectedPapers.add(pid); break; }
+        }
+      }
+    }
+
+  } else if (pinned.type === 'paper') {
+    connectedPapers.add(pinned.id);
+    // Citation neighbors via paperGraph
+    if (paperData?.paperGraph?.edges) {
+      for (const edge of paperData.paperGraph.edges) {
+        if (edge.source === pinned.id) connectedPapers.add(edge.target);
+        else if (edge.target === pinned.id) connectedPapers.add(edge.source);
+      }
+    }
+    // EIPs from paper's eq field
+    const paper = paperData?.papers?.[pinned.id];
+    if (paper) {
+      for (const eNum of (paper.eq || [])) connectedEips.add(Number(eNum));
+    }
+    // Topics mentioning connected EIPs
+    for (const eNum of connectedEips) {
+      const eipTopics = indexes?.eipToTopics?.[String(eNum)];
+      if (eipTopics) eipTopics.forEach(tid => connectedTopics.add(tid));
+    }
+    // Magicians linked to connected EIPs
+    for (const eNum of connectedEips) {
+      if (graphIdx?.eipToMagiciansRefs?.[String(eNum)]) {
+        graphIdx.eipToMagiciansRefs[String(eNum)].forEach(mid => connectedMagicians.add(mid));
+      }
+    }
+
+  } else if (pinned.type === 'magicians') {
+    connectedMagicians.add(pinned.id);
+    // Connected ethresearch topics via mt.er
+    const mt = graphData?.magiciansTopics?.[String(pinned.id)];
+    if (mt) {
+      for (const tid of (mt.er || [])) connectedTopics.add(Number(tid));
+      // EIPs from magicians topic
+      for (const eNum of (mt.eips || [])) connectedEips.add(Number(eNum));
+    }
+    // EIPs via magiciansToEips index
+    if (graphIdx?.magiciansToEips?.[String(pinned.id)]) {
+      for (const eNum of graphIdx.magiciansToEips[String(pinned.id)]) {
+        connectedEips.add(Number(eNum));
+      }
+    }
+    // Topics mentioning connected EIPs
+    for (const eNum of connectedEips) {
+      const eipTopics = indexes?.eipToTopics?.[String(eNum)];
+      if (eipTopics) eipTopics.forEach(tid => connectedTopics.add(tid));
+    }
+    // Papers mentioning connected EIPs
+    if (paperData?.papers && connectedEips.size > 0) {
+      for (const [pid, p] of Object.entries(paperData.papers)) {
+        for (const peip of (p.eq || [])) {
+          if (connectedEips.has(Number(peip))) { connectedPapers.add(pid); break; }
+        }
+      }
+    }
+  }
+
+  return { connectedTopics, connectedEips, connectedPapers, connectedMagicians };
+}
+
 function applyPinnedHighlight() {
   const st = getState();
   const pinned = st.pinnedEntity;
   if (!pinned) { filterTimeline(); return; }
 
-  const indexes = getCoreIndexes();
-
-  // Build connected topic set for the pinned entity
-  const connectedTopics = new Set();
-  const connectedEips = new Set();
-  if (pinned.type === 'topic') {
-    connectedTopics.add(pinned.id);
-    const adj = indexes?.topicEdgeIndex?.[String(pinned.id)];
-    if (adj) adj.forEach(id => connectedTopics.add(id));
-    // EIPs mentioned by this topic
-    const core = getCore();
-    const topic = core?.topics?.[pinned.id];
-    if (topic) {
-      for (const eNum of (topic.eips || [])) connectedEips.add(Number(eNum));
-    }
-  } else if (pinned.type === 'eip') {
-    connectedEips.add(Number(pinned.id));
-    // Find topics that mention this EIP
-    const core = getCore();
-    if (core?.topics) {
-      for (const [tid, t] of Object.entries(core.topics)) {
-        if ((t.eips || []).includes(String(pinned.id)) || (t.peips || []).includes(String(pinned.id))) {
-          connectedTopics.add(Number(tid));
-        }
-      }
-    }
-  }
+  const { connectedTopics, connectedEips, connectedPapers, connectedMagicians } = buildPinnedConnections(pinned);
 
   // Dim topic circles
   if (circleG) {
@@ -1143,8 +1255,14 @@ function applyPinnedHighlight() {
         .attr('stroke-opacity', isPinned ? 1 : isConnected ? 0.6 : 0.06)
         .style('pointer-events', (isPinned || isConnected) ? 'all' : 'none');
     });
+    // Show cross-ref edges touching connected entities
     if (eipCrossRefG) {
-      eipCrossRefG.selectAll('.cross-ref-edge').attr('stroke-opacity', 0.02);
+      eipCrossRefG.selectAll('.cross-ref-edge').each(function (d) {
+        const eipNum = d?.eipNum;
+        const topicId = d?.topicId;
+        const show = connectedEips.has(Number(eipNum)) && connectedTopics.has(Number(topicId));
+        d3.select(this).attr('stroke-opacity', show ? 0.5 : 0.02);
+      });
     }
   }
 
@@ -1152,13 +1270,19 @@ function applyPinnedHighlight() {
   if (paperLayerG && paperLayerBuilt) {
     paperLayerG.selectAll('.paper-diamond').each(function (d) {
       const isPinned = pinned.type === 'paper' && d.paper.id === pinned.id;
+      const isConnected = connectedPapers.has(d.paper.id);
       d3.select(this)
-        .attr('fill-opacity', isPinned ? 0.7 : 0.04)
-        .attr('stroke-opacity', isPinned ? 0.9 : 0.04)
-        .style('pointer-events', isPinned ? 'all' : 'none');
+        .attr('fill-opacity', isPinned ? 0.7 : isConnected ? 0.5 : 0.04)
+        .attr('stroke-opacity', isPinned ? 0.9 : isConnected ? 0.6 : 0.04)
+        .style('pointer-events', (isPinned || isConnected) ? 'all' : 'none');
     });
+    // Show citation edges where both endpoints are connected
     if (paperCiteG) {
-      paperCiteG.selectAll('.paper-cite-edge').attr('stroke-opacity', 0.01);
+      paperCiteG.selectAll('.paper-cite-edge').each(function (d) {
+        const direct = (pinned.type === 'paper') && (d.srcId === pinned.id || d.tgtId === pinned.id);
+        const both = connectedPapers.has(d.srcId) && connectedPapers.has(d.tgtId);
+        d3.select(this).attr('stroke-opacity', direct ? 0.5 : both ? 0.15 : 0.01);
+      });
     }
   }
 
@@ -1166,12 +1290,17 @@ function applyPinnedHighlight() {
   if (magLayerG && magLayerBuilt) {
     magLayerG.selectAll('.magicians-triangle').each(function (d) {
       const isPinned = pinned.type === 'magicians' && d.mtid === pinned.id;
+      const isConnected = connectedMagicians.has(d.mtid);
       d3.select(this)
-        .attr('opacity', isPinned ? 1.0 : 0.08)
-        .style('pointer-events', isPinned ? 'all' : 'none');
+        .attr('opacity', isPinned ? 1.0 : isConnected ? 0.7 : 0.08)
+        .style('pointer-events', (isPinned || isConnected) ? 'all' : 'none');
     });
+    // Show magicians cross-ref edges touching connected entities
     if (magCrossRefG) {
-      magCrossRefG.selectAll('.magicians-ref-edge').attr('stroke-opacity', 0.02);
+      magCrossRefG.selectAll('.magicians-ref-edge').each(function (d) {
+        const show = connectedMagicians.has(d.mtid) && connectedTopics.has(Number(d.topicId));
+        d3.select(this).attr('stroke-opacity', show ? 0.5 : 0.02);
+      });
     }
   }
 }
@@ -1423,7 +1552,7 @@ function buildEipLayer() {
         .attr('stroke', '#7788cc')
         .attr('stroke-opacity', 0.12)
         .attr('stroke-width', 0.5)
-        .datum({ eipDate: d.date, topicDate: topic._date, eipY: d.y, topicY: topic._yPos });
+        .datum({ eipNum: d.num, topicId: tid, eipDate: d.date, topicDate: topic._date, eipY: d.y, topicY: topic._yPos });
     }
   });
 
@@ -1663,7 +1792,7 @@ function buildMagiciansLayer() {
   if (!magLayerG) magLayerG = zoomG.append('g').attr('class', 'magicians-layer');
 
   // Cross-reference edges to ethresearch topics
-  magEntries.forEach(({ mt, date, y }) => {
+  magEntries.forEach(({ mtid, mt, date, y }) => {
     for (const tid of (mt.er || [])) {
       const topic = topicMap[tid];
       if (!topic || topic._yPos === undefined) continue;
@@ -1673,7 +1802,7 @@ function buildMagiciansLayer() {
         .attr('x2', xScaleOrig(topic._date)).attr('y2', topic._yPos)
         .attr('stroke', '#9b72c2').attr('stroke-opacity', 0.14)
         .attr('stroke-width', 0.9).attr('stroke-dasharray', '3 3')
-        .datum({ magDate: date, topicDate: topic._date, magY: y, topicY: topic._yPos });
+        .datum({ mtid, topicId: tid, magDate: date, topicDate: topic._date, magY: y, topicY: topic._yPos });
     }
   });
 
