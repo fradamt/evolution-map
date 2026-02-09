@@ -2181,7 +2181,8 @@ function drawBase() {
     ctx.fillRect(x, histY0 + histH - d.h, zoomedBarW, d.h);
   }
 
-  // 7. Topic circles
+  // 7. Topic circles — use globalAlpha for element-level opacity (matches SVG behavior,
+  // prevents alpha accumulation in overlapping regions)
   if (showPosts) {
     // Minor topics first (behind normal)
     for (const e of topicEntities) {
@@ -2190,19 +2191,21 @@ function drawBase() {
       const cx = curX(e.date);
       if (cx < -20 || cx > plotW + 20) continue;
 
-      const alpha = e.opacity;
       const r = e.lineageBoosted ? e.r * 1.2 : e.r;
+      ctx.globalAlpha = e.opacity * 0.8;
       ctx.beginPath();
       ctx.arc(cx, e.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = hexWithAlpha(e.color, alpha * 0.8);
+      ctx.fillStyle = e.color || '#888';
       ctx.fill();
       // Dashed stroke for minor
+      ctx.globalAlpha = e.opacity;
       ctx.setLineDash([3, 2]);
-      ctx.strokeStyle = hexWithAlpha(e.color, alpha);
+      ctx.strokeStyle = e.color || '#888';
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    ctx.globalAlpha = 1;
 
     // Normal topics
     for (const e of topicEntities) {
@@ -2211,16 +2214,17 @@ function drawBase() {
       const cx = curX(e.date);
       if (cx < -20 || cx > plotW + 20) continue;
 
-      const alpha = e.opacity;
       const r = e.lineageBoosted ? e.r * 1.2 : e.r;
+      ctx.globalAlpha = e.opacity;
       ctx.beginPath();
       ctx.arc(cx, e.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = hexWithAlpha(e.color, alpha);
+      ctx.fillStyle = e.color || '#888';
       ctx.fill();
-      ctx.strokeStyle = hexWithAlpha(e.color, Math.min(alpha + 0.1, 1));
+      ctx.strokeStyle = e.color || '#888';
       ctx.lineWidth = 0.5;
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
 
     // Selected topic stroke
     const selected = st.selectedEntity;
@@ -2238,21 +2242,23 @@ function drawBase() {
     }
   }
 
-  // 8. EIP squares
+  // 8. EIP squares — globalAlpha for element-level opacity
   if (eipLayerBuilt) {
     for (const e of eipEntities) {
       if (e.opacity < 0.02) continue;
       const cx = curX(e.date);
       if (cx < -20 || cx > plotW + 20) continue;
       const half = e.size / 2;
+      ctx.globalAlpha = e.opacity;
       drawRoundedRect(ctx, cx - half, e.y - half, e.size, e.size, 3,
-        hexWithAlpha(e.statusColor, e.opacity),
-        hexWithAlpha(e.statusColor, Math.min(e.opacity + 0.2, 1)),
+        e.statusColor || '#888',
+        e.statusColor || '#888',
         0.8);
     }
+    ctx.globalAlpha = 1;
   }
 
-  // 9. Paper diamonds
+  // 9. Paper diamonds — globalAlpha for element-level opacity
   if (paperLayerBuilt) {
     for (const e of paperEntities) {
       if (e.opacity < 0.01) continue;
@@ -2261,24 +2267,28 @@ function drawBase() {
       const r = e.boosted ? Math.max(7, e.r * 1.6) : e.r;
       const strokeC = e.boosted ? '#fff' : e.color;
       const strokeW = e.boosted ? 1.5 : 0.6;
+      ctx.globalAlpha = e.opacity;
       drawDiamond(ctx, cx, e.y, r * 2,
-        hexWithAlpha(e.color, e.opacity),
-        hexWithAlpha(strokeC, Math.min(e.opacity + 0.1, 1)),
+        e.color || '#2f4f77',
+        strokeC || '#2f4f77',
         strokeW);
     }
+    ctx.globalAlpha = 1;
   }
 
-  // 10. Magicians triangles
+  // 10. Magicians triangles — globalAlpha for element-level opacity
   if (magLayerBuilt) {
     for (const e of magEntities) {
       if (e.opacity < 0.01) continue;
       const cx = curX(e.date);
       if (cx < -20 || cx > plotW + 20) continue;
+      ctx.globalAlpha = e.opacity;
       drawTriangle(ctx, cx, e.y, e.r * 2,
-        hexWithAlpha(e.color, e.opacity),
-        hexWithAlpha(e.color, Math.min(e.opacity + 0.1, 1)),
+        e.color || '#bb88cc',
+        e.color || '#bb88cc',
         0.5);
     }
+    ctx.globalAlpha = 1;
   }
 
   // 11. Milestone stars
@@ -2292,11 +2302,13 @@ function drawBase() {
       if (cx < -20 || cx > plotW + 20) continue;
       const r = rScale(t.inf) + 4;
       const color = THREAD_COLORS[md.threadId] || '#ffcc00';
+      ctx.globalAlpha = 0.6;
       drawStar(ctx, cx, t._yPos, r, r * 0.5, 4,
-        hexWithAlpha(color, 0.6),
-        hexWithAlpha('#fff', 0.5),
+        color,
+        'rgba(255,255,255,0.8)',
         1);
     }
+    ctx.globalAlpha = 1;
   }
 
   // 12. Topic labels
@@ -2317,12 +2329,14 @@ function drawBase() {
       const alpha = Math.min(e.opacity + 0.05, 0.9);
 
       // Text outline for readability
+      ctx.globalAlpha = alpha;
       ctx.strokeStyle = '#0a0a0f';
       ctx.lineWidth = 3;
       ctx.strokeText(txt, lx, ly);
-      ctx.fillStyle = hexWithAlpha('#ddd', alpha);
+      ctx.fillStyle = '#ddd';
       ctx.fillText(txt, lx, ly);
     }
+    ctx.globalAlpha = 1;
   }
 
   // EIP labels (top 12 by influence)
@@ -2338,13 +2352,15 @@ function drawBase() {
       const txt = 'EIP-' + e.num;
       const lx = cx + e.size / 2 + 3;
       const ly = e.y + 3;
+      ctx.globalAlpha = e.opacity;
       ctx.strokeStyle = '#0a0a0f';
       ctx.lineWidth = 3;
       ctx.strokeText(txt, lx, ly);
-      ctx.fillStyle = hexWithAlpha('#aabbcc', e.opacity);
+      ctx.fillStyle = '#aabbcc';
       ctx.fillText(txt, lx, ly);
       eipLabelCount++;
     }
+    ctx.globalAlpha = 1;
   }
 
   // Magicians labels (top 12 by engagement)
