@@ -594,7 +594,7 @@ function draw() {
     } else if (lineageActive) {
       alpha = lineageSet.has(nid) ? 1 : 0.06;
     } else if (connectedSet) {
-      alpha = connectedSet.has(nid) ? 1 : 0.08;
+      alpha = connectedSet.has(nid) ? 1 : 0.25;
     } else if (!nodeMatchesFilter(node, st)) {
       alpha = 0.05;
     } else {
