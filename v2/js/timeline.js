@@ -44,6 +44,7 @@ let eipCrossRefG = null;
 let eipLayerBuilt = false;
 
 // Paper layer state
+let paperCiteG = null;   // citation edge group (behind diamonds)
 let paperLayerG = null;
 let paperLayerBuilt = false;
 let paperLayerMode = null; // track which mode was used to build
@@ -983,8 +984,9 @@ function filterTimeline() {
     }
   }
 
-  // --- Filter paper circles ---
+  // --- Filter paper diamonds + citation edges ---
   if (paperLayerG && paperLayerBuilt) {
+    const visiblePaperIds = new Set();
     paperLayerG.selectAll('.paper-diamond').each(function (d) {
       const p = d.paper;
       let show = true;
@@ -1002,11 +1004,21 @@ function filterTimeline() {
           }
         }
       }
+      if (show) visiblePaperIds.add(p.id);
       d3.select(this)
         .attr('fill-opacity', show ? 0.35 : 0.03)
         .attr('stroke-opacity', show ? 0.5 : 0.03)
         .style('pointer-events', show ? 'all' : 'none');
     });
+    // Filter citation edges: both endpoints must be visible
+    if (paperCiteG) {
+      paperCiteG.selectAll('.paper-cite-edge').each(function (d) {
+        const show = visiblePaperIds.has(d.srcId) && visiblePaperIds.has(d.tgtId);
+        d3.select(this)
+          .attr('stroke-opacity', show ? 0.12 : 0.015)
+          .attr('stroke-width', show ? 0.6 : 0.3);
+      });
+    }
   }
 
   // --- Filter magicians triangles ---
@@ -1086,6 +1098,7 @@ function onReset() {
   if (eipLayerG) { eipLayerG.selectAll('*').remove(); eipLayerBuilt = false; }
   if (eipCrossRefG) eipCrossRefG.selectAll('*').remove();
   // Remove paper layer on reset
+  if (paperCiteG) paperCiteG.selectAll('*').remove();
   if (paperLayerG) { paperLayerG.selectAll('*').remove(); paperLayerBuilt = false; paperLayerMode = null; }
   // Remove magicians layer on reset
   if (magLayerG) { magLayerG.selectAll('*').remove(); magLayerBuilt = false; }
@@ -1371,11 +1384,14 @@ function buildPaperLayer() {
     }
   }
 
+  // Create edge group first (behind diamonds), then diamond group on top
+  if (!paperCiteG) paperCiteG = zoomG.append('g').attr('class', 'paper-cite-layer');
   if (!paperLayerG) paperLayerG = zoomG.append('g').attr('class', 'paper-layer');
 
+  // Build position lookup for each visible paper
+  const paperPos = {};  // paperId → { date, y, r }
   visiblePapers.forEach(p => {
     if (!p.y) return;
-    // Spread papers across the year using hash-based day jitter
     const idHash = hashCode(p.id ? p.id.length * 31 + p.id.charCodeAt(0) : 0);
     const dayOffset = idHash % 365;
     const date = new Date(p.y, 0, 1 + dayOffset);
@@ -1388,24 +1404,47 @@ function buildPaperLayer() {
     const y = yBase + (idHash % 100) / 100 * yRange;
 
     const r = 2 + Math.min(5, (p.inf || 0) * 6);
-    const color = th ? (THREAD_COLORS[th] || '#2f4f77') : '#2f4f77';
+    paperPos[p.id] = { date, y, r };
+  });
+
+  // Draw citation edges from paperGraph
+  const pgEdges = paperData.paperGraph?.edges || [];
+  for (const edge of pgEdges) {
+    const src = paperPos[edge.source];
+    const tgt = paperPos[edge.target];
+    if (!src || !tgt) continue;
+    paperCiteG.append('line')
+      .attr('class', 'paper-cite-edge')
+      .attr('x1', xScaleOrig(src.date)).attr('y1', src.y)
+      .attr('x2', xScaleOrig(tgt.date)).attr('y2', tgt.y)
+      .attr('stroke', '#8fb7ef')
+      .attr('stroke-opacity', 0.12)
+      .attr('stroke-width', 0.6)
+      .datum({ srcId: edge.source, tgtId: edge.target, srcDate: src.date, srcY: src.y, tgtDate: tgt.date, tgtY: tgt.y });
+  }
+
+  // Draw paper diamonds
+  for (const [pid, pos] of Object.entries(paperPos)) {
+    const p = paperData.papers[pid];
+    if (!p) continue;
+    const color = p.th ? (THREAD_COLORS[p.th] || '#2f4f77') : '#2f4f77';
 
     paperLayerG.append('path')
       .attr('class', 'paper-diamond')
-      .attr('d', diamondPath(xScaleOrig(date), y, r))
+      .attr('d', diamondPath(xScaleOrig(pos.date), pos.y, pos.r))
       .attr('fill', color)
       .attr('fill-opacity', 0.4)
       .attr('stroke', color)
       .attr('stroke-opacity', 0.6)
       .attr('stroke-width', 0.6)
-      .datum({ paper: p, date, y, r, type: 'paper' })
+      .datum({ paper: p, date: pos.date, y: pos.y, r: pos.r, type: 'paper' })
       .on('click', function (ev, d) {
         ev.stopPropagation();
         selectEntity({ type: 'paper', id: d.paper.id });
       })
       .on('mouseover', function (ev, d) { showPaperTooltip(ev, d); })
       .on('mouseout', function () { hideTooltip(); });
-  });
+  }
 
   paperLayerBuilt = true;
   paperLayerMode = mode;
@@ -1419,16 +1458,24 @@ function buildPaperLayer() {
 }
 
 function removePaperLayer() {
+  if (paperCiteG) paperCiteG.selectAll('*').remove();
   if (paperLayerG) paperLayerG.selectAll('*').remove();
   paperLayerBuilt = false;
   paperLayerMode = null;
 }
 
 function updatePaperLayerZoom(newX) {
-  if (!paperLayerG) return;
-  paperLayerG.selectAll('.paper-diamond').each(function (d) {
-    d3.select(this).attr('d', diamondPath(newX(d.date), d.y, d.r));
-  });
+  if (paperLayerG) {
+    paperLayerG.selectAll('.paper-diamond').each(function (d) {
+      d3.select(this).attr('d', diamondPath(newX(d.date), d.y, d.r));
+    });
+  }
+  if (paperCiteG) {
+    paperCiteG.selectAll('.paper-cite-edge').each(function (d) {
+      d3.select(this)
+        .attr('x1', newX(d.srcDate)).attr('x2', newX(d.tgtDate));
+    });
+  }
 }
 
 function showPaperTooltip(ev, d) {
