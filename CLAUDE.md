@@ -186,6 +186,19 @@ All topics live in one unified dict. The influence slider controls visibility �
 
 **Timeline landmarks**: Fork lines at the bottom include Genesis (2015-07-30) through Osaka. An "ethresear.ch live" annotation (green dashed line) marks the forum creation date (2017-08-17). Fork labels and date axis are on separate rows to avoid overlap. Zoom is clamped: `scaleExtent([1, 8])` prevents zooming out past the initial view.
 
+**Timeline interaction model** (applies to all entity types — topics, EIPs, papers, magicians):
+- **Hover**: Shows tooltip. Dims all non-connected entities across ALL types (topics → 0.12, EIPs/papers/magicians → fully dimmed). Connected topics highlighted at 0.8. Direct edges highlighted blue.
+- **Single click** (after 220ms timer): **Pins** the highlight state — dims everything except the pinned entity and its connections. Detail panel does NOT open. All entity types are dimmed (EIPs, papers, magicians). Pinned state persists after mouseout.
+- **Double click** (two clicks within 220ms): Opens the **detail panel** with full entity info. Also pins the highlight.
+- **Escape**: Clears pinned state and all content toggles, restores normal filter view.
+- State: `pinnedEntity` (generic {type, id}) tracks pin. `selectedEntity` + `detailOpen` track detail panel. Pin persists independently of detail panel close.
+
+**Paper timeline layer**: All 1,499 papers are built as DOM elements. Visibility is controlled by `PAPER_LAYER_LIMITS` (focus=200, context=400, broad=651) — top N by influence from the *filtered* set. When filtering by thread/author, the top N is recomputed from papers matching the filter, so recent papers naturally appear.
+
+**Paper citation edges**: Drawn from `paperGraph.edges` (15,013 edges). Both endpoints must be in the visible set for the edge to show at full opacity. Citation edges dim alongside paper diamonds during filtering, hover, and pin.
+
+**Entity shapes**: Circles = topics, rounded squares = EIPs, diamonds = papers, triangles = magicians.
+
 **macOS trackpad swipe-back prevention**: Three-layer defense stops the browser from interpreting leftward two-finger trackpad swipes as "navigate back":
 1. **Document capture-phase handler** — `document.addEventListener('wheel', ..., {passive: false, capture: true})` on `#main-area` targets; fires at the top of the event dispatch chain before the compositor can act
 2. **JS-applied `overscroll-behavior: none`** on `html` and `body` (supplements CSS in case the compositor doesn't pick up stylesheet rules)
