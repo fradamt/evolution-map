@@ -71,6 +71,13 @@ function hashCode(n) {
   return ((n * 2654435761) >>> 0) % 10000;
 }
 
+function diamondPath(cx, cy, r) {
+  return 'M' + cx + ',' + (cy - r) +
+    'L' + (cx + r) + ',' + cy +
+    'L' + cx + ',' + (cy + r) +
+    'L' + (cx - r) + ',' + cy + 'Z';
+}
+
 function trianglePath(cx, cy, r) {
   const h = r * Math.sqrt(3) / 2;
   return 'M' + cx + ',' + (cy - r) +
@@ -978,7 +985,7 @@ function filterTimeline() {
 
   // --- Filter paper circles ---
   if (paperLayerG && paperLayerBuilt) {
-    paperLayerG.selectAll('.paper-circle').each(function (d) {
+    paperLayerG.selectAll('.paper-diamond').each(function (d) {
       const p = d.paper;
       let show = true;
       // Influence slider
@@ -1369,16 +1376,14 @@ function buildPaperLayer() {
     const r = 2 + Math.min(5, (p.inf || 0) * 6);
     const color = th ? (THREAD_COLORS[th] || '#2f4f77') : '#2f4f77';
 
-    paperLayerG.append('circle')
-      .attr('class', 'paper-circle')
-      .attr('cx', xScaleOrig(date))
-      .attr('cy', y)
-      .attr('r', r)
+    paperLayerG.append('path')
+      .attr('class', 'paper-diamond')
+      .attr('d', diamondPath(xScaleOrig(date), y, r))
       .attr('fill', color)
-      .attr('fill-opacity', 0.35)
+      .attr('fill-opacity', 0.4)
       .attr('stroke', color)
-      .attr('stroke-opacity', 0.5)
-      .attr('stroke-width', 0.5)
+      .attr('stroke-opacity', 0.6)
+      .attr('stroke-width', 0.6)
       .datum({ paper: p, date, y, r, type: 'paper' })
       .on('click', function (ev, d) {
         ev.stopPropagation();
@@ -1407,8 +1412,9 @@ function removePaperLayer() {
 
 function updatePaperLayerZoom(newX) {
   if (!paperLayerG) return;
-  paperLayerG.selectAll('.paper-circle')
-    .attr('cx', d => newX(d.date));
+  paperLayerG.selectAll('.paper-diamond').each(function (d) {
+    d3.select(this).attr('d', diamondPath(newX(d.date), d.y, d.r));
+  });
 }
 
 function showPaperTooltip(ev, d) {
