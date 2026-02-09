@@ -62,6 +62,7 @@ let entityById = {};       // id → entity index
 let hoveredIdx = -1;
 let hoveredEntity = null;  // { type, id }
 let hoveredConns = null;   // result of buildPinnedConnections() for hover — drawn on HUD only
+let pinnedConns = null;    // result of buildPinnedConnections() for pin — used to gate tooltips
 
 // EIP layer
 let eipEntities = [];
@@ -688,6 +689,7 @@ export function init() {
   on('reset', onReset);
   on('pin:changed', ({ current }) => {
     if (!current) {
+      pinnedConns = null;
       clearPinOverlay();
       filterTimeline();
     }
@@ -1019,6 +1021,7 @@ function buildTimeline(core) {
         selectEntity(null);
         clearPinOverlay();
         hoveredConns = null;
+        pinnedConns = null;
         filterTimeline();
       }
       return;
@@ -1170,6 +1173,21 @@ function handlePointerMove(sx, sy) {
       hoveredEntity = ref;
       hoverEntity(ref);
       baseCanvas.style.cursor = 'pointer';
+
+      // When pinned, only show tooltip for pinned entity and its connections
+      if (st.pinnedEntity && pinnedConns) {
+        const isPinnedSelf = ref.type === st.pinnedEntity.type && ref.id === st.pinnedEntity.id;
+        const isConnected = (ref.type === 'topic' && pinnedConns.connectedTopics.has(ref.id))
+          || (ref.type === 'eip' && pinnedConns.connectedEips.has(Number(ref.id)))
+          || (ref.type === 'paper' && pinnedConns.connectedPapers.has(ref.id))
+          || (ref.type === 'magicians' && pinnedConns.connectedMagicians.has(ref.id));
+        if (!isPinnedSelf && !isConnected) {
+          hideTooltip();
+          baseCanvas.style.cursor = 'default';
+          needsHudRedraw = true;
+          return;
+        }
+      }
 
       // Show tooltip
       const rect = baseCanvas.getBoundingClientRect();
@@ -1374,9 +1392,10 @@ function filterMagiciansEntities() {
 function applyPinnedHighlight() {
   const st = getState();
   const pinned = st.pinnedEntity;
-  if (!pinned) { clearPinOverlay(); filterTimeline(); return; }
+  if (!pinned) { pinnedConns = null; clearPinOverlay(); filterTimeline(); return; }
 
   const conns = buildPinnedConnections(pinned);
+  pinnedConns = conns;
 
   // Topics
   for (const e of topicEntities) {

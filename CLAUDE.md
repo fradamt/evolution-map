@@ -2,6 +2,8 @@
 
 This is the **git repo**. When you finish a task — code changes work, local testing passes (e.g. re-generated HTML looks correct) — commit and push here. No need to ask first. Document changes in this file.
 
+**Default context is `v2/`** — unless otherwise specified, all discussion about the visualization refers to the v2 modular app (`v2/index.html` + `v2/js/` + `v2/data/`), not the v1 monolithic `evolution-map.html`.
+
 ## What This Is
 
 An analysis pipeline over a scraped archive of **ethresear.ch** (Ethereum's Discourse research forum) that produces an "Evolution Map" — a narrative and interactive visualization tracing how Ethereum research ideas became protocol.
