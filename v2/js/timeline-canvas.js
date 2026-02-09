@@ -61,6 +61,7 @@ let entityById = {};       // id → entity index
 // Hover/pin state (local, synced with global state)
 let hoveredIdx = -1;
 let hoveredEntity = null;  // { type, id }
+let hoveredConns = null;   // result of buildPinnedConnections() for hover — drawn on HUD only
 
 // EIP layer
 let eipEntities = [];
@@ -1017,6 +1018,7 @@ function buildTimeline(core) {
         pinEntity(null);
         selectEntity(null);
         clearPinOverlay();
+        hoveredConns = null;
         filterTimeline();
       }
       return;
@@ -1040,6 +1042,7 @@ function buildTimeline(core) {
       clickTimer = setTimeout(() => {
         clickCount = 0;
         // Single click — pin
+        hoveredConns = null;
         pinEntity(entityRef);
         applyPinnedHighlight();
       }, DBLCLICK_DELAY);
@@ -1047,6 +1050,7 @@ function buildTimeline(core) {
       clearTimeout(clickTimer);
       clickCount = 0;
       // Double click — detail panel
+      hoveredConns = null;
       selectEntity(entityRef);
       applyPinnedHighlight();
     }
@@ -1184,8 +1188,9 @@ function handlePointerMove(sx, sy) {
         return;
       }
 
-      // Apply hover highlight
-      applyHoverHighlight(ref);
+      // Network-style hover: compute connections, draw highlights on HUD only (base stays static)
+      hoveredConns = buildPinnedConnections(ref);
+      needsHudRedraw = true;
     }
   } else if (oldHovered) {
     hoveredEntity = null;
@@ -1193,100 +1198,13 @@ function handlePointerMove(sx, sy) {
     baseCanvas.style.cursor = 'default';
     hideTooltip();
 
-    if (!st.pinnedEntity) {
-      filterTimeline();
-    }
+    hoveredConns = null;
     needsHudRedraw = true;
   }
 }
 
-function applyHoverHighlight(ref) {
-  const st = getState();
-  const indexes = getCoreIndexes();
-  const hasActiveFilter = st.activeThread || st.activeAuthor || st.activeCategory || st.activeTag;
-  const conns = buildPinnedConnections(ref);
-
-  // Topics
-  for (const e of topicEntities) {
-    const isPinned = ref.type === 'topic' && e.data.id === ref.id;
-    const isConnected = conns.connectedTopics.has(e.data.id);
-    let op;
-    if (isPinned) op = 0.9;
-    else if (isConnected) op = 0.7;
-    else {
-      const belowThreshold = st.minInfluence > 0 && e.inf < st.minInfluence;
-      if (belowThreshold) op = 0.02;
-      else if (hasActiveFilter && !topicMatchesFilter(e.data, st)) op = 0.03;
-      else op = 0.12;
-    }
-    e.opacity = op;
-    e.targetOpacity = op;
-  }
-
-  // Edges
-  for (const edge of edgeData) {
-    const direct = (ref.type === 'topic') && (edge.source === ref.id || edge.target === ref.id);
-    edge.opacity = direct ? 0.5 : 0.01;
-    edge.highlighted = direct;
-  }
-
-  // EIP entities
-  if (eipLayerBuilt) {
-    for (const e of eipEntities) {
-      const isConn = conns.connectedEips.has(Number(e.num));
-      e.opacity = isConn ? 0.5 : 0.06;
-    }
-    for (const edge of eipEdgeData) {
-      const show = conns.connectedEips.has(Number(edge.eipNum)) && conns.connectedTopics.has(Number(edge.topicId));
-      edge.opacity = show ? 0.5 : 0.01;
-    }
-  }
-
-  // Paper entities
-  if (paperLayerBuilt) {
-    for (const e of paperEntities) {
-      const isConn = conns.connectedPapers.has(e.paper.id);
-      e.opacity = isConn ? 0.8 : 0.04;
-      if (isConn) e.boosted = true;
-      else e.boosted = false;
-    }
-    for (const edge of paperEdgeData) {
-      edge.opacity = 0.008;
-    }
-  }
-
-  // Magicians entities
-  if (magLayerBuilt) {
-    for (const e of magEntities) {
-      const isConn = conns.connectedMagicians.has(e.mtid);
-      e.opacity = isConn ? 0.7 : 0.06;
-    }
-    for (const edge of magEdgeData) {
-      const show = conns.connectedMagicians.has(edge.mtid) && conns.connectedTopics.has(Number(edge.topicId));
-      edge.opacity = show ? 0.5 : 0.01;
-    }
-  }
-
-  // Build hover overlay edges (topic → connected papers)
-  clearPinOverlay();
-  if (ref.type === 'topic' && paperLayerBuilt) {
-    const curX = xScale || xScaleOrig;
-    const t = topicMap[ref.id];
-    if (t) {
-      for (const pe of paperEntities) {
-        if (!conns.connectedPapers.has(pe.paper.id)) continue;
-        pinOverlayEdges.push({
-          x1: curX(t._date), y1: t._yPos,
-          x2: curX(pe.date), y2: pe.y,
-          x1Date: t._date, x2Date: pe.date,
-        });
-      }
-    }
-  }
-
-  needsBaseRedraw = true;
-  needsHudRedraw = true;
-}
+// applyHoverHighlight removed — hover now uses network-style HUD-only highlights
+// (white contours + blue edges on HUD canvas, base canvas stays static)
 
 // --- Filtering ---
 
@@ -2387,42 +2305,211 @@ function drawHud() {
   const ctx = hudCtx;
   ctx.clearRect(0, 0, canvasW, canvasH);
 
-  if (pinOverlayEdges.length === 0 && pinOverlayLabels.length === 0) return;
+  const hasPinOverlay = pinOverlayEdges.length > 0 || pinOverlayLabels.length > 0;
+  const hasHover = hoveredEntity && hoveredConns;
+
+  if (!hasPinOverlay && !hasHover) return;
 
   ctx.save();
   ctx.translate(marginLeft, marginTop);
 
   const curX = xScale || xScaleOrig;
+  const st = getState();
 
-  // Pin overlay edges
-  ctx.setLineDash([4, 2]);
-  ctx.strokeStyle = 'rgba(142, 184, 255, 0.5)';
-  ctx.lineWidth = 1.2;
-  for (const edge of pinOverlayEdges) {
-    const x1 = curX(edge.x1Date);
-    const x2 = curX(edge.x2Date);
-    ctx.beginPath();
-    ctx.moveTo(x1, edge.y1);
-    ctx.lineTo(x2, edge.y2);
-    ctx.stroke();
+  // --- Hover highlights (network-style: white contours + blue edges on HUD only) ---
+  if (hasHover && !st.pinnedEntity) {
+    const ref = hoveredEntity;
+    const conns = hoveredConns;
+
+    // Blue edges from hovered topic to connected topics
+    if (ref.type === 'topic') {
+      ctx.strokeStyle = 'rgba(136, 170, 255, 0.5)';
+      ctx.lineWidth = 1.5;
+      for (const edge of edgeData) {
+        const direct = edge.source === ref.id || edge.target === ref.id;
+        if (!direct) continue;
+        const x1 = curX(edge.sd);
+        const x2 = curX(edge.td);
+        if (x1 < -50 && x2 < -50) continue;
+        if (x1 > plotW + 50 && x2 > plotW + 50) continue;
+        ctx.beginPath();
+        ctx.moveTo(x1, edge.sy);
+        ctx.lineTo(x2, edge.ty);
+        ctx.stroke();
+        drawArrow(ctx, x1, edge.sy, x2, edge.ty, 5, 'rgba(136,170,255,0.8)');
+      }
+    }
+
+    // Blue dashed edges to connected EIPs
+    if (eipLayerBuilt && ref.type === 'topic') {
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = 'rgba(136, 170, 255, 0.4)';
+      ctx.lineWidth = 1;
+      for (const edge of eipEdgeData) {
+        if (!conns.connectedEips.has(Number(edge.eipNum))) continue;
+        if (Number(edge.topicId) !== ref.id && !conns.connectedTopics.has(Number(edge.topicId))) continue;
+        ctx.beginPath();
+        ctx.moveTo(curX(edge.eipDate), edge.eipY);
+        ctx.lineTo(curX(edge.topicDate), edge.topicY);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+
+    // Blue dashed edges to connected papers
+    if (paperLayerBuilt && ref.type === 'topic') {
+      const t = topicMap[ref.id];
+      if (t) {
+        ctx.setLineDash([4, 2]);
+        ctx.strokeStyle = 'rgba(142, 184, 255, 0.5)';
+        ctx.lineWidth = 1.2;
+        for (const pe of paperEntities) {
+          if (!conns.connectedPapers.has(pe.paper.id)) continue;
+          ctx.beginPath();
+          ctx.moveTo(curX(t._date), t._yPos);
+          ctx.lineTo(curX(pe.date), pe.y);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      }
+    }
+
+    // Blue dashed edges to connected magicians
+    if (magLayerBuilt && ref.type === 'topic') {
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = 'rgba(155, 114, 194, 0.5)';
+      ctx.lineWidth = 1;
+      for (const edge of magEdgeData) {
+        if (!conns.connectedMagicians.has(edge.mtid)) continue;
+        if (Number(edge.topicId) !== ref.id && !conns.connectedTopics.has(Number(edge.topicId))) continue;
+        ctx.beginPath();
+        ctx.moveTo(curX(edge.magDate), edge.magY);
+        ctx.lineTo(curX(edge.topicDate), edge.topicY);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+
+    // White contour on connected topic circles
+    for (const e of topicEntities) {
+      if (e.opacity < 0.01) continue;
+      const isHovered = ref.type === 'topic' && e.data.id === ref.id;
+      const isConnected = conns.connectedTopics.has(e.data.id);
+      if (!isHovered && !isConnected) continue;
+      const cx = curX(e.date);
+      if (cx < -20 || cx > plotW + 20) continue;
+      const r = e.lineageBoosted ? e.r * 1.2 : e.r;
+      ctx.beginPath();
+      ctx.arc(cx, e.y, r + (isHovered ? 2 : 1), 0, Math.PI * 2);
+      ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = isHovered ? 2.5 : 1.5;
+      ctx.stroke();
+    }
+
+    // White contour on connected EIP squares
+    if (eipLayerBuilt) {
+      for (const e of eipEntities) {
+        if (e.opacity < 0.02) continue;
+        const isHovered = ref.type === 'eip' && Number(e.num) === Number(ref.id);
+        const isConnected = conns.connectedEips.has(Number(e.num));
+        if (!isHovered && !isConnected) continue;
+        const cx = curX(e.date);
+        if (cx < -20 || cx > plotW + 20) continue;
+        const half = e.size / 2 + (isHovered ? 2 : 1);
+        ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = isHovered ? 2 : 1.2;
+        const s = half * 2;
+        const rr = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx - half + rr, e.y - half);
+        ctx.arcTo(cx + half, e.y - half, cx + half, e.y + half, rr);
+        ctx.arcTo(cx + half, e.y + half, cx - half, e.y + half, rr);
+        ctx.arcTo(cx - half, e.y + half, cx - half, e.y - half, rr);
+        ctx.arcTo(cx - half, e.y - half, cx + half, e.y - half, rr);
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+
+    // White contour on connected paper diamonds
+    if (paperLayerBuilt) {
+      for (const e of paperEntities) {
+        if (e.opacity < 0.01) continue;
+        const isHovered = ref.type === 'paper' && e.paper.id === ref.id;
+        const isConnected = conns.connectedPapers.has(e.paper.id);
+        if (!isHovered && !isConnected) continue;
+        const cx = curX(e.date);
+        if (cx < -20 || cx > plotW + 20) continue;
+        const r = (e.boosted ? Math.max(7, e.r * 1.6) : e.r) + (isHovered ? 2 : 1);
+        ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = isHovered ? 2 : 1.2;
+        // Diamond contour
+        ctx.beginPath();
+        ctx.moveTo(cx, e.y - r);
+        ctx.lineTo(cx + r, e.y);
+        ctx.lineTo(cx, e.y + r);
+        ctx.lineTo(cx - r, e.y);
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+
+    // White contour on connected magicians triangles
+    if (magLayerBuilt) {
+      for (const e of magEntities) {
+        if (e.opacity < 0.01) continue;
+        const isHovered = ref.type === 'magicians' && e.mtid === ref.id;
+        const isConnected = conns.connectedMagicians.has(e.mtid);
+        if (!isHovered && !isConnected) continue;
+        const cx = curX(e.date);
+        if (cx < -20 || cx > plotW + 20) continue;
+        const r = e.r + (isHovered ? 2 : 1);
+        ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = isHovered ? 2 : 1.2;
+        // Triangle contour
+        const h = r * Math.sqrt(3);
+        ctx.beginPath();
+        ctx.moveTo(cx, e.y - r);
+        ctx.lineTo(cx + h / 2, e.y + r / 2);
+        ctx.lineTo(cx - h / 2, e.y + r / 2);
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
   }
-  ctx.setLineDash([]);
 
-  // Pin overlay labels
-  for (const entry of pinOverlayLabels) {
-    const x = curX(entry.date) + (entry.r || 5) + 4;
-    const y = entry.y + 3;
-    const txt = entry.title.length > 35 ? entry.title.slice(0, 34) + '\u2026' : entry.title;
+  // --- Pin overlay (unchanged — this dims the base canvas via applyPinnedHighlight) ---
+  if (hasPinOverlay) {
+    // Pin overlay edges
+    ctx.setLineDash([4, 2]);
+    ctx.strokeStyle = 'rgba(142, 184, 255, 0.5)';
+    ctx.lineWidth = 1.2;
+    for (const edge of pinOverlayEdges) {
+      const x1 = curX(edge.x1Date);
+      const x2 = curX(edge.x2Date);
+      ctx.beginPath();
+      ctx.moveTo(x1, edge.y1);
+      ctx.lineTo(x2, edge.y2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
 
-    ctx.font = entry.isPinned ? 'bold 11px system-ui, sans-serif' : '9px system-ui, sans-serif';
-    ctx.strokeStyle = '#0a0a0f';
-    ctx.lineWidth = 3;
-    ctx.textAlign = 'left';
-    ctx.strokeText(txt, x, y);
-    ctx.fillStyle = entry.isPinned ? '#fff' : '#ccc';
-    ctx.globalAlpha = entry.isPinned ? 1.0 : 0.85;
-    ctx.fillText(txt, x, y);
-    ctx.globalAlpha = 1;
+    // Pin overlay labels
+    for (const entry of pinOverlayLabels) {
+      const x = curX(entry.date) + (entry.r || 5) + 4;
+      const y = entry.y + 3;
+      const txt = entry.title.length > 35 ? entry.title.slice(0, 34) + '\u2026' : entry.title;
+
+      ctx.font = entry.isPinned ? 'bold 11px system-ui, sans-serif' : '9px system-ui, sans-serif';
+      ctx.strokeStyle = '#0a0a0f';
+      ctx.lineWidth = 3;
+      ctx.textAlign = 'left';
+      ctx.strokeText(txt, x, y);
+      ctx.fillStyle = entry.isPinned ? '#fff' : '#ccc';
+      ctx.globalAlpha = entry.isPinned ? 1.0 : 0.85;
+      ctx.fillText(txt, x, y);
+      ctx.globalAlpha = 1;
+    }
   }
 
   ctx.restore();
