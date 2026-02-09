@@ -4,7 +4,7 @@
 // and Shift+click BFS path finding.
 
 import { THREAD_COLORS, NETWORK_ZOOM_EXTENT, EIP_STATUS_COLORS } from './constants.js';
-import { getState, on, selectEntity, hoverEntity, setPath } from './state.js';
+import { getState, on, selectEntity, pinEntity, hoverEntity, setPath } from './state.js';
 import { getCore, getGraph, getGraphIndexes, loadGraph, getPapers } from './data.js';
 import {
   setupCanvas, observeResize, findNodeAtPoint,
@@ -210,13 +210,27 @@ export function init() {
     }
   });
 
-  // Click — entity selection + Shift+click path finding
+  // Click — single-click pins, double-click opens detail, Shift+click path finding
+  let clickTimer = null;
+  let clickCount = 0;
+  const DBLCLICK_DELAY = 220;
+
   canvas.addEventListener('click', (event) => {
     if (dragTarget) return;
     const [mx, my] = transform.invert([event.offsetX, event.offsetY]);
     ensureQuadtree();
     const found = findNodeAtPoint(quadtree, mx, my, 20 / transform.k);
-    if (!found) return;
+
+    if (!found) {
+      // Click on empty space — clear pin/selection
+      const st = getState();
+      if (st.pinnedEntity || st.selectedEntity) {
+        pinEntity(null);
+        selectEntity(null);
+        needsRedraw = true;
+      }
+      return;
+    }
 
     if (event.shiftKey) {
       // BFS path finding from pinned topic
@@ -228,14 +242,30 @@ export function init() {
           setPath(true, startId, pathResult.nodeSet, pathResult.edgeSet);
         }
       }
-    } else {
+      return;
+    }
+
+    clickCount++;
+    if (clickCount === 1) {
+      clickTimer = setTimeout(() => {
+        // Single click — pin (highlight without detail panel)
+        pinEntity({ type: found.sourceType || 'topic', id: found.id });
+        needsRedraw = true;
+        clickCount = 0;
+      }, DBLCLICK_DELAY);
+    } else if (clickCount === 2) {
+      clearTimeout(clickTimer);
+      clickCount = 0;
+      // Double click — open detail panel
       selectEntity({ type: found.sourceType || 'topic', id: found.id });
+      needsRedraw = true;
     }
   });
 
   // Listen for state changes
   on('filters:changed', onFiltersChanged);
   on('selection:changed', () => { needsRedraw = true; });
+  on('pin:changed', () => { needsRedraw = true; });
   on('content:changed', onContentChanged);
   on('path:changed', () => { needsRedraw = true; });
   on('lineage:changed', () => { needsRedraw = true; });
@@ -422,6 +452,7 @@ function draw() {
   const st = getState();
   const selectedId = st.selectedEntity?.id;
   const selectedType = st.selectedEntity?.type;
+  const pinnedId = st.pinnedEntity?.id;
   const zoom = transform.k;
 
   // Path highlight state
@@ -438,8 +469,10 @@ function draw() {
   const visibleIdSet = new Set();
   for (const n of visibleNodes) visibleIdSet.add(String(n.id));
 
-  // Determine connected set for hover/selection highlighting
-  const focusId = hoveredNode ? String(hoveredNode.id) : (selectedId ? String(selectedId) : null);
+  // Determine connected set for hover/selection/pin highlighting
+  const focusId = hoveredNode ? String(hoveredNode.id)
+    : (selectedId ? String(selectedId)
+    : (pinnedId ? String(pinnedId) : null));
   let connectedSet = null;
   if (focusId) {
     connectedSet = new Set();
@@ -549,25 +582,28 @@ function draw() {
   for (const node of visibleNodes) {
     const type = node.sourceType || 'topic';
     const color = getNodeColor(node);
-    const isSelected = String(node.id) === String(selectedId);
+    const nid = String(node.id);
+    const isSelected = nid === String(selectedId);
+    const isPinned = nid === String(pinnedId);
     const isHovered = node === hoveredNode;
 
     // Determine node opacity
     let alpha = 1;
     if (pathActive) {
-      alpha = pathNodeSet.has(String(node.id)) ? 1 : 0.06;
+      alpha = pathNodeSet.has(nid) ? 1 : 0.06;
     } else if (lineageActive) {
-      alpha = lineageSet.has(String(node.id)) ? 1 : 0.06;
+      alpha = lineageSet.has(nid) ? 1 : 0.06;
     } else if (connectedSet) {
-      alpha = connectedSet.has(String(node.id)) ? 1 : 0.08;
+      alpha = connectedSet.has(nid) ? 1 : 0.08;
     } else if (!nodeMatchesFilter(node, st)) {
       alpha = 0.05;
     } else {
       alpha = type === 'fork' ? 0.65 : (node.isMinor ? 0.4 : 0.7);
     }
 
-    const strokeColor = isSelected || isHovered ? '#fff' : color;
-    const strokeWidth = isSelected ? 2.5 : (isHovered ? 2 : (type === 'fork' ? 1.5 : 0.5));
+    const isFocused = isSelected || isPinned || isHovered;
+    const strokeColor = isFocused ? '#fff' : color;
+    const strokeWidth = isSelected ? 2.5 : (isPinned ? 2.2 : (isHovered ? 2 : (type === 'fork' ? 1.5 : 0.5)));
 
     if (type === 'topic') {
       const r = rScale(node.influence || 0);
