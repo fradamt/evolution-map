@@ -9,6 +9,7 @@ Usage:
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -74,6 +75,36 @@ def _precompute_warm_positions(topics, forks, threads, eras):
     return positions
 
 
+def _compute_magicians_influence(magicians_topics, topics):
+    """Map magicians engagement percentile to topic influence quantile (matches V1 algorithm)."""
+    topic_infs = sorted(t.get("inf", 0) for t in topics.values())
+    if not topic_infs:
+        return
+
+    entries = []
+    for mtid, mt in magicians_topics.items():
+        raw = (mt.get("lk", 0) * 2
+               + math.sqrt(mt.get("pc", 0))
+               + math.log1p(mt.get("vw", 0)) * 0.3)
+        entries.append((mtid, raw))
+
+    if not entries:
+        return
+
+    entries.sort(key=lambda x: x[1])
+    n = len(entries)
+    m = len(topic_infs)
+
+    for i, (mtid, _raw) in enumerate(entries):
+        p = 0.5 if n == 1 else i / (n - 1)
+        idx = p * (m - 1)
+        lo = int(idx)
+        hi = min(lo + 1, m - 1)
+        frac = idx - lo
+        inf = topic_infs[lo] * (1 - frac) + topic_infs[hi] * frac
+        magicians_topics[mtid]["inf"] = round(inf, 4)
+
+
 def export():
     print("Loading analysis.json...")
     with open(ANALYSIS_PATH) as f:
@@ -130,6 +161,9 @@ def export():
     with open(papers_path, "w") as f:
         json.dump(papers, f, separators=(",", ":"))
     print(f"  papers.json: {papers_path.stat().st_size / 1024:.0f} KB")
+
+    # --- Compute magicians influence ---
+    _compute_magicians_influence(viz["magiciansTopics"], viz["topics"])
 
     # --- graph.json ---
     # Unified graph + cross-forum edges + magicians topics + EIP catalog (for graph indexes)

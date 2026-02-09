@@ -58,6 +58,7 @@ let magLayerBuilt = false;
 // Lookup
 let topicMap = {};
 let labelSet = new Set();
+let defaultInfluenceThreshold = 0;
 
 const TL_MIN_ZOOM = TIMELINE_ZOOM_EXTENT[0];
 const TL_MAX_ZOOM = TIMELINE_ZOOM_EXTENT[1];
@@ -261,6 +262,7 @@ export function init() {
 
   // Set up default influence threshold
   const defaultThreshold = computeDefaultThreshold(topicMap);
+  defaultInfluenceThreshold = defaultThreshold;
   if (defaultThreshold > 0) {
     setFilters({ minInfluence: defaultThreshold });
     // Set the slider DOM element
@@ -886,6 +888,14 @@ function filterTimeline() {
 
   const hasActiveFilter = st.activeThread || st.activeAuthor || st.activeCategory || st.activeTag;
 
+  // Pre-compute academic name aliases for author filter (ethresearch username → paper/EIP names)
+  let authorAcademicNames = null;
+  if (st.activeAuthor) {
+    const eipInfo = getEips();
+    const ethToEip = eipInfo?.authorLinks?.ethToEip || {};
+    authorAcademicNames = (ethToEip[st.activeAuthor] || []).map(n => n.toLowerCase());
+  }
+
   // Compute target opacities — influence slider fades minor topics, thread/author filters dim non-matching
   const targetOp = {};
   circleG.selectAll('.topic-circle').each(function (d) {
@@ -945,11 +955,14 @@ function filterTimeline() {
       if (st.minInfluence > 0 && (eip.inf || 0) < st.minInfluence) show = false;
       if (hasActiveFilter && show) {
         if (st.activeThread && eip.th !== st.activeThread) show = false;
-        // Author filter: check EIP authors list
+        // Author filter: resolve ethresearch username → academic names via authorLinks
         if (st.activeAuthor && show) {
-          const eipAuthors = (eip.au || []).map(a => (a || '').toLowerCase());
-          const filterAuthor = (st.activeAuthor || '').toLowerCase();
-          if (!eipAuthors.some(a => a === filterAuthor)) show = false;
+          if (authorAcademicNames && authorAcademicNames.length > 0) {
+            const eipAuthors = (eip.au || []).map(a => (a || '').toLowerCase());
+            if (!authorAcademicNames.some(name => eipAuthors.some(ea => ea === name))) show = false;
+          } else {
+            show = false;
+          }
         }
       }
       d3.select(this)
@@ -972,7 +985,15 @@ function filterTimeline() {
       if (st.minInfluence > 0 && (p.inf || 0) < st.minInfluence) show = false;
       if (hasActiveFilter && show) {
         if (st.activeThread && p.th !== st.activeThread) show = false;
-        if (st.activeAuthor && show) show = false; // papers don't have ethresearch authors
+        // Author filter: resolve ethresearch username → academic names via authorLinks
+        if (st.activeAuthor && show) {
+          if (authorAcademicNames && authorAcademicNames.length > 0) {
+            const paperAuthors = (p.a || []).map(a => (a || '').toLowerCase());
+            if (!authorAcademicNames.some(name => paperAuthors.some(pa => pa === name || pa.includes(name) || name.includes(pa)))) show = false;
+          } else {
+            show = false;
+          }
+        }
       }
       d3.select(this)
         .attr('fill-opacity', show ? 0.35 : 0.03)
@@ -1062,6 +1083,18 @@ function onReset() {
   // Remove magicians layer on reset
   if (magLayerG) { magLayerG.selectAll('*').remove(); magLayerBuilt = false; }
   if (magCrossRefG) { magCrossRefG.selectAll('*').remove(); }
+  // Restore default influence threshold and sync slider
+  if (defaultInfluenceThreshold > 0) {
+    setFilters({ minInfluence: defaultInfluenceThreshold });
+    const slider = document.getElementById('inf-slider');
+    const maxInf = d3.max(Object.values(topicMap), t => t.inf) || 1;
+    const pct = Math.round(defaultInfluenceThreshold / maxInf * 100);
+    if (slider) {
+      slider.value = pct;
+      const label = document.getElementById('inf-slider-label');
+      if (label) label.textContent = pct === 0 ? '0%' : pct + '%';
+    }
+  }
   filterTimeline();
 }
 
@@ -1116,6 +1149,7 @@ async function onContentChanged({ key }) {
     const st = getState();
     if (st.showPapers) {
       await loadPapers();
+      await loadEips(); // Ensure authorLinks available for author filtering
       if (getState().showPapers) buildPaperLayer();
     } else {
       removePaperLayer();
@@ -1215,6 +1249,8 @@ function buildEipLayer() {
   if (xScale !== xScaleOrig) {
     updateEipLayerZoom(xScale);
   }
+  // Apply current filters to newly built layer
+  filterTimeline();
 }
 
 function removeEipLayer() {
@@ -1272,6 +1308,14 @@ function onFiltersChangedPaperMode(changed) {
       buildEipLayer();
     }
   }
+  if (changed.activeAuthor) {
+    const st = getState();
+    if (st.showPapers && paperLayerBuilt) {
+      // Author changed — rebuild to include/exclude author's papers
+      removePaperLayer();
+      buildPaperLayer();
+    }
+  }
 }
 
 function buildPaperLayer() {
@@ -1287,6 +1331,24 @@ function buildPaperLayer() {
   const allPapers = Object.values(paperData.papers);
   allPapers.sort((a, b) => (b.inf || 0) - (a.inf || 0));
   const visiblePapers = allPapers.slice(0, limit);
+
+  // Include additional papers matching the active author filter (they may be below the top N threshold)
+  const curState = getState();
+  if (curState.activeAuthor) {
+    const eipInfo = getEips();
+    const ethToEip = eipInfo?.authorLinks?.ethToEip || {};
+    const names = (ethToEip[curState.activeAuthor] || []).map(n => n.toLowerCase());
+    if (names.length > 0) {
+      const visibleIds = new Set(visiblePapers.map(pp => pp.id));
+      for (const pp of allPapers) {
+        if (visibleIds.has(pp.id)) continue;
+        const pa = (pp.a || []).map(a => (a || '').toLowerCase());
+        if (names.some(n => pa.some(a => a === n || a.includes(n) || n.includes(a)))) {
+          visiblePapers.push(pp);
+        }
+      }
+    }
+  }
 
   if (!paperLayerG) paperLayerG = zoomG.append('g').attr('class', 'paper-layer');
 
@@ -1333,6 +1395,8 @@ function buildPaperLayer() {
   if (xScale !== xScaleOrig) {
     updatePaperLayerZoom(xScale);
   }
+  // Apply current filters to newly built layer
+  filterTimeline();
 }
 
 function removePaperLayer() {
@@ -1384,7 +1448,7 @@ function buildMagiciansLayer() {
     if (!mt.d) continue;
     const date = new Date(mt.d);
     if (isNaN(date)) continue;
-    const inf = magiciansEngagementScore(mt);
+    const inf = mt.inf || magiciansEngagementScore(mt);
     if (inf > maxMagInf) maxMagInf = inf;
     const thread = magiciansThreadFromTopic(mt);
     const lane = (thread && laneIdx[thread] !== undefined) ? laneIdx[thread] : laneIdx['_other'] ?? laneOrder.length - 1;
@@ -1489,7 +1553,9 @@ function filterMagiciansLayer() {
 
   magLayerG.selectAll('.magicians-triangle').each(function (d) {
     let show = true;
-    if (hasActiveFilter) {
+    // Influence slider
+    if (st.minInfluence > 0 && (d.inf || 0) < st.minInfluence) show = false;
+    if (hasActiveFilter && show) {
       if (st.activeThread && d.thread !== st.activeThread) show = false;
       if (st.activeAuthor && d.mt.a !== st.activeAuthor) show = false;
     }

@@ -165,6 +165,12 @@ export function resetAll() {
   state.activeCategory = null;
   state.activeTag = null;
   state.minInfluence = 0;
+  // Reset content toggles to defaults
+  state.showEips = false;
+  state.showMagicians = false;
+  state.showPapers = false;
+  state.paperLayerMode = 'focus';
+  state.eipVisibilityMode = 'connected';
   state.lineageActive = false;
   state.lineageSet = new Set();
   state.lineageEdgeSet = new Set();
