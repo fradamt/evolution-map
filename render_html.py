@@ -1040,8 +1040,9 @@ def prepare_viz_data(data):
             if not canonical_name:
                 continue
             entry = ensure_eip_author_entry(canonical_name)
+            is_new = num not in entry["eips"]
             entry["eips"].add(num)
-            if status:
+            if status and is_new:
                 entry["st"][status] = entry["st"].get(status, 0) + 1
             if fork:
                 entry["fk"].add(fork)
