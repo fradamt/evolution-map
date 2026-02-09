@@ -20,6 +20,7 @@ const state = {
   // Selection
   selectedEntity: null, // { type: 'topic'|'eip'|'paper'|'author'|'eipAuthor'|'magicians'|'fork'|'thread'|'era', id }
   hoveredEntity: null,
+  pinnedEntity: null,   // { type, id } — single-click pin (highlight without detail)
   pinnedTopicId: null,
 
   // Filters
@@ -72,10 +73,22 @@ const state = {
 
 // --- Locked Action API ---
 
+export function pinEntity(entity) {
+  const prev = state.pinnedEntity;
+  state.pinnedEntity = entity;
+  state.pinnedTopicId = entity?.type === 'topic' ? entity.id : null;
+  // Close detail panel when pinning (pin = highlight only)
+  state.detailOpen = false;
+  state.selectedEntity = null;
+  emit('pin:changed', { prev, current: entity });
+}
+
 export function selectEntity(entity) {
   const prev = state.selectedEntity;
   state.selectedEntity = entity;
   state.detailOpen = !!entity;
+  // Also pin when selecting (double-click = pin + detail)
+  state.pinnedEntity = entity;
   if (entity?.type === 'topic') state.pinnedTopicId = entity.id;
   emit('selection:changed', { prev, current: entity });
 }
@@ -130,7 +143,7 @@ export function setDetailOpen(open) {
   state.detailOpen = open;
   if (!open) {
     state.selectedEntity = null;
-    state.pinnedTopicId = null;
+    // Keep pinnedEntity when closing detail — pinned highlight persists
   }
   emit('detail:changed', { open });
 }
@@ -158,6 +171,7 @@ export function setMilestones(visible) {
 export function resetAll() {
   state.selectedEntity = null;
   state.hoveredEntity = null;
+  state.pinnedEntity = null;
   state.pinnedTopicId = null;
   state.activeThread = null;
   state.activeAuthor = null;

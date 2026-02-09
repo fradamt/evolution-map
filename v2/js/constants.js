@@ -94,7 +94,7 @@ export const MILESTONE_LABELS = {
 export const PAPER_LAYER_LIMITS = {
   focus: 200,
   context: 400,
-  broad: 1499,
+  broad: 651,
 };
 
 // Default influence slider threshold (0 = show all)

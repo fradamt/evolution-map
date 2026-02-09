@@ -41,7 +41,7 @@ let labelCandidates = [];
 let paperNodesAdded = false;
 let paperNodeIds = new Set();
 let currentPaperMode = null;
-const PAPER_LAYER_LIMITS = { focus: 200, context: 400, broad: 1499 };
+const PAPER_LAYER_LIMITS = { focus: 200, context: 400, broad: 651 };
 
 // rScale for node sizing — computed once after data load
 let rScale = null;
@@ -725,23 +725,10 @@ function addPaperNodes() {
   const mode = st.paperLayerMode || 'focus';
   const limit = PAPER_LAYER_LIMITS[mode] || 200;
 
-  // Sort papers by influence, take top N with per-year minimum coverage
+  // Sort papers by influence, take top N
   const allPapers = Object.values(paperData.papers);
   allPapers.sort((a, b) => (b.inf || 0) - (a.inf || 0));
   const selected = allPapers.slice(0, limit);
-
-  // Ensure temporal coverage: guarantee at least MIN_PER_YEAR papers from each year
-  const MIN_PER_YEAR = 5;
-  const selIds = new Set(selected.map(pp => pp.id));
-  const yearCounts = {};
-  for (const p of selected) { if (p.y) yearCounts[p.y] = (yearCounts[p.y] || 0) + 1; }
-  for (const p of allPapers) {
-    if (!p.y || selIds.has(p.id)) continue;
-    if ((yearCounts[p.y] || 0) >= MIN_PER_YEAR) continue;
-    selected.push(p);
-    selIds.add(p.id);
-    yearCounts[p.y] = (yearCounts[p.y] || 0) + 1;
-  }
 
   // Build a set of existing node IDs to avoid duplicates
   const existingIds = new Set(nodes.map(n => String(n.id)));

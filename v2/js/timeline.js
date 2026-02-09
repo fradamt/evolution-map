@@ -1,7 +1,7 @@
 // timeline.js — SVG swim-lane timeline view (production)
 
 import { THREAD_COLORS, THREAD_ORDER, THREAD_NAMES, TIMELINE_ZOOM_EXTENT, EIP_STATUS_COLORS } from './constants.js';
-import { getState, on, selectEntity, hoverEntity, setFilters, setLineage } from './state.js';
+import { getState, on, selectEntity, pinEntity, hoverEntity, setFilters, setLineage } from './state.js';
 import { getCore, getCoreIndexes, getEips, getPapers, loadEips, loadPapers, loadGraph, getGraph, getGraphIndexes } from './data.js';
 
 // --- Module state ---
@@ -49,7 +49,7 @@ let paperLayerG = null;
 let paperLayerBuilt = false;
 let paperLayerMode = null; // track which mode was used to build
 
-const PAPER_LAYER_LIMITS = { focus: 200, context: 400, broad: 1499 };
+const PAPER_LAYER_LIMITS = { focus: 200, context: 400, broad: 651 };
 
 // Magicians layer state
 let magLayerG = null;
@@ -572,13 +572,15 @@ function buildTimeline(container, core) {
         if (clickTimer) {
           clearTimeout(clickTimer);
           clickTimer = null;
-          // Double-click: select and trace lineage
+          // Double-click: open detail panel
           selectEntity({ type: 'topic', id: d.id });
           return;
         }
         clickTimer = setTimeout(function () {
           clickTimer = null;
-          selectEntity({ type: 'topic', id: d.id });
+          // Single-click: pin highlight (no detail panel)
+          pinEntity({ type: 'topic', id: d.id });
+          applyPinnedHighlight();
         }, 220);
       })
       .on('mouseover', function (ev, d) { onTopicHover(ev, d, true); })
@@ -872,12 +874,36 @@ function onTopicHover(ev, d, entering) {
       });
 
     syncLabelsFromOpMap(targetOp);
+
+    // Dim other entity layers during hover
+    if (eipLayerG && eipLayerBuilt) {
+      eipLayerG.selectAll('.eip-square')
+        .attr('fill-opacity', 0.06).attr('stroke-opacity', 0.06)
+        .style('pointer-events', 'none');
+      if (eipCrossRefG) eipCrossRefG.selectAll('.cross-ref-edge').attr('stroke-opacity', 0.01);
+    }
+    if (paperLayerG && paperLayerBuilt) {
+      paperLayerG.selectAll('.paper-diamond')
+        .attr('fill-opacity', 0.04).attr('stroke-opacity', 0.04)
+        .style('pointer-events', 'none');
+      if (paperCiteG) paperCiteG.selectAll('.paper-cite-edge').attr('stroke-opacity', 0.008);
+    }
+    if (magLayerG && magLayerBuilt) {
+      magLayerG.selectAll('.magicians-triangle')
+        .attr('opacity', 0.06).style('pointer-events', 'none');
+      if (magCrossRefG) magCrossRefG.selectAll('.magicians-ref-edge').attr('stroke-opacity', 0.01);
+    }
   } else {
     hideTooltip();
     hoverEntity(null);
 
-    // Restore based on current filters
-    filterTimeline();
+    // Restore: if pinned, apply pinned highlight; otherwise normal filter state
+    const st = getState();
+    if (st.pinnedEntity) {
+      applyPinnedHighlight();
+    } else {
+      filterTimeline();
+    }
   }
 }
 
@@ -985,37 +1011,50 @@ function filterTimeline() {
   }
 
   // --- Filter paper diamonds + citation edges ---
+  // Like v1: first check filter criteria, then take top N by influence from passing papers
   if (paperLayerG && paperLayerBuilt) {
-    const visiblePaperIds = new Set();
+    const mode = st.paperLayerMode || 'focus';
+    const limit = PAPER_LAYER_LIMITS[mode] || 200;
+
+    // Phase 1: collect papers that pass all filters
+    const passing = [];
     paperLayerG.selectAll('.paper-diamond').each(function (d) {
       const p = d.paper;
-      let show = true;
-      // Influence slider
-      if (st.minInfluence > 0 && (p.inf || 0) < st.minInfluence) show = false;
-      if (hasActiveFilter && show) {
-        if (st.activeThread && p.th !== st.activeThread) show = false;
-        // Author filter: resolve ethresearch username → academic names via authorLinks
-        if (st.activeAuthor && show) {
+      let pass = true;
+      if (st.minInfluence > 0 && (p.inf || 0) < st.minInfluence) pass = false;
+      if (hasActiveFilter && pass) {
+        if (st.activeThread && p.th !== st.activeThread) pass = false;
+        if (st.activeAuthor && pass) {
           if (authorAcademicNames && authorAcademicNames.length > 0) {
             const paperAuthors = (p.a || []).map(a => (a || '').toLowerCase());
-            if (!authorAcademicNames.some(name => paperAuthors.some(pa => pa === name || pa.includes(name) || name.includes(pa)))) show = false;
+            if (!authorAcademicNames.some(name => paperAuthors.some(pa => pa === name || pa.includes(name) || name.includes(pa)))) pass = false;
           } else {
-            show = false;
+            pass = false;
           }
         }
       }
-      if (show) visiblePaperIds.add(p.id);
+      if (pass) passing.push({ el: this, p });
+    });
+
+    // Phase 2: sort by influence, take top N → visible set
+    passing.sort((a, b) => (b.p.inf || 0) - (a.p.inf || 0));
+    const visiblePaperIds = new Set(passing.slice(0, limit).map(x => x.p.id));
+
+    // Phase 3: apply visibility
+    paperLayerG.selectAll('.paper-diamond').each(function (d) {
+      const show = visiblePaperIds.has(d.paper.id);
       d3.select(this)
-        .attr('fill-opacity', show ? 0.35 : 0.03)
-        .attr('stroke-opacity', show ? 0.5 : 0.03)
+        .attr('fill-opacity', show ? 0.35 : 0.02)
+        .attr('stroke-opacity', show ? 0.5 : 0.02)
         .style('pointer-events', show ? 'all' : 'none');
     });
+
     // Filter citation edges: both endpoints must be visible
     if (paperCiteG) {
       paperCiteG.selectAll('.paper-cite-edge').each(function (d) {
         const show = visiblePaperIds.has(d.srcId) && visiblePaperIds.has(d.tgtId);
         d3.select(this)
-          .attr('stroke-opacity', show ? 0.12 : 0.015)
+          .attr('stroke-opacity', show ? 0.12 : 0.008)
           .attr('stroke-width', show ? 0.6 : 0.3);
       });
     }
@@ -1027,10 +1066,124 @@ function filterTimeline() {
   }
 }
 
+// --- Pinned highlight ---
+// When a node is single-clicked, dim everything except the pinned entity and its connections.
+
+function applyPinnedHighlight() {
+  const st = getState();
+  const pinned = st.pinnedEntity;
+  if (!pinned) { filterTimeline(); return; }
+
+  const indexes = getCoreIndexes();
+
+  // Build connected topic set for the pinned entity
+  const connectedTopics = new Set();
+  const connectedEips = new Set();
+  if (pinned.type === 'topic') {
+    connectedTopics.add(pinned.id);
+    const adj = indexes?.topicEdgeIndex?.[String(pinned.id)];
+    if (adj) adj.forEach(id => connectedTopics.add(id));
+    // EIPs mentioned by this topic
+    const core = getCore();
+    const topic = core?.topics?.[pinned.id];
+    if (topic) {
+      for (const eNum of (topic.eips || [])) connectedEips.add(Number(eNum));
+    }
+  } else if (pinned.type === 'eip') {
+    connectedEips.add(Number(pinned.id));
+    // Find topics that mention this EIP
+    const core = getCore();
+    if (core?.topics) {
+      for (const [tid, t] of Object.entries(core.topics)) {
+        if ((t.eips || []).includes(String(pinned.id)) || (t.peips || []).includes(String(pinned.id))) {
+          connectedTopics.add(Number(tid));
+        }
+      }
+    }
+  }
+
+  // Dim topic circles
+  if (circleG) {
+    circleG.selectAll('.topic-circle').each(function (d) {
+      const isPinned = pinned.type === 'topic' && d.id === pinned.id;
+      const isConnected = connectedTopics.has(d.id);
+      const op = isPinned ? 1.0 : isConnected ? 0.8 : 0.06;
+      d3.select(this).attr('opacity', op).style('pointer-events', op > 0.05 ? 'all' : 'none');
+    });
+  }
+
+  // Dim edges
+  if (edgeG) {
+    edgeG.selectAll('.edge-line').each(function (e) {
+      const touching = connectedTopics.has(e.source) && connectedTopics.has(e.target);
+      const direct = (pinned.type === 'topic') && (e.source === pinned.id || e.target === pinned.id);
+      d3.select(this)
+        .attr('stroke-opacity', direct ? 0.6 : touching ? 0.08 : 0.01)
+        .attr('stroke-width', direct ? 2 : 1)
+        .attr('stroke', direct ? '#88aaff' : '#556')
+        .attr('marker-end', direct ? 'url(#arrow-highlight)' : 'url(#arrow-default)');
+    });
+  }
+
+  // Dim labels
+  if (labelG) {
+    labelG.selectAll('.topic-label').each(function (d) {
+      const op = connectedTopics.has(d.id) ? 0.9 : 0.04;
+      d3.select(this).attr('opacity', op);
+    });
+  }
+
+  // Dim EIP squares
+  if (eipLayerG && eipLayerBuilt) {
+    eipLayerG.selectAll('.eip-square').each(function (d) {
+      const isPinned = pinned.type === 'eip' && Number(d.num) === Number(pinned.id);
+      const isConnected = connectedEips.has(Number(d.num));
+      d3.select(this)
+        .attr('fill-opacity', isPinned ? 0.8 : isConnected ? 0.5 : 0.06)
+        .attr('stroke-opacity', isPinned ? 1 : isConnected ? 0.6 : 0.06)
+        .style('pointer-events', (isPinned || isConnected) ? 'all' : 'none');
+    });
+    if (eipCrossRefG) {
+      eipCrossRefG.selectAll('.cross-ref-edge').attr('stroke-opacity', 0.02);
+    }
+  }
+
+  // Dim paper diamonds
+  if (paperLayerG && paperLayerBuilt) {
+    paperLayerG.selectAll('.paper-diamond').each(function (d) {
+      const isPinned = pinned.type === 'paper' && d.paper.id === pinned.id;
+      d3.select(this)
+        .attr('fill-opacity', isPinned ? 0.7 : 0.04)
+        .attr('stroke-opacity', isPinned ? 0.9 : 0.04)
+        .style('pointer-events', isPinned ? 'all' : 'none');
+    });
+    if (paperCiteG) {
+      paperCiteG.selectAll('.paper-cite-edge').attr('stroke-opacity', 0.01);
+    }
+  }
+
+  // Dim magicians triangles
+  if (magLayerG && magLayerBuilt) {
+    magLayerG.selectAll('.magicians-triangle').each(function (d) {
+      const isPinned = pinned.type === 'magicians' && d.mtid === pinned.id;
+      d3.select(this)
+        .attr('opacity', isPinned ? 1.0 : 0.08)
+        .style('pointer-events', isPinned ? 'all' : 'none');
+    });
+    if (magCrossRefG) {
+      magCrossRefG.selectAll('.magicians-ref-edge').attr('stroke-opacity', 0.02);
+    }
+  }
+}
+
 // --- Selection ---
 
 function onSelectionChanged({ current }) {
   if (!circleG) return;
+  // When detail opens via double-click, also apply the pinned highlight
+  if (current) {
+    applyPinnedHighlight();
+  }
   circleG.selectAll('.topic-circle')
     .attr('stroke-width', function (d) {
       return current?.type === 'topic' && current?.id === d.id ? 3 : (d.mn ? 1 : 0.5);
@@ -1222,7 +1375,7 @@ function buildEipLayer() {
     const size = 8 + Math.min(8, (eip.inf || 0) * 12);
     const statusColor = EIP_STATUS_COLORS[eip.s] || '#555';
 
-    const rect = eipLayerG.append('rect')
+    const sq = eipLayerG.append('rect')
       .attr('class', 'eip-square')
       .attr('x', xScaleOrig(date) - size / 2)
       .attr('y', y - size / 2)
@@ -1234,10 +1387,20 @@ function buildEipLayer() {
       .attr('stroke', statusColor)
       .attr('stroke-opacity', 0.8)
       .attr('stroke-width', 0.8)
-      .datum({ num, eip, date, y, size, type: 'eip' })
-      .on('click', function (ev, d) {
+      .datum({ num, eip, date, y, size, type: 'eip' });
+    let eipClickTimer = null;
+    sq.on('click', function (ev, d) {
         ev.stopPropagation();
-        selectEntity({ type: 'eip', id: d.num });
+        if (eipClickTimer) {
+          clearTimeout(eipClickTimer); eipClickTimer = null;
+          selectEntity({ type: 'eip', id: d.num });
+          return;
+        }
+        eipClickTimer = setTimeout(() => {
+          eipClickTimer = null;
+          pinEntity({ type: 'eip', id: d.num });
+          applyPinnedHighlight();
+        }, 220);
       })
       .on('mouseover', function (ev, d) {
         showEipTooltip(ev, d);
@@ -1315,9 +1478,9 @@ function onFiltersChangedPaperMode(changed) {
   if (changed.paperLayerMode) {
     const st = getState();
     if (st.showPapers && paperLayerBuilt) {
-      // Mode changed — rebuild with new limits
-      removePaperLayer();
-      buildPaperLayer();
+      // Mode changed — just re-filter (all papers already built)
+      paperLayerMode = st.paperLayerMode || 'focus';
+      filterTimeline();
     }
   }
   if (changed.eipVisibilityMode) {
@@ -1329,12 +1492,8 @@ function onFiltersChangedPaperMode(changed) {
     }
   }
   if (changed.activeAuthor) {
-    const st = getState();
-    if (st.showPapers && paperLayerBuilt) {
-      // Author changed — rebuild to include/exclude author's papers
-      removePaperLayer();
-      buildPaperLayer();
-    }
+    // Author filter changed — re-filter is enough since all papers are built
+    filterTimeline();
   }
 }
 
@@ -1343,54 +1502,17 @@ function buildPaperLayer() {
   const paperData = getPapers();
   if (!paperData?.papers) return;
 
-  const st = getState();
-  const mode = st.paperLayerMode || 'focus';
-  const limit = PAPER_LAYER_LIMITS[mode] || 200;
-
-  // Sort papers by influence descending, take top N with per-year minimum coverage
+  // Build ALL papers as DOM elements (like v1). Visibility controlled by filterTimeline()
+  // via PAPER_LAYER_LIMITS — top N by influence from the filtered set are shown.
   const allPapers = Object.values(paperData.papers);
-  allPapers.sort((a, b) => (b.inf || 0) - (a.inf || 0));
-  const visiblePapers = allPapers.slice(0, limit);
-
-  // Ensure temporal coverage: guarantee at least MIN_PER_YEAR papers from each year
-  // (recency damping can push recent years entirely below top N threshold)
-  const MIN_PER_YEAR = 5;
-  const selectedIds = new Set(visiblePapers.map(pp => pp.id));
-  const yearCounts = {};
-  for (const p of visiblePapers) { if (p.y) yearCounts[p.y] = (yearCounts[p.y] || 0) + 1; }
-  for (const p of allPapers) {
-    if (!p.y || selectedIds.has(p.id)) continue;
-    if ((yearCounts[p.y] || 0) >= MIN_PER_YEAR) continue;
-    visiblePapers.push(p);
-    selectedIds.add(p.id);
-    yearCounts[p.y] = (yearCounts[p.y] || 0) + 1;
-  }
-
-  // Include additional papers matching the active author filter (they may be below the top N threshold)
-  const curState = getState();
-  if (curState.activeAuthor) {
-    const eipInfo = getEips();
-    const ethToEip = eipInfo?.authorLinks?.ethToEip || {};
-    const names = (ethToEip[curState.activeAuthor] || []).map(n => n.toLowerCase());
-    if (names.length > 0) {
-      for (const pp of allPapers) {
-        if (selectedIds.has(pp.id)) continue;
-        const pa = (pp.a || []).map(a => (a || '').toLowerCase());
-        if (names.some(n => pa.some(a => a === n || a.includes(n) || n.includes(a)))) {
-          visiblePapers.push(pp);
-          selectedIds.add(pp.id);
-        }
-      }
-    }
-  }
 
   // Create edge group first (behind diamonds), then diamond group on top
   if (!paperCiteG) paperCiteG = zoomG.append('g').attr('class', 'paper-cite-layer');
   if (!paperLayerG) paperLayerG = zoomG.append('g').attr('class', 'paper-layer');
 
-  // Build position lookup for each visible paper
+  // Build position lookup for ALL papers
   const paperPos = {};  // paperId → { date, y, r }
-  visiblePapers.forEach(p => {
+  allPapers.forEach(p => {
     if (!p.y) return;
     const idHash = hashCode(p.id ? p.id.length * 31 + p.id.charCodeAt(0) : 0);
     const dayOffset = idHash % 365;
@@ -1429,7 +1551,7 @@ function buildPaperLayer() {
     if (!p) continue;
     const color = p.th ? (THREAD_COLORS[p.th] || '#2f4f77') : '#2f4f77';
 
-    paperLayerG.append('path')
+    const diamond = paperLayerG.append('path')
       .attr('class', 'paper-diamond')
       .attr('d', diamondPath(xScaleOrig(pos.date), pos.y, pos.r))
       .attr('fill', color)
@@ -1437,17 +1559,27 @@ function buildPaperLayer() {
       .attr('stroke', color)
       .attr('stroke-opacity', 0.6)
       .attr('stroke-width', 0.6)
-      .datum({ paper: p, date: pos.date, y: pos.y, r: pos.r, type: 'paper' })
-      .on('click', function (ev, d) {
+      .datum({ paper: p, date: pos.date, y: pos.y, r: pos.r, type: 'paper' });
+    let pClickTimer = null;
+    diamond.on('click', function (ev, d) {
         ev.stopPropagation();
-        selectEntity({ type: 'paper', id: d.paper.id });
+        if (pClickTimer) {
+          clearTimeout(pClickTimer); pClickTimer = null;
+          selectEntity({ type: 'paper', id: d.paper.id });
+          return;
+        }
+        pClickTimer = setTimeout(() => {
+          pClickTimer = null;
+          pinEntity({ type: 'paper', id: d.paper.id });
+          applyPinnedHighlight();
+        }, 220);
       })
       .on('mouseover', function (ev, d) { showPaperTooltip(ev, d); })
       .on('mouseout', function () { hideTooltip(); });
   }
 
   paperLayerBuilt = true;
-  paperLayerMode = mode;
+  paperLayerMode = getState().paperLayerMode || 'focus';
 
   // Apply current zoom
   if (xScale !== xScaleOrig) {
@@ -1566,7 +1698,8 @@ function buildMagiciansLayer() {
         }
         clickTimer = setTimeout(() => {
           clickTimer = null;
-          selectEntity({ type: 'magicians', id: d.mtid });
+          pinEntity({ type: 'magicians', id: d.mtid });
+          applyPinnedHighlight();
         }, 220);
       })
       .on('mouseover', function (ev, d) { showMagiciansTooltip(ev, d); })
