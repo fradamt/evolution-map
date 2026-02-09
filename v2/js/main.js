@@ -4,7 +4,7 @@ import { THREAD_COLORS, THREAD_ORDER } from './constants.js';
 import {
   getState, on, setView, setFilters, setContentToggle, setHelp,
   setSidebarWidth, setSidebarHidden, setMilestones, resetAll,
-  selectEntity, setDetailOpen,
+  selectEntity, pinEntity, setDetailOpen,
 } from './state.js';
 import { loadCore, loadEips, loadPapers, loadGraph, loadCoauthor, getCore, getCoreIndexes } from './data.js';
 import { buildIdentityGraph } from './identity.js';
@@ -156,7 +156,12 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     if (st.helpOpen) {
       setHelp(false);
+    } else if (st.pinnedEntity || st.selectedEntity) {
+      // First Escape: just unpin / deselect (preserves content toggles)
+      pinEntity(null);
+      selectEntity(null);
     } else {
+      // Second Escape (nothing pinned/selected): full reset
       resetAll();
     }
   } else if (e.key === '1') {

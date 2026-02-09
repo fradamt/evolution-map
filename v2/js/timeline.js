@@ -56,6 +56,9 @@ let magLayerG = null;
 let magCrossRefG = null;
 let magLayerBuilt = false;
 
+// Pin overlay (temporary edges + labels during pin)
+let pinOverlayG = null;
+
 // Lookup
 let topicMap = {};
 let labelSet = new Set();
@@ -67,6 +70,31 @@ const TL_EDGE_PAD_FRACTION = 0.05;
 const TL_EDGE_PAD_MIN = 40;
 
 // --- Utilities ---
+
+const STOP_WORDS = new Set([
+  'the','and','for','with','from','that','this','have','been','will','are',
+  'was','were','but','not','all','can','had','its','they','would','what',
+  'when','which','their','also','more','some','than','about','into','over',
+  'such','after','through','very','much','only','between','how','does',
+  'each','where','based','using','towards','toward','ethereum','analysis',
+  'approach','method','protocol','system','systems','network','networks',
+]);
+
+function extractKeywords(title) {
+  if (!title) return new Set();
+  return new Set(
+    title.toLowerCase()
+      .replace(/[^\w\s-]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 4 && !STOP_WORDS.has(w))
+  );
+}
+
+function keywordOverlap(setA, setB) {
+  let count = 0;
+  for (const w of setA) { if (setB.has(w)) count++; }
+  return count;
+}
 
 function hashCode(n) {
   return ((n * 2654435761) >>> 0) % 10000;
@@ -293,6 +321,7 @@ export function init() {
   on('content:changed', onContentChanged);
   on('content:changed', filterTimeline);
   on('reset', onReset);
+  on('pin:changed', ({ current }) => { if (!current) filterTimeline(); });
 
   // ResizeObserver (debounced to avoid rapid-fire rebuilds)
   let resizeTimer = null;
@@ -697,7 +726,7 @@ function buildTimeline(container, core) {
     // Only block unpin for actual interactive entity nodes (which also call stopPropagation).
     // Everything else (era-bg, fork lines, histogram bars, etc.) is "background".
     if (target && target.closest &&
-      target.closest('.topic-circle,.eip-square,.paper-diamond,.magicians-triangle')) return;
+      target.closest('.topic-circle,.eip-square,.paper-diamond,.paper-hit,.magicians-triangle')) return;
     const st = getState();
     if (st.pinnedEntity || st.selectedEntity) {
       pinEntity(null);
@@ -793,6 +822,9 @@ function onZoom(ev) {
 
   // Magicians layer zoom update
   updateMagiciansLayerZoom(newX);
+
+  // Pin overlay zoom update
+  updatePinOverlayZoom(newX);
 
   // Adaptive labels: show more labels when zoomed in
   updateLabelsForZoom(t.k);
@@ -891,8 +923,8 @@ function onTopicHover(ev, d, entering) {
     }
     if (paperLayerG && paperLayerBuilt) {
       paperLayerG.selectAll('.paper-diamond')
-        .attr('fill-opacity', 0.04).attr('stroke-opacity', 0.04)
-        .style('pointer-events', 'none');
+        .attr('fill-opacity', 0.04).attr('stroke-opacity', 0.04);
+      paperLayerG.selectAll('.paper-hit').style('pointer-events', 'none');
       if (paperCiteG) paperCiteG.selectAll('.paper-cite-edge').attr('stroke-opacity', 0.008);
     }
     if (magLayerG && magLayerBuilt) {
@@ -915,6 +947,7 @@ function onTopicHover(ev, d, entering) {
 
 function filterTimeline() {
   if (!circleG) return;
+  clearPinOverlay();
 
   const st = getState();
 
@@ -1049,8 +1082,11 @@ function filterTimeline() {
       const show = visiblePaperIds.has(d.paper.id);
       d3.select(this)
         .attr('fill-opacity', show ? 0.35 : 0.02)
-        .attr('stroke-opacity', show ? 0.5 : 0.02)
-        .style('pointer-events', show ? 'all' : 'none');
+        .attr('stroke-opacity', show ? 0.5 : 0.02);
+    });
+    paperLayerG.selectAll('.paper-hit').each(function (d) {
+      const show = visiblePaperIds.has(d.paper.id);
+      d3.select(this).style('pointer-events', show ? 'all' : 'none');
     });
 
     // Filter citation edges: both endpoints must be visible
@@ -1104,13 +1140,30 @@ function buildPinnedConnections(pinned) {
         graphIdx.eipToMagiciansRefs[String(eNum)].forEach(mid => connectedMagicians.add(mid));
       }
     }
-    // Papers sharing EIPs or in same thread
+    // Papers: EIP overlap + title keyword + thread matching
     if (paperData?.papers) {
+      const topic = core?.topics?.[pinned.id];
+      const topicKW = extractKeywords(topic?.t);
+      const topicThread = topic?.th;
+      const scored = [];
       for (const [pid, p] of Object.entries(paperData.papers)) {
+        let score = 0;
+        // EIP overlap (strongest signal)
         for (const peip of (p.eq || [])) {
-          if (connectedEips.has(Number(peip))) { connectedPapers.add(pid); break; }
+          if (connectedEips.has(Number(peip))) { score += 3.0; break; }
         }
+        // Title keyword overlap (≥2 shared keywords)
+        if (topicKW.size > 0) {
+          const paperKW = extractKeywords(p.t);
+          const overlap = keywordOverlap(topicKW, paperKW);
+          if (overlap >= 2) score += 1.0 + overlap * 0.5;
+        }
+        // Thread match
+        if (topicThread && p.th === topicThread) score += 0.5;
+        if (score >= 1.5) scored.push({ id: pid, score, inf: p.inf || 0 });
       }
+      scored.sort((a, b) => b.score - a.score || b.inf - a.inf);
+      for (const s of scored.slice(0, 18)) connectedPapers.add(s.id);
     }
 
   } else if (pinned.type === 'eip') {
@@ -1141,13 +1194,28 @@ function buildPinnedConnections(pinned) {
         }
       }
     }
-    // Papers mentioning this EIP
+    // Papers: EIP match + title keyword + thread matching
     if (paperData?.papers) {
+      const eipData2 = getEips();
+      const eipTitle = eipData2?.eipCatalog?.[String(pinned.id)]?.t || '';
+      const eipKW = extractKeywords(eipTitle);
+      const eipThread = eipData2?.eipCatalog?.[String(pinned.id)]?.th;
+      const scored = [];
       for (const [pid, p] of Object.entries(paperData.papers)) {
+        let score = 0;
         for (const peip of (p.eq || [])) {
-          if (Number(peip) === Number(pinned.id)) { connectedPapers.add(pid); break; }
+          if (Number(peip) === Number(pinned.id)) { score += 5.0; break; }
         }
+        if (eipKW.size > 0) {
+          const paperKW = extractKeywords(p.t);
+          const overlap = keywordOverlap(eipKW, paperKW);
+          if (overlap >= 2) score += 1.0 + overlap * 0.5;
+        }
+        if (eipThread && p.th === eipThread) score += 0.5;
+        if (score >= 1.5) scored.push({ id: pid, score, inf: p.inf || 0 });
       }
+      scored.sort((a, b) => b.score - a.score || b.inf - a.inf);
+      for (const s of scored.slice(0, 18)) connectedPapers.add(s.id);
     }
 
   } else if (pinned.type === 'paper') {
@@ -1164,10 +1232,29 @@ function buildPinnedConnections(pinned) {
     if (paper) {
       for (const eNum of (paper.eq || [])) connectedEips.add(Number(eNum));
     }
-    // Topics mentioning connected EIPs
+    // Topics: EIP-based + keyword matching
     for (const eNum of connectedEips) {
       const eipTopics = indexes?.eipToTopics?.[String(eNum)];
       if (eipTopics) eipTopics.forEach(tid => connectedTopics.add(tid));
+    }
+    // Keyword-match topics to paper title
+    const paper2 = paperData?.papers?.[pinned.id];
+    if (paper2 && core?.topics) {
+      const paperKW = extractKeywords(paper2.t);
+      if (paperKW.size > 0) {
+        const scored = [];
+        for (const [tid, t] of Object.entries(core.topics)) {
+          if (connectedTopics.has(Number(tid))) continue;
+          const topicKW = extractKeywords(t.t);
+          const overlap = keywordOverlap(paperKW, topicKW);
+          let score = 0;
+          if (overlap >= 2) score += 1.0 + overlap * 0.5;
+          if (paper2.th && t.th === paper2.th) score += 0.5;
+          if (score >= 1.5) scored.push({ id: Number(tid), score, inf: t.inf || 0 });
+        }
+        scored.sort((a, b) => b.score - a.score || b.inf - a.inf);
+        for (const s of scored.slice(0, 12)) connectedTopics.add(s.id);
+      }
     }
     // Magicians linked to connected EIPs
     for (const eNum of connectedEips) {
@@ -1212,7 +1299,7 @@ function buildPinnedConnections(pinned) {
 function applyPinnedHighlight() {
   const st = getState();
   const pinned = st.pinnedEntity;
-  if (!pinned) { filterTimeline(); return; }
+  if (!pinned) { clearPinOverlay(); filterTimeline(); return; }
 
   const { connectedTopics, connectedEips, connectedPapers, connectedMagicians } = buildPinnedConnections(pinned);
 
@@ -1275,8 +1362,12 @@ function applyPinnedHighlight() {
       const isConnected = connectedPapers.has(d.paper.id);
       d3.select(this)
         .attr('fill-opacity', isPinned ? 0.7 : isConnected ? 0.5 : 0.04)
-        .attr('stroke-opacity', isPinned ? 0.9 : isConnected ? 0.6 : 0.04)
-        .style('pointer-events', (isPinned || isConnected) ? 'all' : 'none');
+        .attr('stroke-opacity', isPinned ? 0.9 : isConnected ? 0.6 : 0.04);
+    });
+    paperLayerG.selectAll('.paper-hit').each(function (d) {
+      const isPinned = pinned.type === 'paper' && d.paper.id === pinned.id;
+      const isConnected = connectedPapers.has(d.paper.id);
+      d3.select(this).style('pointer-events', (isPinned || isConnected) ? 'all' : 'none');
     });
     // Show citation edges where both endpoints are connected
     if (paperCiteG) {
@@ -1305,6 +1396,173 @@ function applyPinnedHighlight() {
       });
     }
   }
+
+  // Draw cross-entity edges and labels
+  drawPinOverlay(pinned, connectedTopics, connectedEips, connectedPapers, connectedMagicians);
+}
+
+function clearPinOverlay() {
+  if (pinOverlayG) pinOverlayG.selectAll('*').remove();
+}
+
+function drawPinOverlay(pinned, topics, eips, papers, magicians) {
+  clearPinOverlay();
+  if (!zoomG) return;
+  if (!pinOverlayG) pinOverlayG = zoomG.append('g').attr('class', 'pin-overlay');
+  // Ensure overlay is on top
+  pinOverlayG.raise();
+
+  const curX = xScale || xScaleOrig;
+
+  // Collect positions of all connected entities
+  const positions = {}; // key → { x, y, title, type }
+
+  // Pinned entity position
+  let pinnedPos = null;
+  if (pinned.type === 'topic') {
+    const t = topicMap[pinned.id];
+    if (t) pinnedPos = { x: curX(t._date), y: t._yPos, title: t.t, date: t._date, r: rScale(t.inf) };
+  } else if (pinned.type === 'eip' && eipLayerG) {
+    eipLayerG.selectAll('.eip-square').each(function (d) {
+      if (Number(d.num) === Number(pinned.id)) {
+        pinnedPos = { x: curX(d.date), y: d.y, title: 'EIP-' + d.num + ': ' + (d.title || ''), date: d.date, r: d.size / 2 };
+      }
+    });
+  } else if (pinned.type === 'paper' && paperLayerG) {
+    paperLayerG.selectAll('.paper-diamond').each(function (d) {
+      if (d.paper.id === pinned.id) {
+        pinnedPos = { x: curX(d.date), y: d.y, title: d.paper.t || '', date: d.date, r: d.r };
+      }
+    });
+  } else if (pinned.type === 'magicians' && magLayerG) {
+    magLayerG.selectAll('.magicians-triangle').each(function (d) {
+      if (d.mtid === pinned.id) {
+        pinnedPos = { x: curX(d.date), y: d.y, title: d.mt.t || '', date: d.date, r: d.r };
+      }
+    });
+  }
+  if (!pinnedPos) return;
+
+  // --- Draw cross-entity edges ---
+  // Topic ↔ Paper edges
+  if (paperLayerBuilt && papers.size > 0 && pinned.type !== 'paper') {
+    paperLayerG.selectAll('.paper-diamond').each(function (d) {
+      if (!papers.has(d.paper.id)) return;
+      pinOverlayG.append('line')
+        .attr('class', 'pin-edge')
+        .attr('x1', pinnedPos.x).attr('y1', pinnedPos.y)
+        .attr('x2', curX(d.date)).attr('y2', d.y)
+        .attr('stroke', '#8eb8ff').attr('stroke-opacity', 0.35)
+        .attr('stroke-width', 0.8).attr('stroke-dasharray', '3 2')
+        .datum({ x1Date: pinnedPos.date, y1: pinnedPos.y, x2Date: d.date, y2: d.y });
+    });
+  }
+  if (pinned.type === 'paper') {
+    // Paper → Topic edges
+    if (circleG && topics.size > 0) {
+      circleG.selectAll('.topic-circle').each(function (d) {
+        if (!topics.has(d.id)) return;
+        pinOverlayG.append('line')
+          .attr('class', 'pin-edge')
+          .attr('x1', pinnedPos.x).attr('y1', pinnedPos.y)
+          .attr('x2', curX(d._date)).attr('y2', d._yPos)
+          .attr('stroke', '#8eb8ff').attr('stroke-opacity', 0.4)
+          .attr('stroke-width', 0.8).attr('stroke-dasharray', '3 2')
+          .datum({ x1Date: pinnedPos.date, y1: pinnedPos.y, x2Date: d._date, y2: d._yPos });
+      });
+    }
+    // Paper → EIP edges
+    if (eipLayerBuilt && eips.size > 0) {
+      eipLayerG.selectAll('.eip-square').each(function (d) {
+        if (!eips.has(Number(d.num))) return;
+        pinOverlayG.append('line')
+          .attr('class', 'pin-edge')
+          .attr('x1', pinnedPos.x).attr('y1', pinnedPos.y)
+          .attr('x2', curX(d.date)).attr('y2', d.y)
+          .attr('stroke', '#94c3ff').attr('stroke-opacity', 0.35)
+          .attr('stroke-width', 0.8).attr('stroke-dasharray', '4 2')
+          .datum({ x1Date: pinnedPos.date, y1: pinnedPos.y, x2Date: d.date, y2: d.y });
+      });
+    }
+  }
+
+  // --- Draw labels on pinned entity + neighbors ---
+  const labelEntries = []; // { x, y, title, isPinned }
+
+  // Pinned entity label
+  labelEntries.push({ x: pinnedPos.x, y: pinnedPos.y, r: pinnedPos.r || 5, title: pinnedPos.title, isPinned: true });
+
+  // Connected topic labels (top 12 by influence)
+  const topicLabels = [];
+  if (circleG) {
+    circleG.selectAll('.topic-circle').each(function (d) {
+      if (!topics.has(d.id)) return;
+      if (pinned.type === 'topic' && d.id === pinned.id) return; // skip pinned itself
+      topicLabels.push({ x: curX(d._date), y: d._yPos, r: rScale(d.inf), title: d.t, inf: d.inf, date: d._date });
+    });
+  }
+  topicLabels.sort((a, b) => b.inf - a.inf);
+  for (const tl of topicLabels.slice(0, 12)) labelEntries.push({ ...tl, isPinned: false });
+
+  // Connected EIP labels (top 8)
+  const eipLabels = [];
+  if (eipLayerBuilt && eipLayerG) {
+    eipLayerG.selectAll('.eip-square').each(function (d) {
+      if (!eips.has(Number(d.num))) return;
+      if (pinned.type === 'eip' && Number(d.num) === Number(pinned.id)) return;
+      eipLabels.push({ x: curX(d.date), y: d.y, r: d.size / 2, title: 'EIP-' + d.num, inf: d.inf || 0, date: d.date });
+    });
+  }
+  eipLabels.sort((a, b) => b.inf - a.inf);
+  for (const el of eipLabels.slice(0, 8)) labelEntries.push({ ...el, isPinned: false });
+
+  // Connected paper labels (top 6)
+  const paperLabels = [];
+  if (paperLayerBuilt && paperLayerG) {
+    paperLayerG.selectAll('.paper-diamond').each(function (d) {
+      if (!papers.has(d.paper.id)) return;
+      if (pinned.type === 'paper' && d.paper.id === pinned.id) return;
+      paperLabels.push({ x: curX(d.date), y: d.y, r: d.r, title: d.paper.t || '', inf: d.paper.inf || 0, date: d.date });
+    });
+  }
+  paperLabels.sort((a, b) => b.inf - a.inf);
+  for (const pl of paperLabels.slice(0, 6)) labelEntries.push({ ...pl, isPinned: false });
+
+  // Collision avoidance: remove labels too close to others
+  const placed = [];
+  const MIN_DIST_SQ = 35 * 35; // 35px minimum between labels
+  for (const entry of labelEntries) {
+    const tooClose = placed.some(p => {
+      const dx = entry.x - p.x, dy = entry.y - p.y;
+      return dx * dx + dy * dy < MIN_DIST_SQ;
+    });
+    if (tooClose && !entry.isPinned) continue;
+    placed.push(entry);
+
+    const txt = entry.title.length > 35 ? entry.title.slice(0, 34) + '\u2026' : entry.title;
+    pinOverlayG.append('text')
+      .attr('class', 'pin-label')
+      .attr('x', entry.x + (entry.r || 5) + 4)
+      .attr('y', entry.y + 3)
+      .attr('fill', entry.isPinned ? '#fff' : '#ccc')
+      .attr('font-size', entry.isPinned ? 11 : 9)
+      .attr('font-weight', entry.isPinned ? 'bold' : 'normal')
+      .attr('pointer-events', 'none')
+      .attr('opacity', entry.isPinned ? 1.0 : 0.85)
+      .text(txt)
+      .datum({ date: entry.date || pinnedPos.date, y: entry.y, r: entry.r || 5 });
+  }
+}
+
+function updatePinOverlayZoom(newX) {
+  if (!pinOverlayG) return;
+  pinOverlayG.selectAll('.pin-edge').each(function (d) {
+    d3.select(this)
+      .attr('x1', newX(d.x1Date)).attr('x2', newX(d.x2Date));
+  });
+  pinOverlayG.selectAll('.pin-label').each(function (d) {
+    d3.select(this).attr('x', newX(d.date) + (d.r || 5) + 4);
+  });
 }
 
 // --- Selection ---
@@ -1387,6 +1645,8 @@ function onReset() {
   // Remove magicians layer on reset
   if (magLayerG) { magLayerG.selectAll('*').remove(); magLayerBuilt = false; }
   if (magCrossRefG) { magCrossRefG.selectAll('*').remove(); }
+  // Remove pin overlay on reset
+  clearPinOverlay();
   // Restore default influence threshold and sync slider
   if (defaultInfluenceThreshold > 0) {
     setFilters({ minInfluence: defaultInfluenceThreshold });
@@ -1676,13 +1936,15 @@ function buildPaperLayer() {
       .datum({ srcId: edge.source, tgtId: edge.target, srcDate: src.date, srcY: src.y, tgtDate: tgt.date, tgtY: tgt.y });
   }
 
-  // Draw paper diamonds
+  // Draw paper diamonds with invisible hit areas for reliable hover
   for (const [pid, pos] of Object.entries(paperPos)) {
     const p = paperData.papers[pid];
     if (!p) continue;
     const color = p.th ? (THREAD_COLORS[p.th] || '#2f4f77') : '#2f4f77';
+    const datum = { paper: p, date: pos.date, y: pos.y, r: pos.r, type: 'paper' };
 
-    const diamond = paperLayerG.append('path')
+    // Visible diamond
+    paperLayerG.append('path')
       .attr('class', 'paper-diamond')
       .attr('d', diamondPath(xScaleOrig(pos.date), pos.y, pos.r))
       .attr('fill', color)
@@ -1690,9 +1952,20 @@ function buildPaperLayer() {
       .attr('stroke', color)
       .attr('stroke-opacity', 0.6)
       .attr('stroke-width', 0.6)
-      .datum({ paper: p, date: pos.date, y: pos.y, r: pos.r, type: 'paper' });
+      .attr('pointer-events', 'none')
+      .datum(datum);
+
+    // Invisible hit area on top (min 8px radius for reliable hover)
+    const hitR = Math.max(8, pos.r + 3);
     let pClickTimer = null;
-    diamond.on('click', function (ev, d) {
+    paperLayerG.append('path')
+      .attr('class', 'paper-hit')
+      .attr('d', diamondPath(xScaleOrig(pos.date), pos.y, hitR))
+      .attr('fill', 'transparent')
+      .attr('stroke', 'none')
+      .attr('pointer-events', 'all')
+      .datum(datum)
+      .on('click', function (ev, d) {
         ev.stopPropagation();
         if (pClickTimer) {
           clearTimeout(pClickTimer); pClickTimer = null;
@@ -1731,6 +2004,10 @@ function updatePaperLayerZoom(newX) {
   if (paperLayerG) {
     paperLayerG.selectAll('.paper-diamond').each(function (d) {
       d3.select(this).attr('d', diamondPath(newX(d.date), d.y, d.r));
+    });
+    paperLayerG.selectAll('.paper-hit').each(function (d) {
+      const hitR = Math.max(8, d.r + 3);
+      d3.select(this).attr('d', diamondPath(newX(d.date), d.y, hitR));
     });
   }
   if (paperCiteG) {
