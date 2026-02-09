@@ -1088,11 +1088,15 @@ function filterTimeline() {
     const visiblePaperIds = new Set(passing.slice(0, limit).map(x => x.p.id));
 
     // Phase 3: apply visibility
+    const curX = xScale || xScaleOrig;
     paperLayerG.selectAll('.paper-diamond').each(function (d) {
       const show = visiblePaperIds.has(d.paper.id);
       d3.select(this)
         .attr('fill-opacity', show ? 0.35 : 0.02)
-        .attr('stroke-opacity', show ? 0.5 : 0.02);
+        .attr('stroke-opacity', show ? 0.5 : 0.02)
+        .attr('d', diamondPath(curX(d.date), d.y, d.r))
+        .attr('stroke-width', 0.5)
+        .attr('stroke', d.color || '#555');
     });
     paperLayerG.selectAll('.paper-hit').each(function (d) {
       const show = visiblePaperIds.has(d.paper.id);
@@ -1365,14 +1369,26 @@ function applyPinnedHighlight() {
     }
   }
 
-  // Dim paper diamonds
+  // Dim paper diamonds — connected papers get boosted size + opacity
   if (paperLayerG && paperLayerBuilt) {
+    const curX = xScale || xScaleOrig;
     paperLayerG.selectAll('.paper-diamond').each(function (d) {
       const isPinned = pinned.type === 'paper' && d.paper.id === pinned.id;
       const isConnected = connectedPapers.has(d.paper.id);
-      d3.select(this)
-        .attr('fill-opacity', isPinned ? 0.7 : isConnected ? 0.5 : 0.04)
-        .attr('stroke-opacity', isPinned ? 0.9 : isConnected ? 0.6 : 0.04);
+      const el = d3.select(this);
+      el.attr('fill-opacity', isPinned ? 0.85 : isConnected ? 0.8 : 0.04)
+        .attr('stroke-opacity', isPinned ? 1 : isConnected ? 0.9 : 0.04);
+      // Boost size for connected papers (min 7px, scale up by 1.6x)
+      if (isPinned || isConnected) {
+        const boosted = Math.max(7, d.r * 1.6);
+        el.attr('d', diamondPath(curX(d.date), d.y, boosted))
+          .attr('stroke-width', 1.5)
+          .attr('stroke', '#fff');
+      } else {
+        el.attr('d', diamondPath(curX(d.date), d.y, d.r))
+          .attr('stroke-width', 0.5)
+          .attr('stroke', d.color || '#555');
+      }
     });
     paperLayerG.selectAll('.paper-hit').each(function (d) {
       const isPinned = pinned.type === 'paper' && d.paper.id === pinned.id;
@@ -1462,8 +1478,8 @@ function drawPinOverlay(pinned, topics, eips, papers, magicians) {
         .attr('class', 'pin-edge')
         .attr('x1', pinnedPos.x).attr('y1', pinnedPos.y)
         .attr('x2', curX(d.date)).attr('y2', d.y)
-        .attr('stroke', '#8eb8ff').attr('stroke-opacity', 0.35)
-        .attr('stroke-width', 0.8).attr('stroke-dasharray', '3 2')
+        .attr('stroke', '#8eb8ff').attr('stroke-opacity', 0.5)
+        .attr('stroke-width', 1.2).attr('stroke-dasharray', '4 2')
         .datum({ x1Date: pinnedPos.date, y1: pinnedPos.y, x2Date: d.date, y2: d.y });
     });
   }
@@ -1476,8 +1492,8 @@ function drawPinOverlay(pinned, topics, eips, papers, magicians) {
           .attr('class', 'pin-edge')
           .attr('x1', pinnedPos.x).attr('y1', pinnedPos.y)
           .attr('x2', curX(d._date)).attr('y2', d._yPos)
-          .attr('stroke', '#8eb8ff').attr('stroke-opacity', 0.4)
-          .attr('stroke-width', 0.8).attr('stroke-dasharray', '3 2')
+          .attr('stroke', '#8eb8ff').attr('stroke-opacity', 0.5)
+          .attr('stroke-width', 1.2).attr('stroke-dasharray', '4 2')
           .datum({ x1Date: pinnedPos.date, y1: pinnedPos.y, x2Date: d._date, y2: d._yPos });
       });
     }
@@ -1489,8 +1505,8 @@ function drawPinOverlay(pinned, topics, eips, papers, magicians) {
           .attr('class', 'pin-edge')
           .attr('x1', pinnedPos.x).attr('y1', pinnedPos.y)
           .attr('x2', curX(d.date)).attr('y2', d.y)
-          .attr('stroke', '#94c3ff').attr('stroke-opacity', 0.35)
-          .attr('stroke-width', 0.8).attr('stroke-dasharray', '4 2')
+          .attr('stroke', '#94c3ff').attr('stroke-opacity', 0.5)
+          .attr('stroke-width', 1.2).attr('stroke-dasharray', '4 2')
           .datum({ x1Date: pinnedPos.date, y1: pinnedPos.y, x2Date: d.date, y2: d.y });
       });
     }
@@ -1956,7 +1972,7 @@ function buildPaperLayer() {
     const p = paperData.papers[pid];
     if (!p) continue;
     const color = p.th ? (THREAD_COLORS[p.th] || '#2f4f77') : '#2f4f77';
-    const datum = { paper: p, date: pos.date, y: pos.y, r: pos.r, type: 'paper' };
+    const datum = { paper: p, date: pos.date, y: pos.y, r: pos.r, color, type: 'paper' };
 
     // Visible diamond
     paperLayerG.append('path')
