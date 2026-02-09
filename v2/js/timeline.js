@@ -2,7 +2,7 @@
 
 import { THREAD_COLORS, THREAD_ORDER, THREAD_NAMES, TIMELINE_ZOOM_EXTENT, EIP_STATUS_COLORS } from './constants.js';
 import { getState, on, selectEntity, hoverEntity, setFilters, setLineage } from './state.js';
-import { getCore, getCoreIndexes, getEips, getPapers, loadEips, loadPapers, getGraph, getGraphIndexes } from './data.js';
+import { getCore, getCoreIndexes, getEips, getPapers, loadEips, loadPapers, loadGraph, getGraph, getGraphIndexes } from './data.js';
 
 // --- Module state ---
 let svg = null;
@@ -50,6 +50,11 @@ let paperLayerMode = null; // track which mode was used to build
 
 const PAPER_LAYER_LIMITS = { focus: 200, context: 400, broad: 1499 };
 
+// Magicians layer state
+let magLayerG = null;
+let magCrossRefG = null;
+let magLayerBuilt = false;
+
 // Lookup
 let topicMap = {};
 let labelSet = new Set();
@@ -63,6 +68,13 @@ const TL_EDGE_PAD_MIN = 40;
 
 function hashCode(n) {
   return ((n * 2654435761) >>> 0) % 10000;
+}
+
+function trianglePath(cx, cy, r) {
+  const h = r * Math.sqrt(3) / 2;
+  return 'M' + cx + ',' + (cy - r) +
+    'L' + (cx + h) + ',' + (cy + r / 2) +
+    'L' + (cx - h) + ',' + (cy + r / 2) + 'Z';
 }
 
 function starPoints(cx, cy, outerR, innerR, nPoints) {
@@ -79,6 +91,31 @@ function escHtml(s) {
   const el = document.createElement('span');
   el.textContent = s || '';
   return el.innerHTML;
+}
+
+function magiciansThreadFromTopic(mt) {
+  if (!mt) return null;
+  const counts = {};
+  for (const tid of (mt.er || [])) {
+    const t = topicMap[tid];
+    if (t?.th) counts[t.th] = (counts[t.th] || 0) + 1;
+  }
+  const graphData = getGraph();
+  const eipCat = graphData?.eipCatalog || {};
+  for (const eipNum of (mt.eips || [])) {
+    const e = eipCat[String(eipNum)];
+    if (e?.th) counts[e.th] = (counts[e.th] || 0) + 1;
+  }
+  let best = null, bestCount = 0;
+  for (const [th, count] of Object.entries(counts)) {
+    if (count > bestCount) { bestCount = count; best = th; }
+  }
+  return best;
+}
+
+function magiciansEngagementScore(mt) {
+  if (!mt) return 0;
+  return (mt.lk || 0) * 2 + Math.sqrt(mt.pc || 0) + Math.log1p(mt.vw || 0) * 0.3;
 }
 
 function clampTimelineTransform(t) {
@@ -284,6 +321,9 @@ function rebuildTimeline() {
   paperLayerG = null;
   paperLayerBuilt = false;
   paperLayerMode = null;
+  magLayerG = null;
+  magCrossRefG = null;
+  magLayerBuilt = false;
   labelSet = new Set();
   buildTimeline(container, core);
 }
@@ -733,6 +773,9 @@ function onZoom(ev) {
   // Paper layer zoom update
   updatePaperLayerZoom(newX);
 
+  // Magicians layer zoom update
+  updateMagiciansLayerZoom(newX);
+
   // Adaptive labels: show more labels when zoomed in
   updateLabelsForZoom(t.k);
 }
@@ -890,6 +933,52 @@ function filterTimeline() {
   }
 
   syncLabelsFromOpMap(targetOp);
+
+  // --- Filter EIP squares ---
+  if (eipLayerG && eipLayerBuilt) {
+    eipLayerG.selectAll('.eip-square').each(function (d) {
+      const eip = d.eip;
+      let show = true;
+      if (hasActiveFilter) {
+        if (st.activeThread && eip.th !== st.activeThread) show = false;
+        // Author filter: check EIP authors list
+        if (st.activeAuthor && show) {
+          const eipAuthors = (eip.au || []).map(a => (a || '').toLowerCase());
+          const filterAuthor = (st.activeAuthor || '').toLowerCase();
+          if (!eipAuthors.some(a => a === filterAuthor)) show = false;
+        }
+      }
+      d3.select(this)
+        .attr('fill-opacity', show ? 0.5 : 0.05)
+        .attr('stroke-opacity', show ? 0.8 : 0.05)
+        .style('pointer-events', show ? 'all' : 'none');
+    });
+    if (eipCrossRefG) {
+      eipCrossRefG.selectAll('.cross-ref-edge')
+        .attr('stroke-opacity', hasActiveFilter ? 0.03 : 0.12);
+    }
+  }
+
+  // --- Filter paper circles ---
+  if (paperLayerG && paperLayerBuilt) {
+    paperLayerG.selectAll('.paper-circle').each(function (d) {
+      const p = d.paper;
+      let show = true;
+      if (hasActiveFilter) {
+        if (st.activeThread && p.th !== st.activeThread) show = false;
+        if (st.activeAuthor && show) show = false; // papers don't have ethresearch authors
+      }
+      d3.select(this)
+        .attr('fill-opacity', show ? 0.35 : 0.03)
+        .attr('stroke-opacity', show ? 0.5 : 0.03)
+        .style('pointer-events', show ? 'all' : 'none');
+    });
+  }
+
+  // --- Filter magicians triangles ---
+  if (magLayerG && magLayerBuilt) {
+    filterMagiciansLayer();
+  }
 }
 
 // --- Selection ---
@@ -964,26 +1053,62 @@ function onReset() {
   if (eipCrossRefG) eipCrossRefG.selectAll('*').remove();
   // Remove paper layer on reset
   if (paperLayerG) { paperLayerG.selectAll('*').remove(); paperLayerBuilt = false; paperLayerMode = null; }
+  // Remove magicians layer on reset
+  if (magLayerG) { magLayerG.selectAll('*').remove(); magLayerBuilt = false; }
+  if (magCrossRefG) { magCrossRefG.selectAll('*').remove(); }
   filterTimeline();
 }
 
 // --- EIP layer on timeline ---
 
 async function onContentChanged({ key }) {
+  if (key === 'showPosts') {
+    const st = getState();
+    const show = st.showPosts;
+    if (circleG) {
+      circleG.selectAll('.topic-circle')
+        .style('display', show ? null : 'none')
+        .style('pointer-events', show ? null : 'none');
+    }
+    if (labelG) {
+      labelG.selectAll('.topic-label')
+        .style('display', show ? null : 'none');
+    }
+    if (edgeG) {
+      edgeG.selectAll('.edge-line')
+        .style('display', show ? null : 'none');
+    }
+    if (milestoneG) {
+      milestoneG.selectAll('.milestone-marker')
+        .style('display', (show && st.milestonesVisible) ? null : 'none');
+    }
+    // Also hide/show magicians cross-ref edges (they connect to topics)
+    if (magCrossRefG) {
+      magCrossRefG.selectAll('.magicians-ref-edge')
+        .style('display', show ? null : 'none');
+    }
+  }
   if (key === 'showEips') {
     const st = getState();
     if (st.showEips) {
-      // Ensure EIP data is loaded before building
       await loadEips();
       if (getState().showEips) buildEipLayer();
     } else {
       removeEipLayer();
     }
   }
+  if (key === 'showMagicians') {
+    const st = getState();
+    if (st.showMagicians) {
+      await loadGraph();
+      if (getState().showMagicians) buildMagiciansLayer();
+    } else {
+      removeMagiciansLayer();
+    }
+  }
   if (key === 'showPapers') {
     const st = getState();
     if (st.showPapers) {
-      // Ensure paper data is loaded before building
       await loadPapers();
       if (getState().showPapers) buildPaperLayer();
     } else {
@@ -1225,6 +1350,166 @@ function showPaperTooltip(ev, d) {
     (p.y || '') + (p.cb ? ' \u00b7 ' + p.cb + ' citations' : '') +
     ' \u00b7 inf: ' + (p.inf || 0).toFixed(2) +
     (p.a && p.a.length > 0 ? '<br><span style="color:#888">' + escHtml(p.a.slice(0, 3).join(', ')) + (p.a.length > 3 ? ' et al.' : '') + '</span>' : '');
+  tip.style.display = 'block';
+  let x = ev.clientX + 14;
+  let y = ev.clientY - 10;
+  const tw = tip.offsetWidth;
+  const th = tip.offsetHeight;
+  if (x + tw > window.innerWidth - 10) x = ev.clientX - tw - 14;
+  if (y + th > window.innerHeight - 10) y = window.innerHeight - th - 10;
+  if (y < 5) y = 5;
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
+}
+
+// --- Magicians layer on timeline ---
+
+function buildMagiciansLayer() {
+  if (!zoomG || !xScaleOrig || magLayerBuilt) return;
+  const graphData = getGraph();
+  if (!graphData?.magiciansTopics) return;
+
+  const magTopics = graphData.magiciansTopics;
+
+  // Compute engagement scores for radius scaling
+  let maxMagInf = 0;
+  const magEntries = [];
+  for (const [mtid, mt] of Object.entries(magTopics)) {
+    if (!mt.d) continue;
+    const date = new Date(mt.d);
+    if (isNaN(date)) continue;
+    const inf = magiciansEngagementScore(mt);
+    if (inf > maxMagInf) maxMagInf = inf;
+    const thread = magiciansThreadFromTopic(mt);
+    const lane = (thread && laneIdx[thread] !== undefined) ? laneIdx[thread] : laneIdx['_other'] ?? laneOrder.length - 1;
+    const yBase = topicLaneY0 + lane * laneH + laneH * 0.15;
+    const yRange = laneH * 0.7;
+    const y = yBase + (hashCode(Number(mtid)) % 100) / 100 * yRange;
+    magEntries.push({ mtid: Number(mtid), mt, date, inf, thread, y });
+  }
+
+  const magRScale = d3.scaleSqrt().domain([0, maxMagInf || 1]).range([3, 11]);
+
+  if (!magCrossRefG) magCrossRefG = zoomG.append('g').attr('class', 'magicians-crossref-layer');
+  if (!magLayerG) magLayerG = zoomG.append('g').attr('class', 'magicians-layer');
+
+  // Cross-reference edges to ethresearch topics
+  magEntries.forEach(({ mt, date, y }) => {
+    for (const tid of (mt.er || [])) {
+      const topic = topicMap[tid];
+      if (!topic || topic._yPos === undefined) continue;
+      magCrossRefG.append('line')
+        .attr('class', 'magicians-ref-edge')
+        .attr('x1', xScaleOrig(date)).attr('y1', y)
+        .attr('x2', xScaleOrig(topic._date)).attr('y2', topic._yPos)
+        .attr('stroke', '#9b72c2').attr('stroke-opacity', 0.14)
+        .attr('stroke-width', 0.9).attr('stroke-dasharray', '3 3')
+        .datum({ magDate: date, topicDate: topic._date, magY: y, topicY: topic._yPos });
+    }
+  });
+
+  // Triangle nodes
+  magEntries.forEach(({ mtid, mt, date, inf, thread, y }) => {
+    const r = magRScale(inf);
+    const color = (thread && THREAD_COLORS[thread]) ? THREAD_COLORS[thread] : '#bb88cc';
+    let clickTimer = null;
+
+    magLayerG.append('path')
+      .attr('class', 'magicians-triangle')
+      .attr('d', trianglePath(xScaleOrig(date), y, r))
+      .attr('fill', color).attr('stroke', color)
+      .attr('stroke-width', 0.5).attr('opacity', 0.7)
+      .datum({ mtid, mt, date, inf, thread, y, r, type: 'magicians' })
+      .on('click', function (ev, d) {
+        ev.stopPropagation();
+        if (clickTimer) {
+          clearTimeout(clickTimer); clickTimer = null;
+          selectEntity({ type: 'magicians', id: d.mtid });
+          return;
+        }
+        clickTimer = setTimeout(() => {
+          clickTimer = null;
+          selectEntity({ type: 'magicians', id: d.mtid });
+        }, 220);
+      })
+      .on('mouseover', function (ev, d) { showMagiciansTooltip(ev, d); })
+      .on('mouseout', function () { hideTooltip(); });
+  });
+
+  // Labels for top 12 by engagement
+  const topMag = magEntries.slice().sort((a, b) => b.inf - a.inf).slice(0, 12);
+  topMag.forEach(({ mt, date, inf, y }) => {
+    const r = magRScale(inf);
+    const title = mt.t || '';
+    const txt = title.length > 28 ? title.slice(0, 27) + '\u2026' : title;
+    magLayerG.append('text')
+      .attr('class', 'magicians-label')
+      .attr('x', xScaleOrig(date) + r + 3).attr('y', y + 3)
+      .attr('fill', '#c8b5db').attr('font-size', 8).attr('pointer-events', 'none')
+      .text(txt)
+      .datum({ date });
+  });
+
+  magLayerBuilt = true;
+  if (xScale !== xScaleOrig) updateMagiciansLayerZoom(xScale);
+  filterMagiciansLayer();
+}
+
+function removeMagiciansLayer() {
+  if (magLayerG) magLayerG.selectAll('*').remove();
+  if (magCrossRefG) magCrossRefG.selectAll('*').remove();
+  magLayerBuilt = false;
+}
+
+function updateMagiciansLayerZoom(newX) {
+  if (!magLayerG) return;
+  magLayerG.selectAll('.magicians-triangle').each(function (d) {
+    d3.select(this).attr('d', trianglePath(newX(d.date), d.y, d.r));
+  });
+  magLayerG.selectAll('.magicians-label').attr('x', function (d) {
+    return newX(d.date) + 6;
+  });
+  if (magCrossRefG) {
+    magCrossRefG.selectAll('.magicians-ref-edge')
+      .attr('x1', d => newX(d.magDate))
+      .attr('x2', d => newX(d.topicDate));
+  }
+}
+
+function filterMagiciansLayer() {
+  if (!magLayerG || !magLayerBuilt) return;
+  const st = getState();
+  const hasActiveFilter = st.activeThread || st.activeAuthor || st.activeCategory || st.activeTag;
+
+  magLayerG.selectAll('.magicians-triangle').each(function (d) {
+    let show = true;
+    if (hasActiveFilter) {
+      if (st.activeThread && d.thread !== st.activeThread) show = false;
+      if (st.activeAuthor && d.mt.a !== st.activeAuthor) show = false;
+    }
+    d3.select(this)
+      .style('display', show ? null : 'none')
+      .style('pointer-events', show ? 'all' : 'none');
+  });
+
+  magLayerG.selectAll('.magicians-label')
+    .style('display', hasActiveFilter ? 'none' : null);
+
+  if (magCrossRefG) {
+    magCrossRefG.selectAll('.magicians-ref-edge')
+      .style('display', (st.showPosts && !hasActiveFilter) ? null : 'none');
+  }
+}
+
+function showMagiciansTooltip(ev, d) {
+  const tip = document.getElementById('tooltip');
+  if (!tip) return;
+  const mt = d.mt;
+  const color = (d.thread && THREAD_COLORS[d.thread]) ? THREAD_COLORS[d.thread] : '#bb88cc';
+  tip.innerHTML = '<strong style="color:' + color + '">\u25B3 ' + escHtml(mt.t || '') + '</strong><br>' +
+    '<span style="color:#888">' + escHtml(mt.a || '') + ' \u00b7 ' + (mt.d || '').slice(0, 10) + '</span>' +
+    (mt.eips?.length > 0 ? '<br><span style="color:#88aacc">EIPs: ' + mt.eips.map(e => 'EIP-' + e).join(', ') + '</span>' : '') +
+    '<br><span style="color:#666">' + (mt.vw || 0) + ' views \u00b7 ' + (mt.lk || 0) + ' likes \u00b7 ' + (mt.pc || 0) + ' posts</span>';
   tip.style.display = 'block';
   let x = ev.clientX + 14;
   let y = ev.clientY - 10;
