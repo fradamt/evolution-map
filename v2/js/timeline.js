@@ -163,8 +163,12 @@ function clampTimelineTransform(t) {
     return d3.zoomIdentity.translate(0, 0).scale(k);
   }
 
+  // Account for detail panel overlay (420px absolute-positioned over timeline)
+  const detailPanel = document.getElementById('detail-panel');
+  const detailW = (detailPanel && detailPanel.classList.contains('open')) ? detailPanel.offsetWidth : 0;
+
   const edgePad = Math.max(TL_EDGE_PAD_MIN, plotW * TL_EDGE_PAD_FRACTION);
-  const minX = plotW * (1 - k) - edgePad;
+  const minX = plotW * (1 - k) - edgePad - detailW;
   const maxX = edgePad;
   let x = t && isFinite(t.x) ? t.x : 0;
   if (x < minX) x = minX;

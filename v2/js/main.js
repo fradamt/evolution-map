@@ -224,12 +224,15 @@ function positionSidebarButtons() {
   const st = getState();
   if (sidebar && (widthBtn || hideBtn)) {
     const rect = sidebar.getBoundingClientRect();
-    const leftPx = (st.sidebarHidden ? window.innerWidth : rect.left) + 'px';
+    const leftPx = (st.sidebarHidden ? window.innerWidth - 24 : rect.left) + 'px';
     if (widthBtn) {
       widthBtn.style.left = leftPx;
       widthBtn.style.display = st.sidebarHidden ? 'none' : '';
     }
-    if (hideBtn) hideBtn.style.left = leftPx;
+    if (hideBtn) {
+      hideBtn.style.left = leftPx;
+      hideBtn.textContent = st.sidebarHidden ? '\u25C0' : '\u25B6';
+    }
   }
 }
 
