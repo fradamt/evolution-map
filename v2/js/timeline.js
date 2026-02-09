@@ -1334,10 +1334,24 @@ function buildPaperLayer() {
   const mode = st.paperLayerMode || 'focus';
   const limit = PAPER_LAYER_LIMITS[mode] || 200;
 
-  // Sort papers by influence descending, take top N
+  // Sort papers by influence descending, take top N with per-year minimum coverage
   const allPapers = Object.values(paperData.papers);
   allPapers.sort((a, b) => (b.inf || 0) - (a.inf || 0));
   const visiblePapers = allPapers.slice(0, limit);
+
+  // Ensure temporal coverage: guarantee at least MIN_PER_YEAR papers from each year
+  // (recency damping can push recent years entirely below top N threshold)
+  const MIN_PER_YEAR = 5;
+  const selectedIds = new Set(visiblePapers.map(pp => pp.id));
+  const yearCounts = {};
+  for (const p of visiblePapers) { if (p.y) yearCounts[p.y] = (yearCounts[p.y] || 0) + 1; }
+  for (const p of allPapers) {
+    if (!p.y || selectedIds.has(p.id)) continue;
+    if ((yearCounts[p.y] || 0) >= MIN_PER_YEAR) continue;
+    visiblePapers.push(p);
+    selectedIds.add(p.id);
+    yearCounts[p.y] = (yearCounts[p.y] || 0) + 1;
+  }
 
   // Include additional papers matching the active author filter (they may be below the top N threshold)
   const curState = getState();
@@ -1346,12 +1360,12 @@ function buildPaperLayer() {
     const ethToEip = eipInfo?.authorLinks?.ethToEip || {};
     const names = (ethToEip[curState.activeAuthor] || []).map(n => n.toLowerCase());
     if (names.length > 0) {
-      const visibleIds = new Set(visiblePapers.map(pp => pp.id));
       for (const pp of allPapers) {
-        if (visibleIds.has(pp.id)) continue;
+        if (selectedIds.has(pp.id)) continue;
         const pa = (pp.a || []).map(a => (a || '').toLowerCase());
         if (names.some(n => pa.some(a => a === n || a.includes(n) || n.includes(a)))) {
           visiblePapers.push(pp);
+          selectedIds.add(pp.id);
         }
       }
     }
