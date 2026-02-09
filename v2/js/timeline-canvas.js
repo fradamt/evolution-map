@@ -1211,8 +1211,8 @@ function applyHoverHighlight(ref) {
     const isPinned = ref.type === 'topic' && e.data.id === ref.id;
     const isConnected = conns.connectedTopics.has(e.data.id);
     let op;
-    if (isPinned) op = 0.85;
-    else if (isConnected) op = 0.65;
+    if (isPinned) op = 0.9;
+    else if (isConnected) op = 0.7;
     else {
       const belowThreshold = st.minInfluence > 0 && e.inf < st.minInfluence;
       if (belowThreshold) op = 0.02;
@@ -1324,17 +1324,17 @@ function filterTimeline() {
     const d = e.data;
     const belowThreshold = st.minInfluence > 0 && e.inf < st.minInfluence;
     if (belowThreshold && hasActiveFilter) {
-      e.targetOpacity = 0.03;
+      e.targetOpacity = 0.02;
     } else if (belowThreshold) {
-      e.targetOpacity = d.mn ? 0.18 : 0.25;
+      e.targetOpacity = d.mn ? 0.06 : 0.15;
     } else if (hasActiveFilter) {
       const passesFilter = (!st.activeThread || d.th === st.activeThread) &&
         (!st.activeAuthor || d.a === st.activeAuthor) &&
         (!st.activeCategory || d.cat === st.activeCategory) &&
         (!st.activeTag || (d.tg || []).includes(st.activeTag));
-      e.targetOpacity = passesFilter ? 0.7 : 0.06;
+      e.targetOpacity = passesFilter ? 0.75 : 0.05;
     } else {
-      e.targetOpacity = d.mn ? 0.3 : 0.55;
+      e.targetOpacity = d.mn ? 0.25 : 0.65;
     }
   }
 
@@ -1378,7 +1378,7 @@ function filterTimeline() {
           }
         }
       }
-      e.opacity = show ? 0.4 : 0.05;
+      e.opacity = show ? 0.5 : 0.05;
     }
     for (const edge of eipEdgeData) {
       edge.opacity = hasActiveFilter ? 0.03 : 0.1;
@@ -1443,7 +1443,7 @@ function filterMagiciansEntities() {
       if (st.activeThread && e.thread !== st.activeThread) show = false;
       if (st.activeAuthor && e.mt.a !== st.activeAuthor) show = false;
     }
-    e.opacity = show ? 0.55 : 0;
+    e.opacity = show ? 0.6 : 0;
   }
 
   for (const edge of magEdgeData) {
@@ -1464,7 +1464,7 @@ function applyPinnedHighlight() {
   for (const e of topicEntities) {
     const isPinned = pinned.type === 'topic' && e.data.id === pinned.id;
     const isConnected = conns.connectedTopics.has(e.data.id);
-    e.opacity = isPinned ? 0.85 : isConnected ? 0.65 : 0.06;
+    e.opacity = isPinned ? 0.9 : isConnected ? 0.7 : 0.05;
     e.targetOpacity = e.opacity;
   }
 
@@ -1481,7 +1481,7 @@ function applyPinnedHighlight() {
     for (const e of eipEntities) {
       const isPinned = pinned.type === 'eip' && Number(e.num) === Number(pinned.id);
       const isConnected = conns.connectedEips.has(Number(e.num));
-      e.opacity = isPinned ? 0.65 : isConnected ? 0.45 : 0.06;
+      e.opacity = isPinned ? 0.75 : isConnected ? 0.5 : 0.05;
     }
     for (const edge of eipEdgeData) {
       const show = conns.connectedEips.has(Number(edge.eipNum)) && conns.connectedTopics.has(Number(edge.topicId));
@@ -1495,7 +1495,7 @@ function applyPinnedHighlight() {
     for (const e of paperEntities) {
       const isPinned = pinned.type === 'paper' && e.paper.id === pinned.id;
       const isConnected = conns.connectedPapers.has(e.paper.id);
-      e.opacity = isPinned ? 0.7 : isConnected ? 0.6 : 0.04;
+      e.opacity = isPinned ? 0.75 : isConnected ? 0.6 : 0.04;
       e.boosted = isPinned || isConnected;
     }
     for (const edge of paperEdgeData) {
@@ -1510,7 +1510,7 @@ function applyPinnedHighlight() {
     for (const e of magEntities) {
       const isPinned = pinned.type === 'magicians' && e.mtid === pinned.id;
       const isConnected = conns.connectedMagicians.has(e.mtid);
-      e.opacity = isPinned ? 0.85 : isConnected ? 0.6 : 0.08;
+      e.opacity = isPinned ? 0.8 : isConnected ? 0.6 : 0.06;
     }
     for (const edge of magEdgeData) {
       const show = conns.connectedMagicians.has(edge.mtid) && conns.connectedTopics.has(Number(edge.topicId));
@@ -1669,7 +1669,7 @@ function applyLineageTimeline() {
 
   for (const e of topicEntities) {
     const inLineage = lineageSet.has(e.data.id);
-    e.opacity = inLineage ? 0.85 : 0.04;
+    e.opacity = inLineage ? 0.9 : 0.04;
     e.targetOpacity = e.opacity;
     e.lineageBoosted = inLineage;
   }
@@ -2021,15 +2021,7 @@ function drawBase() {
   const st = getState();
   const showPosts = st.showPosts;
 
-  // 2. Era background rects
-  for (const era of eraData) {
-    const x0 = curX(era.start);
-    const x1 = curX(era.end);
-    ctx.fillStyle = era.color;
-    ctx.fillRect(x0, 0, Math.max(0, x1 - x0), topicLaneY0 + swimH);
-  }
-
-  // Era labels
+  // 2. Era labels (no background rects — circles provide enough color)
   ctx.font = '10px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillStyle = '#555';
