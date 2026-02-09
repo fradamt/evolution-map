@@ -22,7 +22,11 @@ document.documentElement.style.overscrollBehavior = 'none';
 document.body.style.overscrollBehavior = 'none';
 document.addEventListener('wheel', function (ev) {
   if (getState().view !== 'timeline') return;
+  // Allow scrolling inside detail panel and sidebar
   if (ev.target?.closest?.('#detail-panel')) return;
+  if (ev.target?.closest?.('#sidebar')) return;
+  if (ev.target?.closest?.('#search-dropdown')) return;
+  // Only prevent if inside main-area (timeline) — prevents macOS swipe-back
   if (ev.target?.closest?.('#main-area')) {
     ev.preventDefault();
   }
@@ -203,26 +207,32 @@ on('help:changed', ({ open }) => {
 
 
 // --- Sidebar ---
+function positionSidebarButtons() {
+  const sidebar = document.getElementById('sidebar');
+  const widthBtn = document.getElementById('sidebar-width-toggle');
+  const hideBtn = document.getElementById('sidebar-hide-toggle');
+  const st = getState();
+  if (sidebar && (widthBtn || hideBtn)) {
+    const rect = sidebar.getBoundingClientRect();
+    const leftPx = (st.sidebarHidden ? window.innerWidth : rect.left) + 'px';
+    if (widthBtn) {
+      widthBtn.style.left = leftPx;
+      widthBtn.style.display = st.sidebarHidden ? 'none' : '';
+    }
+    if (hideBtn) hideBtn.style.left = leftPx;
+  }
+}
+
 on('sidebar:changed', ({ wide, hidden }) => {
   const app = document.getElementById('app');
   if (!app) return;
   app.classList.toggle('sidebar-wide', wide);
   app.classList.toggle('sidebar-hidden', hidden);
-
-  // Position sidebar toggle buttons
-  const sidebar = document.getElementById('sidebar');
-  const widthBtn = document.getElementById('sidebar-width-toggle');
-  const hideBtn = document.getElementById('sidebar-hide-toggle');
-  if (sidebar && widthBtn) {
-    const rect = sidebar.getBoundingClientRect();
-    widthBtn.style.left = rect.left + 'px';
-    widthBtn.style.display = hidden ? 'none' : 'block';
-  }
-  if (sidebar && hideBtn) {
-    const rect = sidebar.getBoundingClientRect();
-    hideBtn.style.left = (hidden ? window.innerWidth : rect.left) + 'px';
-  }
+  positionSidebarButtons();
 });
+
+// Reposition sidebar buttons on window resize
+window.addEventListener('resize', positionSidebarButtons);
 
 
 // --- Detail panel close ---
@@ -391,6 +401,9 @@ async function init() {
 
   // Update content toggle UI
   updateContentToggleUI();
+
+  // Position sidebar buttons on initial load
+  positionSidebarButtons();
 }
 
 // Boot

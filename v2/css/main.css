@@ -86,19 +86,14 @@ header .stats span { white-space: nowrap; }
 #app.sidebar-hidden #sidebar { border-left: none; overflow: hidden; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-.sidebar-width-toggle {
-  position: fixed; left: 0; top: 50%; transform: translate(-50%, -50%);
-  width: 24px; height: 36px; border: 1px solid #2a2a3a;
-  border-radius: 0 6px 6px 0; background: #12121a; color: #7788cc;
+.sidebar-width-toggle, .sidebar-hide-toggle {
+  position: fixed; top: 50%; width: 24px; height: 36px; border: 1px solid #2a2a3a;
+  border-radius: 6px 0 0 6px; background: #12121a; color: #7788cc;
   font-size: 11px; cursor: pointer; z-index: 200; line-height: 1; padding: 0;
 }
+.sidebar-width-toggle { transform: translateY(-100%); }
+.sidebar-hide-toggle { transform: translateY(4px); color: #88aacc; }
 .sidebar-width-toggle:hover { background: #1a1a2e; color: #aab6ff; }
-.sidebar-hide-toggle {
-  position: fixed; left: 0; top: 50%; transform: translate(-50%, -50%);
-  width: 24px; height: 36px; border: 1px solid #2a2a3a;
-  border-radius: 0 6px 6px 0; background: #12121a; color: #88aacc;
-  font-size: 11px; cursor: pointer; z-index: 200; line-height: 1; padding: 0;
-}
 .sidebar-hide-toggle:hover { background: #1a1a2e; color: #bbd6ff; }
 #sidebar .sidebar-section:first-child { padding-top: 12px; }
 

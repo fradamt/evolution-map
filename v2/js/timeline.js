@@ -785,13 +785,15 @@ function onTopicHover(ev, d, entering) {
     const connected = indexes?.topicEdgeIndex?.[String(d.id)] || new Set();
 
     const st = getState();
-    const hasFilter = st.activeThread || st.activeAuthor || st.activeCategory || st.activeTag || st.minInfluence > 0;
+    const hasActiveFilter = st.activeThread || st.activeAuthor || st.activeCategory || st.activeTag;
 
     const targetOp = {};
     circleG.selectAll('.topic-circle').each(function (t) {
       if (t.id === d.id) { targetOp[t.id] = 1; return; }
       if (connected.has(t.id)) { targetOp[t.id] = 0.8; return; }
-      if (hasFilter && !topicMatchesFilter(t, st)) { targetOp[t.id] = 0.03; return; }
+      const belowThreshold = st.minInfluence > 0 && (t.inf || 0) < st.minInfluence;
+      if (belowThreshold) { targetOp[t.id] = 0.02; return; }
+      if (hasActiveFilter && !topicMatchesFilter(t, st)) { targetOp[t.id] = 0.03; return; }
       targetOp[t.id] = 0.12;
     });
     circleG.selectAll('.topic-circle').attr('opacity', d => targetOp[d.id]);
@@ -837,16 +839,31 @@ function filterTimeline() {
     return;
   }
 
-  const hasFilter = st.activeThread || st.activeAuthor || st.activeCategory || st.activeTag || st.minInfluence > 0;
+  const hasActiveFilter = st.activeThread || st.activeAuthor || st.activeCategory || st.activeTag;
 
-  // Compute target opacities
+  // Compute target opacities — influence slider fades minor topics, thread/author filters dim non-matching
   const targetOp = {};
   circleG.selectAll('.topic-circle').each(function (d) {
-    targetOp[d.id] = hasFilter ? (topicMatchesFilter(d, st) ? 0.85 : 0.08) : 0.7;
+    const belowThreshold = st.minInfluence > 0 && (d.inf || 0) < st.minInfluence;
+    if (belowThreshold && hasActiveFilter) {
+      // Below threshold + active filter: fully hidden
+      targetOp[d.id] = 0.03;
+    } else if (belowThreshold) {
+      // Below threshold only: lightly faded (visible but subtle, matches V1 minor topics)
+      targetOp[d.id] = d.mn ? 0.25 : 0.35;
+    } else if (hasActiveFilter) {
+      const passesFilter = (!st.activeThread || d.th === st.activeThread) &&
+        (!st.activeAuthor || d.a === st.activeAuthor) &&
+        (!st.activeCategory || d.cat === st.activeCategory) &&
+        (!st.activeTag || (d.tg || []).includes(st.activeTag));
+      targetOp[d.id] = passesFilter ? 0.85 : 0.08;
+    } else {
+      targetOp[d.id] = d.mn ? 0.45 : 0.7;
+    }
   });
 
   circleG.selectAll('.topic-circle')
-    .style('pointer-events', d => targetOp[d.id] > 0.25 ? 'all' : 'none')
+    .style('pointer-events', d => targetOp[d.id] > 0.15 ? 'all' : 'none')
     .transition().duration(200)
     .attr('opacity', d => targetOp[d.id])
     .attr('r', d => rScale(d.inf));
@@ -856,9 +873,16 @@ function filterTimeline() {
       .attr('stroke', '#556')
       .attr('stroke-width', 1)
       .attr('stroke-opacity', e => {
-        if (!hasFilter) return 0.06;
         const sT = topicMap[e.source];
         const tT = topicMap[e.target];
+        if (!hasActiveFilter) {
+          // No filter active: show all edges at default opacity
+          // Slightly fade edges involving below-threshold topics
+          const sBelowThresh = st.minInfluence > 0 && (sT?.inf || 0) < st.minInfluence;
+          const tBelowThresh = st.minInfluence > 0 && (tT?.inf || 0) < st.minInfluence;
+          return (sBelowThresh || tBelowThresh) ? 0.02 : 0.06;
+        }
+        // Active filter: highlight matching edges
         if (sT && tT && topicMatchesFilter(sT, st) && topicMatchesFilter(tT, st)) return 0.25;
         return 0.01;
       })
