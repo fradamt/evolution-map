@@ -9,6 +9,9 @@ import {
 import { loadCore, loadEips, loadPapers, loadGraph, loadCoauthor, getCore, getCoreIndexes } from './data.js';
 import { buildIdentityGraph } from './identity.js';
 
+// Canvas timeline feature flag — set true to use Canvas renderer, false for SVG fallback
+const USE_CANVAS_TIMELINE = true;
+
 // View modules — lazy imported
 let timelineModule = null;
 let networkModule = null;
@@ -53,7 +56,7 @@ on('view:changed', async ({ current }) => {
   // Lazy-load view modules and data
   if (current === 'timeline') {
     if (!timelineModule) {
-      timelineModule = await import('./timeline.js');
+      timelineModule = await import(USE_CANVAS_TIMELINE ? './timeline-canvas.js' : './timeline.js');
       timelineModule.init();
     }
     timelineModule.onActivate?.();
@@ -394,7 +397,7 @@ async function init() {
   searchModule.init(core);
 
   // Init default view (timeline)
-  timelineModule = await import('./timeline.js');
+  timelineModule = await import(USE_CANVAS_TIMELINE ? './timeline-canvas.js' : './timeline.js');
   timelineModule.init();
 
   // Pre-load EIPs in background for identity links and search

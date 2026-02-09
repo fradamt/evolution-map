@@ -154,6 +154,42 @@ export function drawArrow(ctx, fromX, fromY, toX, toY, headSize, color) {
 }
 
 /**
+ * Draw a star shape on canvas (for milestone markers).
+ */
+export function drawStar(ctx, cx, cy, outerR, innerR, nPoints, fillColor, strokeColor, lineWidth) {
+  ctx.beginPath();
+  for (let i = 0; i < nPoints * 2; i++) {
+    const angle = (i * Math.PI / nPoints) - Math.PI / 2;
+    const r = i % 2 === 0 ? outerR : innerR;
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  if (fillColor) {
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+  }
+  if (strokeColor) {
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = lineWidth || 1;
+    ctx.stroke();
+  }
+}
+
+/**
+ * Convert hex color to hex+alpha string (rgba).
+ */
+export function hexWithAlpha(hex, alpha) {
+  if (!hex) return `rgba(128,128,128,${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/**
  * Check if a point (in world coordinates) is within viewport bounds.
  */
 export function isInViewport(x, y, transform, width, height, margin) {
