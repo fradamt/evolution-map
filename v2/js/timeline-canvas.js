@@ -1211,8 +1211,8 @@ function applyHoverHighlight(ref) {
     const isPinned = ref.type === 'topic' && e.data.id === ref.id;
     const isConnected = conns.connectedTopics.has(e.data.id);
     let op;
-    if (isPinned) op = 1;
-    else if (isConnected) op = 0.8;
+    if (isPinned) op = 0.85;
+    else if (isConnected) op = 0.65;
     else {
       const belowThreshold = st.minInfluence > 0 && e.inf < st.minInfluence;
       if (belowThreshold) op = 0.02;
@@ -1326,15 +1326,15 @@ function filterTimeline() {
     if (belowThreshold && hasActiveFilter) {
       e.targetOpacity = 0.03;
     } else if (belowThreshold) {
-      e.targetOpacity = d.mn ? 0.25 : 0.35;
+      e.targetOpacity = d.mn ? 0.18 : 0.25;
     } else if (hasActiveFilter) {
       const passesFilter = (!st.activeThread || d.th === st.activeThread) &&
         (!st.activeAuthor || d.a === st.activeAuthor) &&
         (!st.activeCategory || d.cat === st.activeCategory) &&
         (!st.activeTag || (d.tg || []).includes(st.activeTag));
-      e.targetOpacity = passesFilter ? 0.85 : 0.08;
+      e.targetOpacity = passesFilter ? 0.7 : 0.06;
     } else {
-      e.targetOpacity = d.mn ? 0.45 : 0.7;
+      e.targetOpacity = d.mn ? 0.3 : 0.55;
     }
   }
 
@@ -1378,10 +1378,10 @@ function filterTimeline() {
           }
         }
       }
-      e.opacity = show ? 0.5 : 0.05;
+      e.opacity = show ? 0.4 : 0.05;
     }
     for (const edge of eipEdgeData) {
-      edge.opacity = hasActiveFilter ? 0.03 : 0.12;
+      edge.opacity = hasActiveFilter ? 0.03 : 0.1;
     }
   }
 
@@ -1412,7 +1412,7 @@ function filterTimeline() {
 
     for (const e of paperEntities) {
       const show = visiblePaperIds.has(e.paper.id);
-      e.opacity = show ? 0.35 : 0.02;
+      e.opacity = show ? 0.3 : 0.02;
       e.boosted = false;
     }
 
@@ -1443,11 +1443,11 @@ function filterMagiciansEntities() {
       if (st.activeThread && e.thread !== st.activeThread) show = false;
       if (st.activeAuthor && e.mt.a !== st.activeAuthor) show = false;
     }
-    e.opacity = show ? 0.7 : 0;
+    e.opacity = show ? 0.55 : 0;
   }
 
   for (const edge of magEdgeData) {
-    edge.opacity = (st.showPosts && !hasActiveFilter) ? 0.14 : 0;
+    edge.opacity = (st.showPosts && !hasActiveFilter) ? 0.12 : 0;
   }
 }
 
@@ -1464,7 +1464,7 @@ function applyPinnedHighlight() {
   for (const e of topicEntities) {
     const isPinned = pinned.type === 'topic' && e.data.id === pinned.id;
     const isConnected = conns.connectedTopics.has(e.data.id);
-    e.opacity = isPinned ? 1.0 : isConnected ? 0.8 : 0.06;
+    e.opacity = isPinned ? 0.85 : isConnected ? 0.65 : 0.06;
     e.targetOpacity = e.opacity;
   }
 
@@ -1472,7 +1472,7 @@ function applyPinnedHighlight() {
   for (const edge of edgeData) {
     const touching = conns.connectedTopics.has(edge.source) && conns.connectedTopics.has(edge.target);
     const direct = (pinned.type === 'topic') && (edge.source === pinned.id || edge.target === pinned.id);
-    edge.opacity = direct ? 0.6 : touching ? 0.08 : 0.01;
+    edge.opacity = direct ? 0.5 : touching ? 0.08 : 0.01;
     edge.highlighted = direct;
   }
 
@@ -1481,7 +1481,7 @@ function applyPinnedHighlight() {
     for (const e of eipEntities) {
       const isPinned = pinned.type === 'eip' && Number(e.num) === Number(pinned.id);
       const isConnected = conns.connectedEips.has(Number(e.num));
-      e.opacity = isPinned ? 0.8 : isConnected ? 0.5 : 0.06;
+      e.opacity = isPinned ? 0.65 : isConnected ? 0.45 : 0.06;
     }
     for (const edge of eipEdgeData) {
       const show = conns.connectedEips.has(Number(edge.eipNum)) && conns.connectedTopics.has(Number(edge.topicId));
@@ -1495,7 +1495,7 @@ function applyPinnedHighlight() {
     for (const e of paperEntities) {
       const isPinned = pinned.type === 'paper' && e.paper.id === pinned.id;
       const isConnected = conns.connectedPapers.has(e.paper.id);
-      e.opacity = isPinned ? 0.85 : isConnected ? 0.8 : 0.04;
+      e.opacity = isPinned ? 0.7 : isConnected ? 0.6 : 0.04;
       e.boosted = isPinned || isConnected;
     }
     for (const edge of paperEdgeData) {
@@ -1510,7 +1510,7 @@ function applyPinnedHighlight() {
     for (const e of magEntities) {
       const isPinned = pinned.type === 'magicians' && e.mtid === pinned.id;
       const isConnected = conns.connectedMagicians.has(e.mtid);
-      e.opacity = isPinned ? 1.0 : isConnected ? 0.7 : 0.08;
+      e.opacity = isPinned ? 0.85 : isConnected ? 0.6 : 0.08;
     }
     for (const edge of magEdgeData) {
       const show = conns.connectedMagicians.has(edge.mtid) && conns.connectedTopics.has(Number(edge.topicId));
@@ -1669,7 +1669,7 @@ function applyLineageTimeline() {
 
   for (const e of topicEntities) {
     const inLineage = lineageSet.has(e.data.id);
-    e.opacity = inLineage ? 1 : 0.04;
+    e.opacity = inLineage ? 0.85 : 0.04;
     e.targetOpacity = e.opacity;
     e.lineageBoosted = inLineage;
   }
