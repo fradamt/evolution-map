@@ -694,8 +694,10 @@ function buildTimeline(container, core) {
   svg.on('click.clearFocus', function (ev) {
     if (ev.defaultPrevented) return;
     const target = ev.target;
+    // Only block unpin for actual interactive entity nodes (which also call stopPropagation).
+    // Everything else (era-bg, fork lines, histogram bars, etc.) is "background".
     if (target && target.closest &&
-      target.closest('.topic-circle,.eip-square,.paper-diamond,.magicians-triangle,.milestone-marker,.fork-hover-line,.histogram-bar,.era-bg')) return;
+      target.closest('.topic-circle,.eip-square,.paper-diamond,.magicians-triangle')) return;
     const st = getState();
     if (st.pinnedEntity || st.selectedEntity) {
       pinEntity(null);
