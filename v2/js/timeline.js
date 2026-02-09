@@ -219,14 +219,16 @@ function showForkTooltip(ev, f) {
 function syncLabelsFromOpMap(opMap) {
   if (!labelG) return;
   const st = getState();
+  const postsOff = !st.showPosts;
   labelG.selectAll('.topic-label').attr('opacity', function (d) {
+    if (postsOff) return 0;
     const cOp = opMap[d.id];
     return (cOp !== undefined && cOp > 0.25) ? Math.min(cOp + 0.05, 0.9) : 0;
   });
   if (milestoneG) {
     milestoneG.selectAll('.milestone-marker').each(function (d) {
       const cOp = opMap[d.id];
-      const vis = st.milestonesVisible && (cOp === undefined || cOp > 0.25);
+      const vis = !postsOff && st.milestonesVisible && (cOp === undefined || cOp > 0.25);
       d3.select(this).style('display', vis ? null : 'none');
     });
   }
@@ -939,7 +941,9 @@ function filterTimeline() {
     eipLayerG.selectAll('.eip-square').each(function (d) {
       const eip = d.eip;
       let show = true;
-      if (hasActiveFilter) {
+      // Influence slider
+      if (st.minInfluence > 0 && (eip.inf || 0) < st.minInfluence) show = false;
+      if (hasActiveFilter && show) {
         if (st.activeThread && eip.th !== st.activeThread) show = false;
         // Author filter: check EIP authors list
         if (st.activeAuthor && show) {
@@ -964,7 +968,9 @@ function filterTimeline() {
     paperLayerG.selectAll('.paper-circle').each(function (d) {
       const p = d.paper;
       let show = true;
-      if (hasActiveFilter) {
+      // Influence slider
+      if (st.minInfluence > 0 && (p.inf || 0) < st.minInfluence) show = false;
+      if (hasActiveFilter && show) {
         if (st.activeThread && p.th !== st.activeThread) show = false;
         if (st.activeAuthor && show) show = false; // papers don't have ethresearch authors
       }
@@ -1286,16 +1292,16 @@ function buildPaperLayer() {
 
   visiblePapers.forEach(p => {
     if (!p.y) return;
-    // Use Jan 1 of publication year as date
-    const date = new Date(p.y, 0, 1);
+    // Spread papers across the year using hash-based day jitter
+    const idHash = hashCode(p.id ? p.id.length * 31 + p.id.charCodeAt(0) : 0);
+    const dayOffset = idHash % 365;
+    const date = new Date(p.y, 0, 1 + dayOffset);
     if (isNaN(date)) return;
 
     const th = p.th;
     const lane = (th && laneIdx[th] !== undefined) ? laneIdx[th] : laneIdx['_other'] ?? laneOrder.length - 1;
     const yBase = topicLaneY0 + lane * laneH + laneH * 0.6;
     const yRange = laneH * 0.35;
-    // Use paper ID hash for vertical jitter
-    const idHash = hashCode(p.id ? p.id.length * 31 + p.id.charCodeAt(0) : 0);
     const y = yBase + (idHash % 100) / 100 * yRange;
 
     const r = 2 + Math.min(5, (p.inf || 0) * 6);
