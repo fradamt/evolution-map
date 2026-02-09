@@ -959,28 +959,39 @@ function traceLineage(topicId, core) {
 
   const nodeSet = new Set([topicId]);
   const edgeSet = new Set();
-  const queue = [topicId];
-  const visited = new Set([topicId]);
 
-  // BFS through citation edges
-  while (queue.length > 0) {
-    const current = queue.shift();
-    const ct = topics[current];
+  // BFS upstream (ancestors via outgoing refs), capped at 2 hops (matches v1)
+  const upQueue = [{ id: topicId, depth: 0 }];
+  const upVisited = new Set([topicId]);
+  while (upQueue.length > 0) {
+    const cur = upQueue.shift();
+    if (cur.depth >= 2) continue;
+    const ct = topics[cur.id];
     if (!ct) continue;
     for (const ref of (ct.out || [])) {
-      if (!visited.has(ref)) {
-        visited.add(ref);
-        nodeSet.add(ref);
-        edgeSet.add(current + '->' + ref);
-        queue.push(ref);
+      nodeSet.add(ref);
+      edgeSet.add(cur.id + '->' + ref);
+      if (!upVisited.has(ref)) {
+        upVisited.add(ref);
+        upQueue.push({ id: ref, depth: cur.depth + 1 });
       }
     }
+  }
+
+  // BFS downstream (descendants via incoming refs), capped at 2 hops
+  const downQueue = [{ id: topicId, depth: 0 }];
+  const downVisited = new Set([topicId]);
+  while (downQueue.length > 0) {
+    const cur = downQueue.shift();
+    if (cur.depth >= 2) continue;
+    const ct = topics[cur.id];
+    if (!ct) continue;
     for (const ref of (ct.inc || [])) {
-      if (!visited.has(ref)) {
-        visited.add(ref);
-        nodeSet.add(ref);
-        edgeSet.add(ref + '->' + current);
-        queue.push(ref);
+      nodeSet.add(ref);
+      edgeSet.add(ref + '->' + cur.id);
+      if (!downVisited.has(ref)) {
+        downVisited.add(ref);
+        downQueue.push({ id: ref, depth: cur.depth + 1 });
       }
     }
   }

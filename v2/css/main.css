@@ -123,6 +123,9 @@ header .stats span { white-space: nowrap; }
   text-shadow: 0 0 4px #0a0a0f, 0 0 8px #0a0a0f, 0 1px 3px #0a0a0f;
 }
 
+/* Pin overlay (non-interactive) */
+.pin-overlay { pointer-events: none; }
+
 /* Arrow markers */
 .arrow-default { fill: #556; }
 .arrow-highlight { fill: #88aaff; }

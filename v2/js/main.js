@@ -4,7 +4,7 @@ import { THREAD_COLORS, THREAD_ORDER } from './constants.js';
 import {
   getState, on, setView, setFilters, setContentToggle, setHelp,
   setSidebarWidth, setSidebarHidden, setMilestones, resetAll,
-  selectEntity, pinEntity, setDetailOpen,
+  selectEntity, pinEntity, setDetailOpen, setLineage,
 } from './state.js';
 import { loadCore, loadEips, loadPapers, loadGraph, loadCoauthor, getCore, getCoreIndexes } from './data.js';
 import { buildIdentityGraph } from './identity.js';
@@ -156,8 +156,13 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     if (st.helpOpen) {
       setHelp(false);
+    } else if (st.lineageActive) {
+      // Clear lineage first
+      setLineage(false, new Set(), new Set());
+      pinEntity(null);
+      selectEntity(null);
     } else if (st.pinnedEntity || st.selectedEntity) {
-      // First Escape: just unpin / deselect (preserves content toggles)
+      // Unpin / deselect (preserves content toggles)
       pinEntity(null);
       selectEntity(null);
     } else {

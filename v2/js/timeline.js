@@ -193,6 +193,7 @@ function computeDefaultThreshold(topics) {
 // --- Tooltip ---
 
 function showTooltip(ev, t) {
+  cancelHideTooltip();
   const tip = document.getElementById('tooltip');
   if (!tip) return;
   const color = THREAD_COLORS[t.th] || '#666';
@@ -213,12 +214,20 @@ function showTooltip(ev, t) {
   tip.style.top = y + 'px';
 }
 
+let hideTooltipTimer = null;
 function hideTooltip() {
-  const tip = document.getElementById('tooltip');
-  if (tip) tip.style.display = 'none';
+  clearTimeout(hideTooltipTimer);
+  hideTooltipTimer = setTimeout(() => {
+    const tip = document.getElementById('tooltip');
+    if (tip) tip.style.display = 'none';
+  }, 80);
+}
+function cancelHideTooltip() {
+  clearTimeout(hideTooltipTimer);
 }
 
 function showHistTooltip(ev, d) {
+  cancelHideTooltip();
   const tip = document.getElementById('tooltip');
   if (!tip) return;
   const mn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -229,6 +238,7 @@ function showHistTooltip(ev, d) {
 }
 
 function showForkTooltip(ev, f) {
+  cancelHideTooltip();
   const tip = document.getElementById('tooltip');
   if (!tip) return;
   const eipList = (f.eips || []).map(e => 'EIP-' + e).join(', ');
@@ -1140,7 +1150,7 @@ function buildPinnedConnections(pinned) {
         graphIdx.eipToMagiciansRefs[String(eNum)].forEach(mid => connectedMagicians.add(mid));
       }
     }
-    // Papers: EIP overlap + title keyword + thread matching
+    // Papers: EIP overlap + title keyword + thread matching (v1-aligned scoring)
     if (paperData?.papers) {
       const topic = core?.topics?.[pinned.id];
       const topicKW = extractKeywords(topic?.t);
@@ -1152,15 +1162,15 @@ function buildPinnedConnections(pinned) {
         for (const peip of (p.eq || [])) {
           if (connectedEips.has(Number(peip))) { score += 3.0; break; }
         }
-        // Title keyword overlap (≥2 shared keywords)
+        // Title keyword overlap (+0.65 per shared keyword)
         if (topicKW.size > 0) {
           const paperKW = extractKeywords(p.t);
           const overlap = keywordOverlap(topicKW, paperKW);
-          if (overlap >= 2) score += 1.0 + overlap * 0.5;
+          if (overlap > 0) score += overlap * 0.65;
         }
-        // Thread match
-        if (topicThread && p.th === topicThread) score += 0.5;
-        if (score >= 1.5) scored.push({ id: pid, score, inf: p.inf || 0 });
+        // Thread match (+1.0)
+        if (topicThread && p.th === topicThread) score += 1.0;
+        if (score >= 1.4) scored.push({ id: pid, score, inf: p.inf || 0 });
       }
       scored.sort((a, b) => b.score - a.score || b.inf - a.inf);
       for (const s of scored.slice(0, 18)) connectedPapers.add(s.id);
@@ -1194,7 +1204,7 @@ function buildPinnedConnections(pinned) {
         }
       }
     }
-    // Papers: EIP match + title keyword + thread matching
+    // Papers: EIP match + title keyword + thread matching (v1-aligned scoring)
     if (paperData?.papers) {
       const eipData2 = getEips();
       const eipTitle = eipData2?.eipCatalog?.[String(pinned.id)]?.t || '';
@@ -1209,10 +1219,10 @@ function buildPinnedConnections(pinned) {
         if (eipKW.size > 0) {
           const paperKW = extractKeywords(p.t);
           const overlap = keywordOverlap(eipKW, paperKW);
-          if (overlap >= 2) score += 1.0 + overlap * 0.5;
+          if (overlap > 0) score += overlap * 0.65;
         }
-        if (eipThread && p.th === eipThread) score += 0.5;
-        if (score >= 1.5) scored.push({ id: pid, score, inf: p.inf || 0 });
+        if (eipThread && p.th === eipThread) score += 1.0;
+        if (score >= 1.4) scored.push({ id: pid, score, inf: p.inf || 0 });
       }
       scored.sort((a, b) => b.score - a.score || b.inf - a.inf);
       for (const s of scored.slice(0, 18)) connectedPapers.add(s.id);
@@ -1237,7 +1247,7 @@ function buildPinnedConnections(pinned) {
       const eipTopics = indexes?.eipToTopics?.[String(eNum)];
       if (eipTopics) eipTopics.forEach(tid => connectedTopics.add(tid));
     }
-    // Keyword-match topics to paper title
+    // Keyword-match topics to paper title (v1-aligned scoring)
     const paper2 = paperData?.papers?.[pinned.id];
     if (paper2 && core?.topics) {
       const paperKW = extractKeywords(paper2.t);
@@ -1248,9 +1258,9 @@ function buildPinnedConnections(pinned) {
           const topicKW = extractKeywords(t.t);
           const overlap = keywordOverlap(paperKW, topicKW);
           let score = 0;
-          if (overlap >= 2) score += 1.0 + overlap * 0.5;
-          if (paper2.th && t.th === paper2.th) score += 0.5;
-          if (score >= 1.5) scored.push({ id: Number(tid), score, inf: t.inf || 0 });
+          if (overlap > 0) score += overlap * 0.65;
+          if (paper2.th && t.th === paper2.th) score += 1.0;
+          if (score >= 1.4) scored.push({ id: Number(tid), score, inf: t.inf || 0 });
         }
         scored.sort((a, b) => b.score - a.score || b.inf - a.inf);
         for (const s of scored.slice(0, 12)) connectedTopics.add(s.id);
@@ -1603,20 +1613,24 @@ function applyLineageTimeline() {
 
   edgeG.selectAll('.edge-line')
     .attr('stroke', e => {
-      const key = e.source + '-' + e.target;
-      return lineageEdgeSet.has(key) ? '#88aaff' : '#556';
+      const key = e.source + '->' + e.target;
+      const keyR = e.target + '->' + e.source;
+      return (lineageEdgeSet.has(key) || lineageEdgeSet.has(keyR)) ? '#88aaff' : '#556';
     })
     .attr('stroke-opacity', e => {
-      const key = e.source + '-' + e.target;
-      return lineageEdgeSet.has(key) ? 0.6 : 0.01;
+      const key = e.source + '->' + e.target;
+      const keyR = e.target + '->' + e.source;
+      return (lineageEdgeSet.has(key) || lineageEdgeSet.has(keyR)) ? 0.6 : 0.01;
     })
     .attr('stroke-width', e => {
-      const key = e.source + '-' + e.target;
-      return lineageEdgeSet.has(key) ? 2 : 1;
+      const key = e.source + '->' + e.target;
+      const keyR = e.target + '->' + e.source;
+      return (lineageEdgeSet.has(key) || lineageEdgeSet.has(keyR)) ? 2 : 1;
     })
     .attr('marker-end', e => {
-      const key = e.source + '-' + e.target;
-      return lineageEdgeSet.has(key) ? 'url(#arrow-lineage)' : 'url(#arrow-default)';
+      const key = e.source + '->' + e.target;
+      const keyR = e.target + '->' + e.source;
+      return (lineageEdgeSet.has(key) || lineageEdgeSet.has(keyR)) ? 'url(#arrow-lineage)' : 'url(#arrow-default)';
     });
 
   syncLabels();
@@ -1845,6 +1859,7 @@ function updateEipLayerZoom(newX) {
 }
 
 function showEipTooltip(ev, d) {
+  cancelHideTooltip();
   const tip = document.getElementById('tooltip');
   if (!tip) return;
   const statusColor = EIP_STATUS_COLORS[d.eip.s] || '#555';
@@ -2019,6 +2034,7 @@ function updatePaperLayerZoom(newX) {
 }
 
 function showPaperTooltip(ev, d) {
+  cancelHideTooltip();
   const tip = document.getElementById('tooltip');
   if (!tip) return;
   const p = d.paper;
