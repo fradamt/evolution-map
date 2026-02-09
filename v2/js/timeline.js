@@ -924,23 +924,69 @@ function onTopicHover(ev, d, entering) {
 
     syncLabelsFromOpMap(targetOp);
 
-    // Dim other entity layers during hover
+    // Highlight connected cross-entity items, dim the rest (v1-aligned)
+    const hoverConns = buildPinnedConnections({ type: 'topic', id: d.id });
+
     if (eipLayerG && eipLayerBuilt) {
-      eipLayerG.selectAll('.eip-square')
-        .attr('fill-opacity', 0.06).attr('stroke-opacity', 0.06)
-        .style('pointer-events', 'none');
-      if (eipCrossRefG) eipCrossRefG.selectAll('.cross-ref-edge').attr('stroke-opacity', 0.01);
+      eipLayerG.selectAll('.eip-square').each(function (ed) {
+        const isConn = hoverConns.connectedEips.has(Number(ed.num));
+        d3.select(this)
+          .attr('fill-opacity', isConn ? 0.5 : 0.06)
+          .attr('stroke-opacity', isConn ? 0.6 : 0.06)
+          .style('pointer-events', isConn ? 'all' : 'none');
+      });
+      if (eipCrossRefG) {
+        eipCrossRefG.selectAll('.cross-ref-edge').each(function (ed) {
+          const show = hoverConns.connectedEips.has(Number(ed.eipNum)) && (ed.topicId === d.id || connected.has(Number(ed.topicId)));
+          d3.select(this).attr('stroke-opacity', show ? 0.5 : 0.01);
+        });
+      }
     }
     if (paperLayerG && paperLayerBuilt) {
-      paperLayerG.selectAll('.paper-diamond')
-        .attr('fill-opacity', 0.04).attr('stroke-opacity', 0.04);
-      paperLayerG.selectAll('.paper-hit').style('pointer-events', 'none');
+      const curX = xScale || xScaleOrig;
+      paperLayerG.selectAll('.paper-diamond').each(function (pd) {
+        const isConn = hoverConns.connectedPapers.has(pd.paper.id);
+        const el = d3.select(this);
+        el.attr('fill-opacity', isConn ? 0.8 : 0.04)
+          .attr('stroke-opacity', isConn ? 0.9 : 0.04);
+        if (isConn) {
+          const boosted = Math.max(7, pd.r * 1.6);
+          el.attr('d', diamondPath(curX(pd.date), pd.y, boosted))
+            .attr('stroke-width', 1.5).attr('stroke', '#fff');
+        }
+      });
+      paperLayerG.selectAll('.paper-hit').each(function (pd) {
+        d3.select(this).style('pointer-events', hoverConns.connectedPapers.has(pd.paper.id) ? 'all' : 'none');
+      });
       if (paperCiteG) paperCiteG.selectAll('.paper-cite-edge').attr('stroke-opacity', 0.008);
+      // Draw hover edges from topic to connected papers
+      clearPinOverlay();
+      if (!pinOverlayG) pinOverlayG = zoomG.append('g').attr('class', 'pin-overlay');
+      pinOverlayG.raise();
+      const topicX = curX(d._date), topicY = d._yPos;
+      paperLayerG.selectAll('.paper-diamond').each(function (pd) {
+        if (!hoverConns.connectedPapers.has(pd.paper.id)) return;
+        pinOverlayG.append('line').attr('class', 'pin-edge')
+          .attr('x1', topicX).attr('y1', topicY)
+          .attr('x2', curX(pd.date)).attr('y2', pd.y)
+          .attr('stroke', '#8eb8ff').attr('stroke-opacity', 0.44)
+          .attr('stroke-width', 1.2).attr('stroke-dasharray', '4 2')
+          .datum({ x1Date: d._date, y1: topicY, x2Date: pd.date, y2: pd.y });
+      });
     }
     if (magLayerG && magLayerBuilt) {
-      magLayerG.selectAll('.magicians-triangle')
-        .attr('opacity', 0.06).style('pointer-events', 'none');
-      if (magCrossRefG) magCrossRefG.selectAll('.magicians-ref-edge').attr('stroke-opacity', 0.01);
+      magLayerG.selectAll('.magicians-triangle').each(function (md) {
+        const isConn = hoverConns.connectedMagicians.has(md.mtid);
+        d3.select(this)
+          .attr('opacity', isConn ? 0.7 : 0.06)
+          .style('pointer-events', isConn ? 'all' : 'none');
+      });
+      if (magCrossRefG) {
+        magCrossRefG.selectAll('.magicians-ref-edge').each(function (md) {
+          const show = hoverConns.connectedMagicians.has(md.mtid) && (md.topicId == d.id || connected.has(Number(md.topicId)));
+          d3.select(this).attr('stroke-opacity', show ? 0.5 : 0.01);
+        });
+      }
     }
   } else {
     hideTooltip();
@@ -957,6 +1003,14 @@ function onTopicHover(ev, d, entering) {
 
 function filterTimeline() {
   if (!circleG) return;
+
+  // If an entity is pinned, re-apply pinned highlight instead of normal filtering
+  const pinSt = getState();
+  if (pinSt.pinnedEntity) {
+    applyPinnedHighlight();
+    return;
+  }
+
   clearPinOverlay();
 
   const st = getState();
